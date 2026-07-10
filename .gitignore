@@ -1,0 +1,34 @@
+# Secrets — NEVER commit real keys. Use .env.example as the template.
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+
+# Terraform — state files can contain secrets
+*.tfstate
+*.tfstate.*
+.terraform/
+*.tfvars
+!example.tfvars
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Local data
+docker/volumes/
+*.log

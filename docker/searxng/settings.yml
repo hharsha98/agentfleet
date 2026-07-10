@@ -1,0 +1,13 @@
+# Minimal SearXNG config — merged over the image defaults.
+use_default_settings: true
+
+server:
+  # Dev-only secret; overridden via env in any real deployment.
+  secret_key: "agentfleet-dev-secret-change-in-prod"
+  limiter: false
+
+search:
+  # JSON output is what the Deep Research agent consumes.
+  formats:
+    - html
+    - json
