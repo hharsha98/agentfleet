@@ -1,4 +1,8 @@
-# AgentFleet — Session Handoff (updated 2026-07-11)
+# AgentFleet — Session Handoff (updated 2026-07-11, session 3)
+
+## NOW: P5 backend COMPLETE ✅ (commit `0e4d83a`, pushed) — Kanban UI is the next task
+
+Orchestration works end-to-end (live-verified): `POST /api/v1/runs {goal}` → Orchestrator plans a task DAG (parse_plan in `services/orchestrator.py`) → parallel execution through the chat runtime (throwaway conversations = tools+metering+tracing for free) → `needs_approval` tasks pause in `review`; `POST /api/v1/runs/{run}/tasks/{task}/approve` resumes. Langfuse tracing live-verified (keys were pasted behind `#` comments — fixed with sed). **NEXT STEP: the Kanban board UI** — `/missions` page: goal input → poll `GET /api/v1/runs/{id}` every ~3s → columns todo/in_progress/review/done/failed → Approve button on review cards → expandable results with mono usage footers. Then P6 (agent builder + publish). Server startup rule: ALWAYS `lsof -ti tcp:8000 | xargs kill` before starting uvicorn — stale servers on 8000 caused two false-negative test rounds.
 
 ## LATEST: P4 COMPLETE ✅ (through commit `31d4fdd`, pushed) — PLAN CHANGE: LOCAL-FIRST
 
