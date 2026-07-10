@@ -1,6 +1,8 @@
 # AgentFleet — Session Handoff (updated 2026-07-11, session 3)
 
-## NOW: P6b COMPLETE ✅ (commit `d6b2bde`, pushed) — remaining P6: external MCP connect + templates gallery
+## NOW: P6 FULLY COMPLETE ✅ (commit `888b39c`, pushed) — ALL SIX friend-parity pillars done
+
+P6c (Sonnet-executed): templates gallery (6 curated templates, /templates page, one-click install) + external MCP servers as agent tools (`services/mcp_client.py` McpToolbox — per-turn streamable-HTTP connect, mcp_{server}_{tool} prefixing, dead-server isolation with BaseException handling; live-verified against Context7 public server). Agents table now has mcp_servers JSONB (migration `6a640e8f5f6d`). **NEXT: P7 ops layer** — suggested chunk order for delegation: (a) Eval Center backend (eval_sets/eval_runs tables, golden tasks per agent, deterministic checks + LLM-judge runner, CI-invokable script), (b) usage/cost dashboard page (aggregate messages/run_tasks metering) + budgets with hard caps, (c) guardrails (injection screening on tool outputs, PII masking) + red-team suite in CI, (d) versioned agent publishing (snapshots + rollback). After P7: task #10 local packaging (Docker/K8s), then P8 polish/landing/demo.
 
 P6b (Sonnet-executed, Fable-reviewed): api_keys table (hash-only, one-time reveal), `POST /api/v1/public/agents/{slug}/invoke` (Bearer auth, 401 on invalid/cross-agent, executes through chat runtime), keys UI on /agents cards, `mcp/server.py` FastMCP stdio server (list_agents + ask_agent, env AGENTFLEET_API_URL/AGENTFLEET_API_KEY) + mcp/README.md. Live-verified incl. real invoke. Remaining P6 chunks to delegate: (1) external MCP servers as agent tools (MCP client in tool registry + agent config), (2) templates gallery. Then P7.
 
