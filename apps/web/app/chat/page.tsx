@@ -19,9 +19,13 @@ export default async function ChatPage() {
         <Link href="/" className="font-medium tracking-tight">
           AgentFleet
         </Link>
-        <span className="font-mono text-xs text-muted">
-          {agents.length} agents online
-        </span>
+        <nav className="flex items-center gap-4 text-sm text-muted">
+          <span className="text-foreground">Chat</span>
+          <Link href="/documents" className="hover:text-foreground">
+            Documents
+          </Link>
+          <span className="font-mono text-xs">{agents.length} agents online</span>
+        </nav>
       </header>
       <ChatUI agents={agents} apiUrl={API_URL} />
     </div>

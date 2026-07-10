@@ -5,11 +5,15 @@ Each entry pairs a spec (the JSON schema the model sees) with an async run()
 least privilege: an agent without "web_search" can never invoke it.
 """
 
+import asyncio
 import json
 
 import httpx
+from sqlalchemy import select
 
 from app.config import get_settings
+from app.db import SessionLocal
+from app.models import Chunk, Document
 
 
 async def web_search(query: str, max_results: int = 5) -> str:
@@ -36,6 +40,37 @@ async def web_search(query: str, max_results: int = 5) -> str:
     )
 
 
+async def search_documents(query: str, max_results: int = 5) -> str:
+    # Lazy import: the embedding model only loads when a doc search happens.
+    from app.services.ingest import embed_texts
+
+    vector = (await asyncio.to_thread(embed_texts, [query]))[0]
+    async with SessionLocal() as session:
+        distance = Chunk.embedding.cosine_distance(vector)
+        rows = (
+            await session.execute(
+                select(Chunk.text, Chunk.ordinal, Document.filename, distance.label("dist"))
+                .join(Document, Chunk.document_id == Document.id)
+                .order_by(distance)
+                .limit(max_results)
+            )
+        ).all()
+    if not rows:
+        return "No documents have been uploaded yet."
+    return json.dumps(
+        [
+            {
+                "document": filename,
+                "chunk": ordinal,
+                "text": text[:400],
+                "relevance": round(1 - dist, 3),
+            }
+            for text, ordinal, filename, dist in rows
+        ],
+        ensure_ascii=False,
+    )
+
+
 TOOLS: dict[str, dict] = {
     "web_search": {
         "spec": {
@@ -56,6 +91,26 @@ TOOLS: dict[str, dict] = {
             },
         },
         "run": web_search,
+    },
+    "search_documents": {
+        "spec": {
+            "type": "function",
+            "function": {
+                "name": "search_documents",
+                "description": (
+                    "Semantic search over the user's uploaded documents (knowledge base). "
+                    "Returns a JSON list of {document, chunk, text, relevance}."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "What to look for"},
+                    },
+                    "required": ["query"],
+                },
+            },
+        },
+        "run": search_documents,
     },
 }
 

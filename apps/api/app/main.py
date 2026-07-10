@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.routes.agents import router as agents_router
 from app.routes.chat import router as chat_router
+from app.routes.documents import router as documents_router
 
 app = FastAPI(title="AgentFleet API", version="0.1.0")
 
@@ -17,6 +18,7 @@ app.add_middleware(
 
 app.include_router(agents_router, prefix="/api/v1/agents", tags=["agents"])
 app.include_router(chat_router, prefix="/api/v1/conversations", tags=["conversations"])
+app.include_router(documents_router, prefix="/api/v1/documents", tags=["documents"])
 
 
 @app.get("/health")

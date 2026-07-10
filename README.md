@@ -38,13 +38,15 @@ cd apps/api && uv sync && uv run uvicorn app.main:app --reload
 ## Roadmap
 
 - [x] P1 Foundation — repo, compose stack, schema, auth, design tokens
-- [ ] P2 Agent runtime + streaming chat
-- [ ] P3 AWS MVP deploy + landing page
+- [x] P2 Agent runtime + streaming chat (hardened by adversarial review)
+- [x] P2b Tools — web search via SearXNG, tool-call cards, agentic-loop salvage
 - [ ] P4 Document RAG + deep research
 - [ ] P5 DAG orchestration + Kanban + HITL
 - [ ] P6 Agent builder + publish (share/embed/API/MCP)
 - [ ] P7 Ops layer: evals, red-team CI, versioning, cost governance
-- [ ] P8 Full roster + polish + demo
+- [ ] P8 Full roster + landing page + polish + demo
+- [ ] Local prod packaging — full docker compose + K8s manifests
+- [ ] Cloud deploy on demand (ADR-007): AWS at interview time, GCP after
 
 ## Design
 

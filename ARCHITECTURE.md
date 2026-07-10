@@ -34,6 +34,18 @@ Short, honest records of the trade-offs behind AgentFleet. Format: context → d
 **Why:** Free tiers (Groq `gpt-oss-120b` primary — reliable tool calling, no training on inputs) make development ~free, but they throw 429s mid-demo and cap context. Cost per run is metered and surfaced in the dashboard either way — the routing itself is a product feature.
 **Trade-off:** Two code paths to test; some free models have weaker tool-calling — the eval suite catches regressions when switching.
 
+## ADR-007: Local-first delivery; cloud deployment on demand
+
+**Decision (2026-07-11):** Build the complete prototype locally (Docker Compose, later kind/K8s manifests). Cloud deployment happens on demand: AWS first when interviews are scheduled (~$100 credit ≈ the interview window), GCP after (~3 months free tier). Terraform/GCP configs are prepared in advance so going live is a ~1-hour task.
+**Why:** Cloud credits are a scarce resource for a student; burning them before anyone is watching buys nothing. Containerized, provider-agnostic services make the cloud switch a configuration change.
+**Trade-off:** No always-on public URL until interview season — mitigated by a polished demo video and one-command local setup.
+
+## ADR-008: Local embeddings (fastembed) for document RAG
+
+**Decision:** Embeddings run locally via fastembed (ONNX, `BAAI/bge-small-en-v1.5`, 384 dims) instead of a paid/remote embedding API.
+**Why:** Local-first (works offline, zero per-token cost, no data leaves the machine), small and CPU-fast, production-credible (maintained by Qdrant). pgvector stores the vectors either way, so swapping to a hosted embedding model later is a one-file change.
+**Trade-off:** English-optimized small model — retrieval quality below large hosted embedders; acceptable at portfolio corpus size.
+
 ## ADR-006: Redis as a Fargate sidecar container, not ElastiCache
 
 **Decision:** On AWS, Redis runs as a container alongside the worker instead of ElastiCache.
