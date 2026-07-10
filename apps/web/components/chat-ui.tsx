@@ -17,10 +17,18 @@ type Usage = {
   latency_ms: number;
 };
 
+type ToolActivity = {
+  name: string;
+  args: Record<string, unknown>;
+  preview?: string;
+  done: boolean;
+};
+
 type ChatMessage = {
   role: "user" | "assistant";
   content: string;
   usage?: Usage;
+  tools?: ToolActivity[];
 };
 
 export function ChatUI({ agents, apiUrl }: { agents: AgentInfo[]; apiUrl: string }) {
@@ -105,6 +113,18 @@ export function ChatUI({ agents, apiUrl }: { agents: AgentInfo[]; apiUrl: string
           }
           if (data.type === "token") {
             patchLast((m) => ({ ...m, content: m.content + data.content }));
+          } else if (data.type === "tool_call") {
+            patchLast((m) => ({
+              ...m,
+              tools: [...(m.tools ?? []), { name: data.name, args: data.arguments, done: false }],
+            }));
+          } else if (data.type === "tool_result") {
+            patchLast((m) => {
+              const tools = [...(m.tools ?? [])];
+              const idx = tools.findIndex((t) => t.name === data.name && !t.done);
+              if (idx >= 0) tools[idx] = { ...tools[idx], done: true, preview: data.preview };
+              return { ...m, tools };
+            });
           } else if (data.type === "done") {
             patchLast((m) => ({ ...m, usage: data.usage }));
           } else if (data.type === "error") {
@@ -171,6 +191,20 @@ export function ChatUI({ agents, apiUrl }: { agents: AgentInfo[]; apiUrl: string
                 m.role === "user" ? "border-accent/40 bg-accent/10" : "border-hairline"
               }`}
             >
+              {m.tools?.map((t, j) => (
+                <details
+                  key={j}
+                  className="mb-2 rounded-md border border-hairline px-2 py-1"
+                >
+                  <summary className="cursor-pointer font-mono text-xs text-muted">
+                    {t.done ? "✓" : "⏳"} {t.name}
+                    {typeof t.args.query === "string" ? `: ${t.args.query}` : ""}
+                  </summary>
+                  <pre className="mt-1 overflow-x-auto whitespace-pre-wrap font-mono text-[10px] text-muted">
+                    {t.preview ?? "running…"}
+                  </pre>
+                </details>
+              ))}
               {m.content}
               {m.role === "assistant" && streaming && i === messages.length - 1 && (
                 <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-accent align-middle" />

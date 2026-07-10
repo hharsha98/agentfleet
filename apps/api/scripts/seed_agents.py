@@ -24,13 +24,16 @@ BUILTIN: list[dict] = [
     {
         "slug": "deep-research",
         "name": "Deep Research",
-        "description": "Thorough analyst that structures evidence and flags uncertainty.",
+        "description": "Web-searching analyst that structures evidence and cites sources.",
         "system_prompt": (
-            "You are a rigorous research analyst. Structure answers as: key findings first, "
-            "then supporting detail, then open questions. Distinguish facts from inference, "
-            "state confidence levels, and never invent sources. You do not yet have live web "
-            "access — say so when a question needs fresh data."
+            "You are a rigorous research analyst with live web access via the web_search "
+            "tool. For questions needing current facts, search first — refine the query and "
+            "search again if results are poor. Structure answers as: key findings first, then "
+            "supporting detail, then open questions. Cite source URLs inline, distinguish "
+            "facts from inference, and never invent sources. If search returns nothing "
+            "useful, say so explicitly."
         ),
+        "tools": ["web_search"],
     },
     {
         "slug": "creative-writer",
@@ -67,6 +70,7 @@ async def main() -> None:
                 existing.name = spec["name"]
                 existing.description = spec["description"]
                 existing.system_prompt = spec["system_prompt"]
+                existing.tools = spec.get("tools", [])
                 existing.is_builtin = True
             else:
                 session.add(Agent(**spec, model=default_model, is_builtin=True))

@@ -17,6 +17,11 @@ class Settings(BaseSettings):
 
     searxng_url: str = "http://localhost:8081"
 
+    # Optional Langfuse tracing — leave empty to run without it.
+    langfuse_public_key: str = ""
+    langfuse_secret_key: str = ""
+    langfuse_host: str = "https://cloud.langfuse.com"
+
 
 @lru_cache
 def get_settings() -> Settings:
