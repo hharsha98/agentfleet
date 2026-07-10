@@ -1,6 +1,10 @@
 # AgentFleet — Session Handoff (updated 2026-07-11, session 3)
 
-## NOW: P6 FULLY COMPLETE ✅ (commit `888b39c`, pushed) — ALL SIX friend-parity pillars done
+## NOW: P7a COMPLETE ✅ (commit `1633b89`, pushed) — next: P7b cost dashboard + budgets
+
+P7a Eval Center (Sonnet-executed, live-verified 1/1 incl. LLM judge): eval_cases/eval_runs tables (migration `796001c03f05`), services/evals.py runner, /evals page, scripts/run_evals.py CI gate, .github/workflows/evals.yml. **PROVIDER ALERT: Groq now 403s this network ("Access denied. Please check your network settings" — possibly VPN-related). Live tests use NVIDIA instead: `FREE_LLM_BASE_URL=https://integrate.api.nvidia.com/v1 FREE_LLM_KEY=$(grep '^NVIDIA_API_KEY=' keys.txt ...)` — same model id openai/gpt-oss-120b works. Ask user to start the freellmapi proxy (auto-cascades around such blocks).** Next P7 chunks to delegate: (b) cost dashboard page (aggregate messages+run_tasks metering per agent/day) + budgets table with hard caps enforced in stream_chat, (c) guardrails (injection screening on tool outputs, PII masking) + red-team eval cases in CI, (d) versioned agent publishing (config snapshots + rollback). Then task #10 packaging, then P8.
+
+## Earlier: P6 (commit `888b39c`)
 
 P6c (Sonnet-executed): templates gallery (6 curated templates, /templates page, one-click install) + external MCP servers as agent tools (`services/mcp_client.py` McpToolbox — per-turn streamable-HTTP connect, mcp_{server}_{tool} prefixing, dead-server isolation with BaseException handling; live-verified against Context7 public server). Agents table now has mcp_servers JSONB (migration `6a640e8f5f6d`). **NEXT: P7 ops layer** — suggested chunk order for delegation: (a) Eval Center backend (eval_sets/eval_runs tables, golden tasks per agent, deterministic checks + LLM-judge runner, CI-invokable script), (b) usage/cost dashboard page (aggregate messages/run_tasks metering) + budgets with hard caps, (c) guardrails (injection screening on tool outputs, PII masking) + red-team suite in CI, (d) versioned agent publishing (snapshots + rollback). After P7: task #10 local packaging (Docker/K8s), then P8 polish/landing/demo.
 
