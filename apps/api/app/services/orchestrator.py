@@ -16,6 +16,7 @@ import uuid
 
 from sqlalchemy import select
 
+from app.config import get_settings
 from app.db import SessionLocal
 from app.models import Agent, Conversation, Run, RunTask
 from app.providers import get_llm_client
@@ -85,9 +86,12 @@ async def plan_and_execute(run_id: uuid.UUID) -> None:
             valid_slugs = {a.slug for a in agents}
 
             client = get_llm_client()
-            model = next(a.model for a in agents)
+            settings = get_settings()
+            # The "brain" call: planning quality gates the whole run, so it may
+            # use a stronger model than the task executors (tiered routing).
+            planner = settings.planner_model or settings.default_model
             response = await client.chat.completions.create(
-                model=model,
+                model=planner,
                 messages=[
                     {
                         "role": "user",

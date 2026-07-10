@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     free_llm_base_url: str = "http://localhost:3001/v1"
     free_llm_key: str = ""
     default_model: str = "openai/gpt-oss-120b"
+    # Tiered routing: strong model plans (the "brain"), cheap models execute.
+    # Empty -> planning falls back to default_model.
+    planner_model: str = ""
 
     anthropic_api_key: str = ""
 
