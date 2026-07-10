@@ -149,6 +149,37 @@ class Conversation(Base):
     messages: Mapped[list["Message"]] = relationship(back_populates="conversation")
 
 
+class EvalCase(Base):
+    """A golden test case for an agent: an input plus pass/fail assertions."""
+
+    __tablename__ = "eval_cases"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    agent_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("agents.id", ondelete="CASCADE"), index=True
+    )
+    input: Mapped[str] = mapped_column(Text)
+    expected_contains: Mapped[list] = mapped_column(JSONB, default=list)
+    forbidden_contains: Mapped[list] = mapped_column(JSONB, default=list)
+    judge_rubric: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class EvalRun(Base):
+    """One run of an agent's eval suite: aggregate score plus per-case detail."""
+
+    __tablename__ = "eval_runs"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    agent_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("agents.id", ondelete="CASCADE"), index=True
+    )
+    total: Mapped[int] = mapped_column(Integer, default=0)
+    passed: Mapped[int] = mapped_column(Integer, default=0)
+    results: Mapped[list] = mapped_column(JSONB, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class Message(Base):
     """One chat turn, with the cost/latency metering that feeds the dashboards."""
 

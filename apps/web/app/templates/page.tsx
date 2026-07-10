@@ -83,6 +83,9 @@ export default function TemplatesPage() {
             Agents
           </Link>
           <span className="text-foreground">Templates</span>
+          <Link href="/evals" className="hover:text-foreground">
+            Evals
+          </Link>
         </nav>
       </header>
 

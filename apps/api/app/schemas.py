@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -59,3 +60,44 @@ class MessageIn(BaseModel):
     # Hard cap: unbounded input is a memory/DB/provider-cost DoS vector on an
     # endpoint that has no auth yet (review finding, 2026-07-10).
     content: str = Field(min_length=1, max_length=8000)
+
+
+class EvalCaseCreate(BaseModel):
+    input: str = Field(min_length=1, max_length=8000)
+    expected_contains: list[str] = []
+    forbidden_contains: list[str] = []
+    judge_rubric: str = ""
+
+
+class EvalCaseOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    agent_id: uuid.UUID
+    input: str
+    expected_contains: list[str]
+    forbidden_contains: list[str]
+    judge_rubric: str
+    created_at: datetime
+
+
+class EvalRunOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    agent_id: uuid.UUID
+    total: int
+    passed: int
+    results: list[dict]
+    created_at: datetime
+
+
+class EvalRunSummaryOut(BaseModel):
+    """Lightweight run listing — omits the heavy per-case `results` payload."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    total: int
+    passed: int
+    created_at: datetime

@@ -1,0 +1,59 @@
+name: evals
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: agentfleet
+          POSTGRES_PASSWORD: agentfleet
+          POSTGRES_DB: agentfleet
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U agentfleet"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql+asyncpg://agentfleet:agentfleet@localhost:5432/agentfleet
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        working-directory: apps/api
+        run: uv sync
+
+      - name: Run migrations
+        working-directory: apps/api
+        run: uv run alembic upgrade head
+
+      - name: Seed built-in agents
+        working-directory: apps/api
+        run: uv run python -m scripts.seed_agents
+
+      - name: Run tests
+        working-directory: apps/api
+        run: uv run pytest -q
+
+      # LLM eval gate: runs scripts.run_evals against a real provider, so it
+      # needs a provider key secret. Guarded + non-blocking so PRs from forks
+      # (or repos that haven't configured the secret yet) don't fail CI —
+      # this job is the regression gate, meant to be tightened once
+      # FREE_LLM_KEY / ANTHROPIC_API_KEY are configured as repo secrets.
+      - name: Run LLM eval gate
+        if: ${{ secrets.FREE_LLM_KEY != '' }}
+        continue-on-error: true
+        working-directory: apps/api
+        env:
+          FREE_LLM_KEY: ${{ secrets.FREE_LLM_KEY }}
+        run: uv run python -m scripts.run_evals
