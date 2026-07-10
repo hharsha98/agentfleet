@@ -44,6 +44,50 @@ class Agent(Base):
     )
 
 
+class Run(Base):
+    """One orchestrated goal: the Orchestrator plans it into RunTasks."""
+
+    __tablename__ = "runs"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    goal: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(
+        String(20), default="planning"
+    )  # planning|running|awaiting_approval|done|failed
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    tasks: Mapped[list["RunTask"]] = relationship(
+        back_populates="run", cascade="all, delete-orphan", order_by="RunTask.ordinal"
+    )
+
+
+class RunTask(Base):
+    __tablename__ = "run_tasks"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    run_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("runs.id", ondelete="CASCADE"), index=True
+    )
+    ordinal: Mapped[int] = mapped_column(Integer)
+    title: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str] = mapped_column(Text, default="")
+    agent_slug: Mapped[str] = mapped_column(String(64))
+    depends_on: Mapped[list] = mapped_column(JSONB, default=list)  # ordinals of prerequisites
+    needs_approval: Mapped[bool] = mapped_column(Boolean, default=False)
+    status: Mapped[str] = mapped_column(
+        String(20), default="todo"
+    )  # todo|in_progress|review|done|failed
+    result: Mapped[str] = mapped_column(Text, default="")
+    error: Mapped[str | None] = mapped_column(String(300))
+    tokens_in: Mapped[int] = mapped_column(Integer, default=0)
+    tokens_out: Mapped[int] = mapped_column(Integer, default=0)
+    cost_usd: Mapped[float] = mapped_column(Numeric(10, 6), default=0)
+    latency_ms: Mapped[int | None] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    run: Mapped[Run] = relationship(back_populates="tasks")
+
+
 class Document(Base):
     __tablename__ = "documents"
 
