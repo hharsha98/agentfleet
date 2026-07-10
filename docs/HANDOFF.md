@@ -1,6 +1,10 @@
 # AgentFleet — Session Handoff (updated 2026-07-11)
 
-## LATEST: P2 core COMPLETE ✅ (commit `463293d`)
+## LATEST: P2 + P2b COMPLETE ✅ (through commit `e2daa9e`, pushed)
+
+P2b shipped: tool registry (`app/tools.py`, web_search via SearXNG), multi-round tool-calling loop in `services/chat.py` with SSE `tool_call`/`tool_result` events, collapsible tool cards in `chat-ui.tsx`, Langfuse env-gated in `providers.py` (activates when LANGFUSE_* keys land in .env — user still needs to create the free account). Battle-tested: loop salvages provider aborts on malformed model tool calls and forces a final answer with tool traffic flattened to plain text (Groq gpt-oss quirk — see commit message). **Next: P3 AWS MVP deploy + landing page (task #3).**
+
+## P2 core (commit `463293d`)
 
 Agent runtime + SSE chat shipped and live-verified: 4 seeded agents (`uv run python -m scripts.seed_agents` — note `-m`!), `GET /api/v1/agents`, `POST /api/v1/conversations(/{id}/messages)` → SSE stream, per-message metering (tokens/cost/latency), `/chat` page with agent picker + Stop button. Hardened by adversarial review: 8k input cap, 30-message history cap, sanitized errors, disconnect-safe persistence. Deferred to P7: conversation ownership/auth. **Next (P2b): tool registry (web_search via SearXNG :8081) + tool-call cards in UI + Langfuse tracing (user must create free cloud account) — then P3 AWS deploy.** Testing note: freellmapi proxy still not running; live tests used Groq direct via env override (`FREE_LLM_BASE_URL=https://api.groq.com/openai/v1`, key grep'd from career-ops keys.txt — never printed). Kill stale test servers on :8000 before testing (`lsof -ti tcp:8000`).
 
