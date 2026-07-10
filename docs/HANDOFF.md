@@ -1,6 +1,10 @@
 # AgentFleet — Session Handoff (updated 2026-07-11, session 3)
 
-## NOW: P5 FULLY COMPLETE ✅ (commit `3c50ef5`, pushed) — next: P6 agent builder + publish
+## NOW: P6a COMPLETE ✅ (commit `29a3745`, pushed) — remaining P6: MCP connect + publish + templates
+
+**WORKING MODE (user rule, 2026-07-11):** Fable = brain (specs, architecture, review); delegate build chunks to Sonnet subagents (`Agent` tool, model:"sonnet") with self-contained specs that INCLUDE the Fact-Forcing-Gate retry instructions. Independently verify (pytest/build/live smoke) before committing. In-product mirror: `PLANNER_MODEL` (brain) vs `DEFAULT_MODEL` (executors) — commit `50fe335`.
+
+P6a shipped: agent CRUD API (slug validation, tool allowlist, builtin-delete protection, GET /api/v1/agents/tools) + `/agents` builder page + nav across all pages. Note: `tests/test_agent_builder.py` uses single-loop httpx.AsyncClient pattern (multi-test asyncio.run + shared engine is flaky — see its docstring). **Remaining P6 (delegate to Sonnet):** (1) connect external MCP servers as tools (MCP client in registry, agent config field), (2) publish pillar: per-app API keys + public share endpoint + expose fleet as MCP server (`mcp/` dir), (3) templates gallery. Then P7 ops layer.
 
 Kanban board shipped at `/missions`: goal → live 5-column board (3s polling), Approve&run on review cards, expandable results, usage footers, cross-nav Chat/Documents/Missions. **NEXT: P6** — runtime agent builder (CRUD UI over the agents table + create/edit API routes with slug validation), connect external MCP servers (MCP client in tool registry), publish pillar (share URL + per-app API keys + expose-as-MCP), templates gallery. Also remaining: README roadmap tick for P5, update roadmap P4 line (both currently unticked).
 
