@@ -1,8 +1,14 @@
 import { ApiStatus } from "@/components/api-status";
+import { UserMenu } from "@/components/user-menu";
 
 export default function Home() {
   return (
-    <main className="relative flex flex-1 flex-col items-center justify-center gap-6 overflow-hidden px-6">
+    <>
+      <header className="flex items-center justify-between border-b border-hairline px-6 py-3">
+        <span className="font-medium tracking-tight">AgentFleet</span>
+        <UserMenu />
+      </header>
+      <main className="relative flex flex-1 flex-col items-center justify-center gap-6 overflow-hidden px-6">
       {/* Blueprint grid + single radial glow — hero only, per design spec */}
       <div
         aria-hidden
@@ -19,6 +25,7 @@ export default function Home() {
         agents with production-grade guardrails.
       </p>
       <ApiStatus />
-    </main>
+      </main>
+    </>
   );
 }
