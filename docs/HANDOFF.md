@@ -1,6 +1,10 @@
 # AgentFleet — Session Handoff (updated 2026-07-11, session 3)
 
-## NOW: P5 backend COMPLETE ✅ (commit `0e4d83a`, pushed) — Kanban UI is the next task
+## NOW: P5 FULLY COMPLETE ✅ (commit `3c50ef5`, pushed) — next: P6 agent builder + publish
+
+Kanban board shipped at `/missions`: goal → live 5-column board (3s polling), Approve&run on review cards, expandable results, usage footers, cross-nav Chat/Documents/Missions. **NEXT: P6** — runtime agent builder (CRUD UI over the agents table + create/edit API routes with slug validation), connect external MCP servers (MCP client in tool registry), publish pillar (share URL + per-app API keys + expose-as-MCP), templates gallery. Also remaining: README roadmap tick for P5, update roadmap P4 line (both currently unticked).
+
+## Earlier: P5 backend (commit `0e4d83a`)
 
 Orchestration works end-to-end (live-verified): `POST /api/v1/runs {goal}` → Orchestrator plans a task DAG (parse_plan in `services/orchestrator.py`) → parallel execution through the chat runtime (throwaway conversations = tools+metering+tracing for free) → `needs_approval` tasks pause in `review`; `POST /api/v1/runs/{run}/tasks/{task}/approve` resumes. Langfuse tracing live-verified (keys were pasted behind `#` comments — fixed with sed). **NEXT STEP: the Kanban board UI** — `/missions` page: goal input → poll `GET /api/v1/runs/{id}` every ~3s → columns todo/in_progress/review/done/failed → Approve button on review cards → expandable results with mono usage footers. Then P6 (agent builder + publish). Server startup rule: ALWAYS `lsof -ti tcp:8000 | xargs kill` before starting uvicorn — stale servers on 8000 caused two false-negative test rounds.
 
