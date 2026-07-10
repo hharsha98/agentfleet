@@ -67,6 +67,9 @@ export default function DocumentsPage() {
             Chat
           </Link>
           <span className="text-foreground">Documents</span>
+          <Link href="/missions" className="hover:text-foreground">
+            Missions
+          </Link>
         </nav>
       </header>
 
