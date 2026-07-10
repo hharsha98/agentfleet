@@ -11,6 +11,33 @@ class AgentOut(BaseModel):
     name: str
     description: str
     model: str
+    system_prompt: str
+    temperature: float
+    tools: list
+    is_builtin: bool
+
+
+class AgentCreate(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
+    slug: str = Field(pattern=r"^[a-z0-9][a-z0-9-]{1,62}$")
+    name: str = Field(min_length=1, max_length=120)
+    description: str = ""
+    system_prompt: str = Field(min_length=1, max_length=8000)
+    model: str = ""  # empty means "use server default"
+    temperature: float = Field(default=0.7, ge=0, le=2)
+    tools: list[str] = []
+
+
+class AgentUpdate(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    description: str | None = None
+    system_prompt: str | None = Field(default=None, min_length=1, max_length=8000)
+    model: str | None = None
+    temperature: float | None = Field(default=None, ge=0, le=2)
+    tools: list[str] | None = None
 
 
 class ConversationCreate(BaseModel):

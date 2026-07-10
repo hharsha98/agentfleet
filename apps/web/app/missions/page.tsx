@@ -138,6 +138,9 @@ export default function MissionsPage() {
             Documents
           </Link>
           <span className="text-foreground">Missions</span>
+          <Link href="/agents" className="hover:text-foreground">
+            Agents
+          </Link>
         </nav>
       </header>
 
