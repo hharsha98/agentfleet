@@ -1,6 +1,8 @@
 # AgentFleet — Session Handoff (updated 2026-07-11, session 3)
 
-## NOW: P6a COMPLETE ✅ (commit `29a3745`, pushed) — remaining P6: MCP connect + publish + templates
+## NOW: P6b COMPLETE ✅ (commit `d6b2bde`, pushed) — remaining P6: external MCP connect + templates gallery
+
+P6b (Sonnet-executed, Fable-reviewed): api_keys table (hash-only, one-time reveal), `POST /api/v1/public/agents/{slug}/invoke` (Bearer auth, 401 on invalid/cross-agent, executes through chat runtime), keys UI on /agents cards, `mcp/server.py` FastMCP stdio server (list_agents + ask_agent, env AGENTFLEET_API_URL/AGENTFLEET_API_KEY) + mcp/README.md. Live-verified incl. real invoke. Remaining P6 chunks to delegate: (1) external MCP servers as agent tools (MCP client in tool registry + agent config), (2) templates gallery. Then P7.
 
 **WORKING MODE (user rule, 2026-07-11):** Fable = brain (specs, architecture, review); delegate build chunks to Sonnet subagents (`Agent` tool, model:"sonnet") with self-contained specs that INCLUDE the Fact-Forcing-Gate retry instructions. Independently verify (pytest/build/live smoke) before committing. In-product mirror: `PLANNER_MODEL` (brain) vs `DEFAULT_MODEL` (executors) — commit `50fe335`.
 
