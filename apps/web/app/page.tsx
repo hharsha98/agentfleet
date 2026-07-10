@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { ApiStatus } from "@/components/api-status";
 import { UserMenu } from "@/components/user-menu";
 
@@ -25,6 +27,12 @@ export default function Home() {
         agents with production-grade guardrails.
       </p>
       <ApiStatus />
+      <Link
+        href="/chat"
+        className="relative rounded-md bg-accent px-5 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
+      >
+        Open the fleet →
+      </Link>
       </main>
     </>
   );
