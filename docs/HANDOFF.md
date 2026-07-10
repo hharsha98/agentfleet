@@ -1,6 +1,16 @@
 # AgentFleet — Session Handoff (updated 2026-07-11)
 
-## LATEST: P2 + P2b COMPLETE ✅ (through commit `e2daa9e`, pushed)
+## LATEST: P4 COMPLETE ✅ (through commit `31d4fdd`, pushed) — PLAN CHANGE: LOCAL-FIRST
+
+**User decision (ADR-007):** no cloud deploy until interviews — AWS (~$100 credits) at interview time, GCP (~3 months free) after. Build the full prototype locally; task #10 = Dockerize everything + K8s manifests. Terraform prep still belongs to task #3 (on-demand).
+
+P4 shipped: documents/chunks tables (pgvector 384-dim, migration `b374b4179d73` — note the manual `import pgvector.sqlalchemy` + CREATE EXTENSION fix), `app/services/ingest.py` (fastembed bge-small local embeddings, ADR-008; ~130MB model cached after first use), `search_documents` tool, upload API + `/documents` page. Deep Research has both tools and routes between them correctly (live-verified).
+
+**Langfuse: keys still NOT in .env** — user tried, paste didn't land (hidden-file trap). Told them: `open -e ".../agentfleet/.env"`, uncomment + fill the three LANGFUSE lines. Verify with `grep -c "^LANGFUSE_PUBLIC_KEY=pk" .env` (never print values) then restart API and check cloud.langfuse.com for traces.
+
+**Next: P5 Orchestration** (task #5) — arq worker + task DAG + Kanban board + step timeline + HITL approvals. Redis is already in compose.
+
+## Earlier: P2 + P2b (commit `e2daa9e`)
 
 P2b shipped: tool registry (`app/tools.py`, web_search via SearXNG), multi-round tool-calling loop in `services/chat.py` with SSE `tool_call`/`tool_result` events, collapsible tool cards in `chat-ui.tsx`, Langfuse env-gated in `providers.py` (activates when LANGFUSE_* keys land in .env — user still needs to create the free account). Battle-tested: loop salvages provider aborts on malformed model tool calls and forces a final answer with tool traffic flattened to plain text (Groq gpt-oss quirk — see commit message). **Next: P3 AWS MVP deploy + landing page (task #3).**
 
