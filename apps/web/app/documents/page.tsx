@@ -73,6 +73,9 @@ export default function DocumentsPage() {
           <Link href="/agents" className="hover:text-foreground">
             Agents
           </Link>
+          <Link href="/templates" className="hover:text-foreground">
+            Templates
+          </Link>
         </nav>
       </header>
 

@@ -7,6 +7,7 @@ from app.routes.documents import router as documents_router
 from app.routes.keys import router as keys_router
 from app.routes.public import router as public_router
 from app.routes.runs import router as runs_router
+from app.routes.templates import router as templates_router
 
 app = FastAPI(title="AgentFleet API", version="0.1.0")
 
@@ -25,6 +26,7 @@ app.include_router(documents_router, prefix="/api/v1/documents", tags=["document
 app.include_router(runs_router, prefix="/api/v1/runs", tags=["runs"])
 app.include_router(keys_router, prefix="/api/v1/agents/{agent_id}/keys", tags=["keys"])
 app.include_router(public_router, prefix="/api/v1/public", tags=["public"])
+app.include_router(templates_router, prefix="/api/v1/templates", tags=["templates"])
 
 
 @app.get("/health")

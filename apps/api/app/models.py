@@ -37,6 +37,7 @@ class Agent(Base):
     model: Mapped[str] = mapped_column(String(120))
     temperature: Mapped[float] = mapped_column(Float, default=0.7)
     tools: Mapped[list] = mapped_column(JSONB, default=list)
+    mcp_servers: Mapped[list] = mapped_column(JSONB, default=list)  # [{"name","url"}]
     is_builtin: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

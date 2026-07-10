@@ -30,6 +30,9 @@ export default async function ChatPage() {
           <Link href="/agents" className="hover:text-foreground">
             Agents
           </Link>
+          <Link href="/templates" className="hover:text-foreground">
+            Templates
+          </Link>
           <span className="font-mono text-xs">{agents.length} agents online</span>
         </nav>
       </header>

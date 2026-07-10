@@ -5,6 +5,11 @@ import { useEffect, useState } from "react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+type McpServer = {
+  name: string;
+  url: string;
+};
+
 type Agent = {
   id: string;
   slug: string;
@@ -14,6 +19,7 @@ type Agent = {
   system_prompt: string;
   temperature: number;
   tools: string[];
+  mcp_servers: McpServer[];
   is_builtin: boolean;
 };
 
@@ -33,6 +39,7 @@ type FormState = {
   model: string;
   temperature: string;
   tools: string[];
+  mcp_servers: McpServer[];
 };
 
 const EMPTY_FORM: FormState = {
@@ -43,6 +50,7 @@ const EMPTY_FORM: FormState = {
   model: "",
   temperature: "0.7",
   tools: [],
+  mcp_servers: [],
 };
 
 const inputClass =
@@ -107,6 +115,7 @@ export default function AgentsPage() {
       model: agent.model,
       temperature: String(agent.temperature),
       tools: agent.tools,
+      mcp_servers: agent.mcp_servers,
     });
     setFormError(null);
     setFormOpen(true);
@@ -126,6 +135,21 @@ export default function AgentsPage() {
     }));
   }
 
+  function addMcpServer() {
+    setForm((f) => ({ ...f, mcp_servers: [...f.mcp_servers, { name: "", url: "" }] }));
+  }
+
+  function updateMcpServer(index: number, field: "name" | "url", value: string) {
+    setForm((f) => ({
+      ...f,
+      mcp_servers: f.mcp_servers.map((s, i) => (i === index ? { ...s, [field]: value } : s)),
+    }));
+  }
+
+  function removeMcpServer(index: number) {
+    setForm((f) => ({ ...f, mcp_servers: f.mcp_servers.filter((_, i) => i !== index) }));
+  }
+
   async function submitForm() {
     if (busy) return;
     setBusy(true);
@@ -143,6 +167,7 @@ export default function AgentsPage() {
             model: form.model,
             temperature,
             tools: form.tools,
+            mcp_servers: form.mcp_servers,
           }),
         });
         if (!res.ok) {
@@ -162,6 +187,7 @@ export default function AgentsPage() {
             model: form.model,
             temperature,
             tools: form.tools,
+            mcp_servers: form.mcp_servers,
           }),
         });
         if (!res.ok) {
@@ -254,6 +280,9 @@ export default function AgentsPage() {
             Missions
           </Link>
           <span className="text-foreground">Agents</span>
+          <Link href="/templates" className="hover:text-foreground">
+            Templates
+          </Link>
         </nav>
       </header>
 
@@ -360,6 +389,42 @@ export default function AgentsPage() {
               </div>
             </div>
 
+            <div>
+              <p className="mb-2 font-mono text-xs text-muted">mcp servers</p>
+              <div className="space-y-2">
+                {form.mcp_servers.map((server, i) => (
+                  <div key={i} className="flex gap-2">
+                    <input
+                      value={server.name}
+                      onChange={(e) => updateMcpServer(i, "name", e.target.value)}
+                      placeholder="name (e.g. search)"
+                      className={inputClass}
+                    />
+                    <input
+                      value={server.url}
+                      onChange={(e) => updateMcpServer(i, "url", e.target.value)}
+                      placeholder="https://…"
+                      className={inputClass}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeMcpServer(i)}
+                      className="shrink-0 rounded-md border border-hairline px-3 py-2 text-xs text-muted hover:text-foreground"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={addMcpServer}
+                  className="rounded-md border border-hairline px-3 py-1.5 text-xs text-muted hover:text-foreground"
+                >
+                  Add server
+                </button>
+              </div>
+            </div>
+
             {formError && <p className="font-mono text-xs text-muted">⚠ {formError}</p>}
 
             <div className="flex gap-2 pt-1">
@@ -416,7 +481,7 @@ export default function AgentsPage() {
                 </div>
               </div>
               {a.description && <p className="mt-2 text-sm text-muted">{a.description}</p>}
-              {a.tools.length > 0 && (
+              {(a.tools.length > 0 || a.mcp_servers.length > 0) && (
                 <div className="mt-3 flex flex-wrap gap-1.5">
                   {a.tools.map((t) => (
                     <span
@@ -424,6 +489,14 @@ export default function AgentsPage() {
                       className="rounded-full border border-hairline px-2.5 py-0.5 font-mono text-[10px] text-muted"
                     >
                       {t}
+                    </span>
+                  ))}
+                  {a.mcp_servers.map((s) => (
+                    <span
+                      key={s.name}
+                      className="rounded-full border border-hairline px-2.5 py-0.5 font-mono text-[10px] text-muted"
+                    >
+                      mcp:{s.name}
                     </span>
                   ))}
                 </div>

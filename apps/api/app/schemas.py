@@ -14,6 +14,7 @@ class AgentOut(BaseModel):
     system_prompt: str
     temperature: float
     tools: list
+    mcp_servers: list
     is_builtin: bool
 
 
@@ -27,6 +28,7 @@ class AgentCreate(BaseModel):
     model: str = ""  # empty means "use server default"
     temperature: float = Field(default=0.7, ge=0, le=2)
     tools: list[str] = []
+    mcp_servers: list[dict] = []
 
 
 class AgentUpdate(BaseModel):
@@ -38,6 +40,7 @@ class AgentUpdate(BaseModel):
     model: str | None = None
     temperature: float | None = Field(default=None, ge=0, le=2)
     tools: list[str] | None = None
+    mcp_servers: list[dict] | None = None
 
 
 class ConversationCreate(BaseModel):
