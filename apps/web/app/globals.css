@@ -1,0 +1,26 @@
+@import "tailwindcss";
+
+:root {
+  /* Dark-first: one tuned theme, no light variant (see design spec). */
+  --background: #0a0a0a;
+  --foreground: #f4f4f5; /* zinc-100 */
+  --muted: #a1a1aa; /* zinc-400 */
+  --accent: #5e6ad2; /* THE accent — CTAs, active states, chart fills only */
+  --hairline: rgba(255, 255, 255, 0.1);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-hairline: var(--hairline);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
