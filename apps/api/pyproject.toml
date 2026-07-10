@@ -18,6 +18,7 @@ dependencies = [
     "fastembed>=0.4",
     "pypdf>=5.0",
     "python-multipart>=0.0.18",
+    "mcp>=1.2",
 ]
 
 [dependency-groups]

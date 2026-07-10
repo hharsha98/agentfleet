@@ -117,6 +117,25 @@ class Chunk(Base):
     document: Mapped[Document] = relationship(back_populates="chunks")
 
 
+class ApiKey(Base):
+    """A per-agent secret for the public invoke endpoint (Publish pillar).
+
+    Only the sha256 hash is stored — the full key is shown once, at creation.
+    """
+
+    __tablename__ = "api_keys"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    agent_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("agents.id", ondelete="CASCADE"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(100), default="default")
+    prefix: Mapped[str] = mapped_column(String(12))
+    key_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class Conversation(Base):
     __tablename__ = "conversations"
 

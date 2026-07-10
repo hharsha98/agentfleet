@@ -17,6 +17,14 @@ type Agent = {
   is_builtin: boolean;
 };
 
+type ApiKeyItem = {
+  id: string;
+  name: string;
+  prefix: string;
+  created_at: string;
+  last_used_at: string | null;
+};
+
 type FormState = {
   name: string;
   slug: string;
@@ -49,6 +57,16 @@ export default function AgentsPage() {
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+
+  // API keys (Publish pillar): which agent's keys panel is expanded, the
+  // keys loaded for it, the "create key" mini-form input, and the
+  // full key shown exactly once right after creation.
+  const [keysOpenId, setKeysOpenId] = useState<string | null>(null);
+  const [keysByAgent, setKeysByAgent] = useState<Record<string, ApiKeyItem[]>>({});
+  const [newKeyName, setNewKeyName] = useState<Record<string, string>>({});
+  const [keyBusy, setKeyBusy] = useState<Record<string, boolean>>({});
+  const [revealedKey, setRevealedKey] = useState<Record<string, string>>({});
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   async function refresh() {
     try {
@@ -163,6 +181,60 @@ export default function AgentsPage() {
     if (!confirm(`Delete agent "${agent.name}"? This cannot be undone.`)) return;
     await fetch(`${API_URL}/api/v1/agents/${agent.id}`, { method: "DELETE" });
     refresh();
+  }
+
+  async function fetchKeys(agentId: string) {
+    const res = await fetch(`${API_URL}/api/v1/agents/${agentId}/keys`);
+    if (res.ok) {
+      const data = await res.json();
+      setKeysByAgent((k) => ({ ...k, [agentId]: data }));
+    }
+  }
+
+  function toggleKeys(agentId: string) {
+    if (keysOpenId === agentId) {
+      setKeysOpenId(null);
+      return;
+    }
+    setKeysOpenId(agentId);
+    setRevealedKey((r) => {
+      const next = { ...r };
+      delete next[agentId];
+      return next;
+    });
+    fetchKeys(agentId);
+  }
+
+  async function createKey(agentId: string) {
+    if (keyBusy[agentId]) return;
+    setKeyBusy((b) => ({ ...b, [agentId]: true }));
+    try {
+      const res = await fetch(`${API_URL}/api/v1/agents/${agentId}/keys`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newKeyName[agentId]?.trim() || "default" }),
+      });
+      if (res.ok) {
+        const body = await res.json();
+        setRevealedKey((r) => ({ ...r, [agentId]: body.key }));
+        setNewKeyName((n) => ({ ...n, [agentId]: "" }));
+        await fetchKeys(agentId);
+      }
+    } finally {
+      setKeyBusy((b) => ({ ...b, [agentId]: false }));
+    }
+  }
+
+  async function revokeKey(agentId: string, key: ApiKeyItem) {
+    if (!confirm(`Revoke key "${key.name}" (${key.prefix}…)? This cannot be undone.`)) return;
+    await fetch(`${API_URL}/api/v1/agents/${agentId}/keys/${key.id}`, { method: "DELETE" });
+    await fetchKeys(agentId);
+  }
+
+  async function copyKey(agentId: string, key: string) {
+    await navigator.clipboard.writeText(key);
+    setCopiedId(agentId);
+    setTimeout(() => setCopiedId((id) => (id === agentId ? null : id)), 1500);
   }
 
   return (
@@ -354,6 +426,78 @@ export default function AgentsPage() {
                       {t}
                     </span>
                   ))}
+                </div>
+              )}
+
+              <button
+                onClick={() => toggleKeys(a.id)}
+                className="mt-3 text-xs text-muted hover:text-foreground"
+              >
+                {keysOpenId === a.id ? "Hide API keys" : "API keys"}
+              </button>
+
+              {keysOpenId === a.id && (
+                <div className="mt-3 space-y-3 rounded-md border border-hairline p-3">
+                  <ul className="space-y-2">
+                    {(keysByAgent[a.id] ?? []).map((k) => (
+                      <li
+                        key={k.id}
+                        className="flex items-center justify-between gap-3 text-xs"
+                      >
+                        <div>
+                          <span className="font-medium">{k.name}</span>{" "}
+                          <span className="font-mono text-muted">{k.prefix}…</span>
+                          <span className="ml-2 text-muted">
+                            created {new Date(k.created_at).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => revokeKey(a.id, k)}
+                          className="shrink-0 rounded-md border border-hairline px-2.5 py-1 text-[11px] text-muted hover:text-foreground"
+                        >
+                          Revoke
+                        </button>
+                      </li>
+                    ))}
+                    {(keysByAgent[a.id] ?? []).length === 0 && (
+                      <li className="text-xs text-muted">No keys yet.</li>
+                    )}
+                  </ul>
+
+                  {revealedKey[a.id] && (
+                    <div className="space-y-1.5 rounded-md bg-accent/10 p-2.5">
+                      <div className="flex items-center justify-between gap-2 font-mono text-xs">
+                        <span className="truncate">{revealedKey[a.id]}</span>
+                        <button
+                          onClick={() => copyKey(a.id, revealedKey[a.id])}
+                          className="shrink-0 rounded-md border border-hairline px-2 py-1 text-[11px] text-muted hover:text-foreground"
+                        >
+                          {copiedId === a.id ? "Copied" : "Copy"}
+                        </button>
+                      </div>
+                      <p className="text-[11px] text-muted">
+                        Copy now — shown only once.
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="flex gap-2">
+                    <input
+                      value={newKeyName[a.id] ?? ""}
+                      onChange={(e) =>
+                        setNewKeyName((n) => ({ ...n, [a.id]: e.target.value }))
+                      }
+                      placeholder="key name"
+                      className={`${inputClass} py-1.5`}
+                    />
+                    <button
+                      onClick={() => createKey(a.id)}
+                      disabled={keyBusy[a.id]}
+                      className="shrink-0 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-40"
+                    >
+                      {keyBusy[a.id] ? "Creating…" : "Create key"}
+                    </button>
+                  </div>
                 </div>
               )}
             </li>
