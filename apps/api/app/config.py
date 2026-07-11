@@ -18,6 +18,11 @@ class Settings(BaseSettings):
 
     anthropic_api_key: str = ""
 
+    # Which agent loop implementation runs chat turns: the LangGraph
+    # StateGraph runtime (default, ADR-001) or the original hand-built
+    # while-loop (services/chat.py), kept as a documented fallback.
+    agent_runtime: str = "langgraph"  # "langgraph" | "native"
+
     searxng_url: str = "http://localhost:8081"
 
     # Optional Langfuse tracing — leave empty to run without it.

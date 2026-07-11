@@ -6,8 +6,9 @@ Short, honest records of the trade-offs behind AgentFleet. Format: context → d
 
 **Alternatives considered:** Claude Agent SDK, Pydantic AI, OpenAI Agents SDK, CrewAI, AutoGen.
 **Decision:** LangGraph for the core runtime.
-**Why:** Explicit state machines with Postgres checkpointing, first-class `interrupt()` for human-in-the-loop gates, and the highest demand signal in 2026 German job postings. CrewAI abstracts too much for a platform runtime; the Claude Agent SDK and Pydantic AI are strong but younger — one roster agent may be re-implemented on a second SDK later to show breadth.
+**Why:** Explicit state machines with checkpointing, first-class `interrupt()` for human-in-the-loop gates, and the highest demand signal in 2026 German job postings. CrewAI abstracts too much for a platform runtime; the Claude Agent SDK and Pydantic AI are strong but younger — one roster agent may be re-implemented on a second SDK later to show breadth.
 **Trade-off:** More boilerplate than CrewAI; LangChain ecosystem coupling.
+**Status (2026-07-11):** Implemented and now the default (`AGENT_RUNTIME=langgraph`). `services/graph_runtime.py` compiles a `StateGraph`: a model node and a custom tools node (still our own guardrails + MCP dispatch, not the prebuilt `ToolNode`) linked by a conditional edge — tool calls loop back to the model, a plain answer routes to `END` — with `MemorySaver` checkpointing per conversation (`thread_id`). It streams the identical SSE contract the hand-built loop produced. That original hand-built loop (`services/chat.py`) — built first, before adopting LangGraph, specifically to understand the agentic tool-call loop from scratch — is kept as an env-switchable fallback (`AGENT_RUNTIME=native`) and as a deliberate "built it from scratch first" learning artifact.
 
 ## ADR-002: One Postgres (with pgvector) for everything
 

@@ -9,6 +9,7 @@ const GITHUB_URL = "https://github.com/hharsha98/agentfleet";
 
 const STACK = [
   "FastAPI",
+  "LangGraph",
   "Postgres + pgvector",
   "fastembed",
   "Next.js",
@@ -113,7 +114,7 @@ export default function Home() {
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-xs text-muted">
                 <span>12 agents</span>
                 <span>·</span>
-                <span className="text-accent">31 tests green</span>
+                <span className="text-accent">36 tests green</span>
                 <span>·</span>
                 <span>MIT</span>
               </div>

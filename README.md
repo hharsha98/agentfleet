@@ -95,13 +95,13 @@ Most agent demos stop at "it can call a tool." AgentFleet treats an agent like a
 
 **Backend** — Python 3.12 · FastAPI (async) · Pydantic v2 · SQLAlchemy 2 (async) · Alembic · PostgreSQL + pgvector
 
-**LLM & agents** — OpenAI-compatible client against a pluggable provider (free multi-provider proxy for dev; Groq / NVIDIA / Anthropic-compatible via env) · in-house tiered planner/executor model routing · hand-built agentic tool loop (streaming + tool calls + salvage path) · fastembed (local, CPU, BAAI/bge-small) for embeddings · custom in-process async DAG executor for orchestration (plan → task graph → parallel execution → human-in-the-loop approvals) · MCP in both directions
+**LLM & agents** — OpenAI-compatible client against a pluggable provider (free multi-provider proxy for dev; Groq / NVIDIA / Anthropic-compatible via env) · in-house tiered planner/executor model routing · LangGraph StateGraph agent runtime (model↔tools, conditional edges, checkpointing) — with a hand-built streaming loop as an env-switchable fallback · fastembed (local, CPU, BAAI/bge-small) for embeddings · custom in-process async DAG executor for orchestration (plan → task graph → parallel execution → human-in-the-loop approvals) · MCP in both directions
 
 **Observability & ops** — Langfuse tracing (optional, env-gated) · per-message token/cost/latency metering · Eval Center (LLM-as-judge + deterministic checks) with a GitHub Actions regression gate · per-agent + global cost budgets with hard caps · guardrails (prompt-injection screening + PII masking) + red-team suite · versioned agent publishing with one-click rollback
 
 **Frontend** — Next.js 16 (App Router, Turbopack) · TypeScript · Tailwind v4 (hand-rolled dark design system) · Auth.js v5 (Google OAuth)
 
-**Infra** — Docker + one-command Docker Compose · Kubernetes manifests ([k8s/](k8s/README.md)) · GitHub Actions CI (tests against a live pgvector service) · 31 passing tests
+**Infra** — Docker + one-command Docker Compose · Kubernetes manifests ([k8s/](k8s/README.md)) · GitHub Actions CI (tests against a live pgvector service) · 36 passing tests
 
 ## Quick start (local)
 
@@ -137,6 +137,7 @@ All LLM calls go through one OpenAI-compatible provider abstraction (ADR-005 in 
 **Shipped:**
 - [x] P1 Foundation — repo, compose stack, schema, auth, design tokens
 - [x] P2 + P2b — agent runtime, streaming chat, tools (web search, tool-call cards, agentic-loop salvage)
+- [x] LangGraph agent runtime (ADR-001) — StateGraph model↔tools loop with checkpointing, now the default; hand-built loop kept as an `AGENT_RUNTIME=native` fallback
 - [x] P4 — document RAG + deep research (local pgvector embeddings)
 - [x] P5 — DAG orchestration + Kanban + HITL approvals
 - [x] P6 — agent builder + publish (share/API/MCP) + templates + external MCP
@@ -149,7 +150,6 @@ All LLM calls go through one OpenAI-compatible provider abstraction (ADR-005 in 
 - [ ] Cloud deploy on demand (ADR-007) — AWS at interview time, GCP after
 
 **Intentionally not wired yet** (see [ARCHITECTURE.md](ARCHITECTURE.md) for the full trade-offs):
-- LangGraph migration for the agent runtime (ADR-001) — today's tool loop is hand-built; LangGraph is the evaluated upgrade for explicit state machines with Postgres checkpointing
 - Redis/arq durable task execution (ADR-004) — the DAG orchestrator runs in-process today; Redis is already in the compose stack, queue-ready
 - Temporal as the longer-term durable-execution answer, noted in ADR-004 as the scale-up path
 - Cloud deploy via Terraform to AWS then GCP (ADR-007) — deliberately deferred to interview time so cloud credits aren't burned before anyone is watching
