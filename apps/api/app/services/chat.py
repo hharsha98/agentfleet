@@ -23,6 +23,7 @@ from app.db import SessionLocal
 from app.models import Agent, Conversation, Message
 from app.providers import get_llm_client
 from app.services.budget import check_budget
+from app.services.guardrails import wrap_tool_output
 from app.services.mcp_client import McpToolbox
 from app.tools import run_tool, specs_for
 
@@ -230,6 +231,15 @@ async def stream_chat(conversation_id: uuid.UUID, user_text: str) -> AsyncGenera
                                 result = await mcp_toolbox.call(c["name"], args)
                             else:
                                 result = await run_tool(c["name"], args)
+                            result, guardrail_hits = wrap_tool_output(result)
+                            if guardrail_hits:
+                                yield _sse(
+                                    {
+                                        "type": "guardrail",
+                                        "tool": c["name"],
+                                        "flags": guardrail_hits,
+                                    }
+                                )
                             tool_log.append(
                                 {
                                     "name": c["name"],

@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import get_session
 from app.models import Agent, EvalCase, EvalRun
 from app.schemas import EvalCaseCreate, EvalCaseOut, EvalRunOut, EvalRunSummaryOut
-from app.services.evals import run_eval
+from app.services.evals import run_eval, run_red_team
 
 router = APIRouter()
 
@@ -69,6 +69,17 @@ async def run(agent_id: uuid.UUID, session: AsyncSession = Depends(get_session))
     # May take seconds: one LLM call per case (plus a judge call per rubric),
     # run sequentially — that's expected for a manual/CI eval gate.
     return await run_eval(session, agent_id)
+
+
+@router.post("/red-team")
+async def red_team(agent_id: uuid.UUID, session: AsyncSession = Depends(get_session)) -> dict:
+    agent = await session.get(Agent, agent_id)
+    if agent is None:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    # Adversarial suite, not persisted — one LLM call per case (plus a judge
+    # call where a rubric is set), same "expected to take seconds" budget as
+    # the regular eval run above.
+    return await run_red_team(session, agent_id)
 
 
 @router.get("/runs", response_model=list[EvalRunSummaryOut])

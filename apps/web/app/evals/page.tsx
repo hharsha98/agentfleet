@@ -52,6 +52,11 @@ type EvalRunSummary = {
   created_at: string;
 };
 
+type GuardrailScanResult = {
+  injection_flags: string[];
+  pii: { masked: string; replacements: number };
+};
+
 type CaseFormState = {
   input: string;
   expected_contains: string;
@@ -90,6 +95,12 @@ export default function EvalsPage() {
   const [running, setRunning] = useState(false);
   const [latestRun, setLatestRun] = useState<EvalRun | null>(null);
   const [recentRuns, setRecentRuns] = useState<EvalRunSummary[]>([]);
+
+  // Guardrails sandbox: paste text, scan it, see injection flags + PII masking.
+  const [guardrailText, setGuardrailText] = useState("");
+  const [guardrailBusy, setGuardrailBusy] = useState(false);
+  const [guardrailResult, setGuardrailResult] = useState<GuardrailScanResult | null>(null);
+  const [guardrailError, setGuardrailError] = useState<string | null>(null);
 
   async function refreshAgents() {
     try {
@@ -195,6 +206,29 @@ export default function EvalsPage() {
       }
     } finally {
       setRunning(false);
+    }
+  }
+
+  async function scanGuardrails() {
+    if (guardrailBusy || !guardrailText.trim()) return;
+    setGuardrailBusy(true);
+    setGuardrailError(null);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/guardrails/scan`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: guardrailText }),
+      });
+      if (res.ok) {
+        setGuardrailResult(await res.json());
+      } else {
+        const body = await res.json().catch(() => ({}));
+        setGuardrailError(body.detail ?? `Scan failed (${res.status})`);
+      }
+    } catch {
+      setGuardrailError("API offline — start the backend and reload.");
+    } finally {
+      setGuardrailBusy(false);
     }
   }
 
@@ -477,6 +511,65 @@ export default function EvalsPage() {
             )}
           </>
         )}
+
+        <div className="mt-10 border-t border-hairline pt-6">
+          <h2 className="text-sm font-medium">Guardrails sandbox</h2>
+          <p className="mt-1 text-xs text-muted">
+            Paste any text — retrieved content, a user message — to check for prompt-injection
+            phrases and personal data.
+          </p>
+          <textarea
+            value={guardrailText}
+            onChange={(e) => setGuardrailText(e.target.value)}
+            placeholder="Paste text to scan…"
+            rows={4}
+            className={`${inputClass} mt-3`}
+          />
+          <div className="mt-2 flex items-center gap-3">
+            <button
+              onClick={scanGuardrails}
+              disabled={guardrailBusy || !guardrailText.trim()}
+              className="rounded-md bg-accent px-4 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-40"
+            >
+              {guardrailBusy ? "Scanning…" : "Scan"}
+            </button>
+            {guardrailError && <p className="font-mono text-xs text-muted">⚠ {guardrailError}</p>}
+          </div>
+
+          {guardrailResult && (
+            <div className="mt-4 space-y-3">
+              <div>
+                <p className="mb-1.5 font-mono text-xs text-muted">injection flags</p>
+                {guardrailResult.injection_flags.length === 0 ? (
+                  <span className="rounded-full border border-emerald-400/40 px-2.5 py-0.5 font-mono text-[10px] text-emerald-300">
+                    clean
+                  </span>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5">
+                    {guardrailResult.injection_flags.map((flag) => (
+                      <span
+                        key={flag}
+                        className="rounded-full border border-red-400/40 px-2.5 py-0.5 font-mono text-[10px] text-red-300"
+                      >
+                        {flag}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <p className="mb-1.5 font-mono text-xs text-muted">
+                  pii-masked text · {guardrailResult.pii.replacements} replacement
+                  {guardrailResult.pii.replacements === 1 ? "" : "s"}
+                </p>
+                <pre className="max-h-48 overflow-y-auto whitespace-pre-wrap rounded-md border border-hairline bg-transparent p-3 font-mono text-[11px] leading-relaxed">
+                  {guardrailResult.pii.masked}
+                </pre>
+              </div>
+            </div>
+          )}
+        </div>
       </main>
     </div>
   );

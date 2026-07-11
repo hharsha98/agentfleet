@@ -31,6 +31,21 @@ type ApiKeyItem = {
   last_used_at: string | null;
 };
 
+type RedTeamCaseResult = {
+  case_id: string | null;
+  input: string;
+  passed: boolean;
+  checks: { contains: boolean; forbidden: boolean; judge: boolean | null };
+  judge_reason: string | null;
+  reply_preview: string;
+};
+
+type RedTeamRun = {
+  total: number;
+  passed: number;
+  results: RedTeamCaseResult[];
+};
+
 type FormState = {
   name: string;
   slug: string;
@@ -75,6 +90,12 @@ export default function AgentsPage() {
   const [keyBusy, setKeyBusy] = useState<Record<string, boolean>>({});
   const [revealedKey, setRevealedKey] = useState<Record<string, string>>({});
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // Red-team (guardrails eval): busy flag, latest run per agent, and
+  // whether the failed-cases list is expanded for that agent's card.
+  const [redTeamBusy, setRedTeamBusy] = useState<Record<string, boolean>>({});
+  const [redTeamByAgent, setRedTeamByAgent] = useState<Record<string, RedTeamRun | null>>({});
+  const [redTeamExpanded, setRedTeamExpanded] = useState<Record<string, boolean>>({});
 
   async function refresh() {
     try {
@@ -261,6 +282,31 @@ export default function AgentsPage() {
     await navigator.clipboard.writeText(key);
     setCopiedId(agentId);
     setTimeout(() => setCopiedId((id) => (id === agentId ? null : id)), 1500);
+  }
+
+  async function runRedTeam(agentId: string) {
+    if (redTeamBusy[agentId]) return;
+    setRedTeamBusy((b) => ({ ...b, [agentId]: true }));
+    try {
+      const res = await fetch(`${API_URL}/api/v1/agents/${agentId}/evals/red-team`, {
+        method: "POST",
+      });
+      if (res.ok) {
+        const data: RedTeamRun = await res.json();
+        setRedTeamByAgent((r) => ({ ...r, [agentId]: data }));
+        setRedTeamExpanded((e) => ({ ...e, [agentId]: false }));
+      }
+    } finally {
+      setRedTeamBusy((b) => ({ ...b, [agentId]: false }));
+    }
+  }
+
+  function toggleRedTeamExpanded(agentId: string) {
+    setRedTeamExpanded((e) => ({ ...e, [agentId]: !e[agentId] }));
+  }
+
+  function failedRedTeamCases(agentId: string): RedTeamCaseResult[] {
+    return (redTeamByAgent[agentId]?.results ?? []).filter((r) => !r.passed);
   }
 
   return (
@@ -508,12 +554,57 @@ export default function AgentsPage() {
                 </div>
               )}
 
-              <button
-                onClick={() => toggleKeys(a.id)}
-                className="mt-3 text-xs text-muted hover:text-foreground"
-              >
-                {keysOpenId === a.id ? "Hide API keys" : "API keys"}
-              </button>
+              <div className="mt-3 flex items-center gap-3">
+                <button
+                  onClick={() => toggleKeys(a.id)}
+                  className="text-xs text-muted hover:text-foreground"
+                >
+                  {keysOpenId === a.id ? "Hide API keys" : "API keys"}
+                </button>
+                <button
+                  onClick={() => runRedTeam(a.id)}
+                  disabled={redTeamBusy[a.id]}
+                  className="rounded-md border border-hairline px-2.5 py-1 text-[11px] text-muted transition-opacity hover:text-foreground disabled:opacity-40"
+                >
+                  {redTeamBusy[a.id] ? "Running red-team…" : "Red-team"}
+                </button>
+              </div>
+
+              {redTeamByAgent[a.id] && (
+                <div className="mt-2 rounded-md border border-hairline p-2.5 text-xs">
+                  <div className="flex items-center justify-between gap-2">
+                    <span
+                      className={`font-mono ${
+                        redTeamByAgent[a.id]!.passed === redTeamByAgent[a.id]!.total
+                          ? "text-emerald-300"
+                          : "text-red-300"
+                      }`}
+                    >
+                      Injection resistance: {redTeamByAgent[a.id]!.passed}/
+                      {redTeamByAgent[a.id]!.total}
+                    </span>
+                    {failedRedTeamCases(a.id).length > 0 && (
+                      <button
+                        onClick={() => toggleRedTeamExpanded(a.id)}
+                        className="shrink-0 text-[11px] text-muted hover:text-foreground"
+                      >
+                        {redTeamExpanded[a.id]
+                          ? "Hide failed"
+                          : `Show failed (${failedRedTeamCases(a.id).length})`}
+                      </button>
+                    )}
+                  </div>
+                  {redTeamExpanded[a.id] && failedRedTeamCases(a.id).length > 0 && (
+                    <ul className="mt-2 space-y-1.5">
+                      {failedRedTeamCases(a.id).map((r, i) => (
+                        <li key={i} className="text-muted">
+                          {r.input}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
 
               {keysOpenId === a.id && (
                 <div className="mt-3 space-y-3 rounded-md border border-hairline p-3">
