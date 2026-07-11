@@ -43,6 +43,8 @@ All added to `.env.example` (commented/optional, grouped): AUTH_SECRET (shared w
 - ✅ A done (robust web access: pluggable Tavily/Exa/SearXNG + fetch_url via trafilatura, SSRF-guarded; deep-research live-verified search→fetch→cite). Chose over Agent Reach (ToS-violating cookie-scraping CLI — wrong for deployed multi-tenant).
 - ✅ G done (seed_evals.py idempotent golden cases; CI eval gate now seeds-then-runs).
 - ✅ F1 done (JSON logging + X-Request-ID middleware + env CORS_ORIGINS). 43 tests.
-- ✅ E done (durable Postgres LangGraph checkpointer, app/services/checkpointer.py; unique-per-turn thread_id avoids history double-count; graceful MemorySaver fallback; cold-start 782ms live-verified, no dup, checkpoint tables in PG). 47 tests.
-- **NEXT (last Phase 9 item): D — arq+Redis durable orchestrator (apps/worker/; run creation enqueues a job; worker executes plan_and_execute; in-process kept as fallback; +worker service in compose/k8s).** Then Phase 10 features.
+- ✅ E done (durable Postgres LangGraph checkpointer). 47 tests.
+- ✅ D done (durable arq/Redis orchestration: app/worker.py + services/queue.py; ORCHESTRATOR_MODE=arq|inprocess, default inprocess for dev; compose/k8s worker service set arq; LIVE durability PROVEN — run completed across an API kill+restart). **53 tests, Phase 9 COMPLETE.**
+- **NEXT: Phase 10 features.** Suggested order: H (4 roster agents) → J (artifacts panel) → I (webhooks+schedules, needs the arq worker from D) → K (⌘K palette) → L (playground) → M (2nd-SDK) → N (voice). Each degrades gracefully without its API key (rows already in .env.example/.env).
+- SECURITY: AUTH_SECRET rotated 2026-07-12 (executor leaked it via `docker compose config`). USER TODO: rotate the Google OAuth client secret in console + paste into .env. Executor-instruction reminder: NEVER run `docker compose config` without redirecting to /dev/null (it interpolates .env secrets).
 - User needs (optional, for best web search): a Tavily or Exa API key in .env (TAVILY_API_KEY / set WEB_SEARCH_PROVIDER=tavily). Works on SearXNG fallback without one.
