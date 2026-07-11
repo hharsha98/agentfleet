@@ -29,23 +29,38 @@ Python 3.12 · FastAPI · LangGraph · Postgres + pgvector · Redis + arq · Nex
 
 ## Quick start (local)
 
+**One command, full stack** (api + web + postgres + redis + searxng, all in Docker):
+
+```bash
+cp .env.example .env          # fill in your keys
+docker compose -f docker/compose.full.yaml up --build
+# open http://localhost:3002
+```
+
+The api container self-migrates and seeds the built-in agent roster on boot.
+
+**Dev mode** (infra in Docker, api/web run locally with hot reload):
+
 ```bash
 cp .env.example .env          # fill in your keys
 docker compose -f docker/compose.yaml up -d
 cd apps/api && uv sync && uv run uvicorn app.main:app --reload
+cd apps/web && npm install && npm run dev
 ```
+
+K8s manifests for a local kind/k3d/minikube cluster live in [k8s/](k8s/README.md).
 
 ## Roadmap
 
 - [x] P1 Foundation — repo, compose stack, schema, auth, design tokens
 - [x] P2 Agent runtime + streaming chat (hardened by adversarial review)
 - [x] P2b Tools — web search via SearXNG, tool-call cards, agentic-loop salvage
-- [ ] P4 Document RAG + deep research
-- [ ] P5 DAG orchestration + Kanban + HITL
-- [ ] P6 Agent builder + publish (share/embed/API/MCP)
-- [ ] P7 Ops layer: evals, red-team CI, versioning, cost governance
+- [x] P4 Document RAG + deep research (local pgvector embeddings)
+- [x] P5 DAG orchestration + Kanban + HITL approvals
+- [x] P6 Agent builder + publish (share/API/MCP) + templates + external MCP
+- [x] P7 Ops layer: Eval Center + CI gate, cost budgets, guardrails + red-team, versioned rollback
+- [x] Local prod packaging — full docker compose + K8s manifests
 - [ ] P8 Full roster + landing page + polish + demo
-- [ ] Local prod packaging — full docker compose + K8s manifests
 - [ ] Cloud deploy on demand (ADR-007): AWS at interview time, GCP after
 
 ## Design
