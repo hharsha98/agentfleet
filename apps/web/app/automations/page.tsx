@@ -15,6 +15,17 @@ type ScheduledRun = {
   created_at: string;
 };
 
+type Webhook = {
+  id: string;
+  name: string;
+  goal_template: string;
+  secret_prefix: string;
+  last_triggered_at: string | null;
+  created_at: string;
+};
+
+type WebhookCreated = Webhook & { trigger_path: string; secret: string };
+
 const inputClass =
   "w-full rounded-md border border-hairline bg-transparent px-3 py-2 text-sm outline-none placeholder:text-muted focus:border-accent disabled:opacity-50";
 
@@ -28,6 +39,15 @@ export default function AutomationsPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [toggleBusy, setToggleBusy] = useState<Record<string, boolean>>({});
   const [deleteBusy, setDeleteBusy] = useState<Record<string, boolean>>({});
+
+  const [webhooks, setWebhooks] = useState<Webhook[]>([]);
+  const [whName, setWhName] = useState("");
+  const [whGoal, setWhGoal] = useState("");
+  const [whBusy, setWhBusy] = useState(false);
+  const [whFormError, setWhFormError] = useState<string | null>(null);
+  const [whDeleteBusy, setWhDeleteBusy] = useState<Record<string, boolean>>({});
+  const [justCreated, setJustCreated] = useState<WebhookCreated | null>(null);
+  const [copied, setCopied] = useState(false);
 
   async function refresh() {
     try {
@@ -43,8 +63,18 @@ export default function AutomationsPage() {
     }
   }
 
+  async function refreshWebhooks() {
+    try {
+      const res = await fetch(`${API_URL}/api/v1/webhooks`);
+      if (res.ok) setWebhooks(await res.json());
+    } catch {
+      // note already covers API-offline state via refresh()
+    }
+  }
+
   useEffect(() => {
     refresh();
+    refreshWebhooks();
   }, []);
 
   async function createSchedule() {
@@ -96,6 +126,62 @@ export default function AutomationsPage() {
       if (res.ok) refresh();
     } finally {
       setDeleteBusy((b) => ({ ...b, [schedule.id]: false }));
+    }
+  }
+
+  async function createWebhook() {
+    if (whBusy || !whName.trim() || !whGoal.trim()) return;
+    setWhBusy(true);
+    setWhFormError(null);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/webhooks`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: whName.trim(), goal_template: whGoal.trim() }),
+      });
+      if (res.ok) {
+        const created: WebhookCreated = await res.json();
+        setJustCreated(created);
+        setCopied(false);
+        setWhName("");
+        setWhGoal("");
+        refreshWebhooks();
+      } else {
+        const body = await res.json().catch(() => ({}));
+        setWhFormError(body.detail ?? `Create failed (${res.status})`);
+      }
+    } finally {
+      setWhBusy(false);
+    }
+  }
+
+  async function deleteWebhook(webhook: Webhook) {
+    if (!confirm(`Delete webhook "${webhook.name}"? This cannot be undone.`)) return;
+    setWhDeleteBusy((b) => ({ ...b, [webhook.id]: true }));
+    try {
+      const res = await fetch(`${API_URL}/api/v1/webhooks/${webhook.id}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        if (justCreated?.id === webhook.id) setJustCreated(null);
+        refreshWebhooks();
+      }
+    } finally {
+      setWhDeleteBusy((b) => ({ ...b, [webhook.id]: false }));
+    }
+  }
+
+  function curlExample(webhook: WebhookCreated): string {
+    // API_URL, not the web app's origin — /api/v1/hooks is served by the API.
+    return `curl -X POST ${API_URL}${webhook.trigger_path} \\\n  -H "Authorization: Bearer ${webhook.secret}" \\\n  -d '{"payload":"..."}'`;
+  }
+
+  async function copySecret(secret: string) {
+    try {
+      await navigator.clipboard.writeText(secret);
+      setCopied(true);
+    } catch {
+      // clipboard access denied — the mono box still shows the secret to copy manually
     }
   }
 
@@ -239,6 +325,117 @@ export default function AutomationsPage() {
           {schedules.length === 0 && !note && (
             <li className="pt-8 text-center text-sm text-muted">
               No automations yet — create one to run a goal on a schedule.
+            </li>
+          )}
+        </ul>
+
+        <div className="mt-12">
+          <h2 className="text-2xl font-medium tracking-tight">Webhooks</h2>
+          <p className="mt-1 text-sm text-muted">
+            Give the fleet a goal template — an external system POSTs to the trigger URL to run
+            it on demand.
+          </p>
+        </div>
+
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            createWebhook();
+          }}
+          className="mt-6 space-y-3 rounded-lg border border-hairline p-4"
+        >
+          <h2 className="text-sm font-medium">New webhook</h2>
+
+          <input
+            value={whName}
+            onChange={(e) => setWhName(e.target.value)}
+            placeholder="Name (e.g. Zendesk ticket triage)"
+            required
+            className={inputClass}
+          />
+
+          <div>
+            <textarea
+              value={whGoal}
+              onChange={(e) => setWhGoal(e.target.value)}
+              placeholder="Goal template — e.g. Triage this ticket: {payload}"
+              rows={3}
+              required
+              className={inputClass}
+            />
+            <p className="mt-1.5 font-mono text-[11px] text-muted">
+              use <code>{"{payload}"}</code> to inject the request body
+            </p>
+          </div>
+
+          {whFormError && <p className="font-mono text-xs text-muted">⚠ {whFormError}</p>}
+
+          <button
+            type="submit"
+            disabled={whBusy || !whName.trim() || !whGoal.trim()}
+            className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity disabled:opacity-40"
+          >
+            {whBusy ? "Creating…" : "Create"}
+          </button>
+        </form>
+
+        {justCreated && (
+          <div className="mt-4 space-y-2 rounded-lg border border-emerald-400/40 p-4">
+            <p className="text-sm font-medium">
+              Webhook created — copy the secret now, it won&apos;t be shown again.
+            </p>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 truncate rounded-md border border-hairline bg-transparent px-3 py-2 font-mono text-xs">
+                {justCreated.secret}
+              </code>
+              <button
+                onClick={() => copySecret(justCreated.secret)}
+                className="shrink-0 rounded-md border border-hairline px-3 py-2 text-xs text-muted transition-opacity hover:text-foreground"
+              >
+                {copied ? "Copied" : "Copy"}
+              </button>
+            </div>
+            <p className="font-mono text-[11px] text-muted">
+              Trigger URL: <code>{justCreated.trigger_path}</code>
+            </p>
+            <pre className="overflow-x-auto rounded-md border border-hairline bg-transparent px-3 py-2 font-mono text-[11px] text-muted">
+              {curlExample(justCreated)}
+            </pre>
+          </div>
+        )}
+
+        <ul className="mt-6 space-y-3">
+          {webhooks.map((w) => (
+            <li key={w.id} className="rounded-lg border border-hairline p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">{w.name}</span>
+                  </div>
+                  <p className="mt-1 truncate text-sm text-muted">{w.goal_template}</p>
+                  <p className="mt-1.5 font-mono text-[11px] text-muted">
+                    /api/v1/hooks/{w.id}
+                  </p>
+                  <p className="mt-1 font-mono text-[11px] text-muted">
+                    {w.secret_prefix}… · last triggered:{" "}
+                    {w.last_triggered_at ? new Date(w.last_triggered_at).toLocaleString() : "never"}
+                  </p>
+                </div>
+                <div className="flex shrink-0 gap-2">
+                  <button
+                    onClick={() => deleteWebhook(w)}
+                    disabled={whDeleteBusy[w.id]}
+                    className="rounded-md border border-hairline px-3 py-1.5 text-xs text-muted transition-opacity hover:text-foreground disabled:opacity-40"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </li>
+          ))}
+          {webhooks.length === 0 && !note && (
+            <li className="pt-8 text-center text-sm text-muted">
+              No webhooks yet — create one to trigger a mission from an external system.
             </li>
           )}
         </ul>

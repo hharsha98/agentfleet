@@ -134,6 +134,26 @@ class ScheduledRun(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class Webhook(Base):
+    """An inbound trigger: an external POST to /api/v1/hooks/{id} (see
+    app/routes/hooks.py) starts a Run from goal_template, with the literal
+    token `{payload}` replaced by the request body.
+
+    Same hash-only secret storage as ApiKey (Publish pillar) — only the
+    sha256 hash is persisted, the full secret is shown once at creation.
+    """
+
+    __tablename__ = "webhooks"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(120))
+    goal_template: Mapped[str] = mapped_column(Text)
+    secret_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    secret_prefix: Mapped[str] = mapped_column(String(12))
+    last_triggered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class Document(Base):
     __tablename__ = "documents"
 
