@@ -59,4 +59,6 @@ jobs:
         if: ${{ env.FREE_LLM_KEY != '' }}
         continue-on-error: true
         working-directory: apps/api
-        run: uv run python -m scripts.run_evals
+        run: |
+          uv run python -m scripts.seed_evals
+          uv run python -m scripts.run_evals

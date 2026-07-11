@@ -1,6 +1,12 @@
-from fastapi import FastAPI
+import logging
+import time
+import uuid
+
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.config import get_settings
+from app.logging_config import request_id_var, setup_logging
 from app.routes.agents import router as agents_router
 from app.routes.budgets import router as budgets_router
 from app.routes.chat import router as chat_router
@@ -13,15 +19,53 @@ from app.routes.runs import router as runs_router
 from app.routes.templates import router as templates_router
 from app.routes.usage import router as usage_router
 
+setup_logging()
+logger = logging.getLogger("app.request")
+
 app = FastAPI(title="AgentFleet API", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3002"],
+    allow_origins=[o.strip() for o in get_settings().cors_origins.split(",") if o.strip()],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def request_id_middleware(request: Request, call_next):
+    """Tag every request with a correlation ID and log one structured line.
+
+    Reads an incoming X-Request-ID header if present, otherwise generates a
+    uuid4 hex. The ID is available to any log call made while handling the
+    request (via request_id_var) and echoed back on the response. Logging
+    failures are swallowed — they must never break the actual request.
+    """
+    incoming = request.headers.get("X-Request-ID")
+    request_id = incoming if incoming else uuid.uuid4().hex
+    token = request_id_var.set(request_id)
+    start = time.monotonic()
+    try:
+        response = await call_next(request)
+    except Exception:
+        request_id_var.reset(token)
+        raise
+
+    duration_ms = round((time.monotonic() - start) * 1000, 2)
+    response.headers["X-Request-ID"] = request_id
+    try:
+        logger.info(
+            "request method=%s path=%s status=%s duration_ms=%s",
+            request.method,
+            request.url.path,
+            response.status_code,
+            duration_ms,
+        )
+    except Exception:
+        pass
+    request_id_var.reset(token)
+    return response
 
 
 app.include_router(agents_router, prefix="/api/v1/agents", tags=["agents"])

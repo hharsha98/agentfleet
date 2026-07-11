@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     langfuse_secret_key: str = ""
     langfuse_host: str = "https://cloud.langfuse.com"
 
+    # Comma-separated list of origins allowed to call the API (CORS). Env:
+    # CORS_ORIGINS. Default matches the web app's local dev port.
+    cors_origins: str = "http://localhost:3002"
+
 
 @lru_cache
 def get_settings() -> Settings:
