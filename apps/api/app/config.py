@@ -23,6 +23,13 @@ class Settings(BaseSettings):
     # while-loop (services/chat.py), kept as a documented fallback.
     agent_runtime: str = "langgraph"  # "langgraph" | "native"
 
+    # Which LangGraph checkpointer backs graph state: durable Postgres
+    # (default; see services/checkpointer.py) or an in-process MemorySaver
+    # for environments without a database (the checkpointer also falls back
+    # automatically on connection failure — this setting forces it
+    # explicitly, e.g. for tests or a DB-less dev laptop).
+    checkpointer: str = "postgres"  # "postgres" | "memory"
+
     searxng_url: str = "http://localhost:8081"
 
     # web_search provider routing: "tavily" | "exa" | "searxng". Missing key,

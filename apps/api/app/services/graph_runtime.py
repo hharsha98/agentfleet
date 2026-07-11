@@ -7,7 +7,9 @@ registry (app.tools), MCP dispatch (McpToolbox), guardrails
 (wrap_tool_output), and cost metering (app.costs). What changes is *how* the
 model<->tools loop runs: instead of chat.py's manual while-loop, this module
 compiles a LangGraph StateGraph (model node <-> tools node, conditional
-edges, MemorySaver checkpointing per conversation) and streams it.
+edges, durable Postgres checkpointing per turn via services/checkpointer.py
+— see the THREAD-ID TRAP comment below for why "per turn" and not "per
+conversation") and streams it.
 
 The SSE wire contract emitted to the client is byte-for-byte identical to
 chat.py's: `data: {json}\n\n` frames of type token / tool_call / tool_result
@@ -43,7 +45,6 @@ from collections.abc import AsyncGenerator
 import openai
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_openai import ChatOpenAI
-from langgraph.checkpoint.memory import MemorySaver
 from langgraph.config import get_stream_writer
 from langgraph.errors import GraphRecursionError
 from langgraph.graph import END, MessagesState, StateGraph
@@ -55,6 +56,7 @@ from app.db import SessionLocal
 from app.models import Agent, Conversation, Message
 from app.services.budget import check_budget
 from app.services.chat import MAX_HISTORY_MESSAGES, MAX_TOOL_ROUNDS
+from app.services.checkpointer import get_checkpointer
 from app.services.guardrails import wrap_tool_output
 from app.services.mcp_client import McpToolbox
 from app.tools import run_tool, specs_for
@@ -94,12 +96,18 @@ def tool_specs_for_agent(agent_tools: list, mcp_specs: list[dict]) -> list[dict]
 
 
 def _build_graph(
-    model, mcp_toolbox: McpToolbox, tool_log: list[dict], findings_texts: list[str]
+    model, mcp_toolbox: McpToolbox, tool_log: list[dict], findings_texts: list[str], checkpointer
 ):
     """Compile a fresh StateGraph for one chat turn. The model and
     mcp_toolbox are per-request (bound to this agent's config and this
     turn's live MCP connections), so the graph is built per call rather
     than cached — compilation is cheap relative to a model round-trip.
+
+    checkpointer is the process-wide singleton from services/checkpointer.py
+    (obtained via `await get_checkpointer()` in the async request path, not
+    at import time) — durable Postgres by default, or a MemorySaver
+    fallback. It is NOT created here: a fresh pool per chat turn would
+    exhaust Postgres connections and defeat the point of a shared saver.
 
     findings_texts accumulates the same (name, args, output) research notes
     chat.py's findings_texts does, so that if the run aborts mid-loop
@@ -146,7 +154,7 @@ def _build_graph(
     graph.set_entry_point("model")
     graph.add_conditional_edges("model", route_after_model, {"tools": "tools", END: END})
     graph.add_edge("tools", "model")
-    return graph.compile(checkpointer=MemorySaver())
+    return graph.compile(checkpointer=checkpointer)
 
 
 async def _salvage_final_answer(
@@ -272,9 +280,25 @@ async def stream_chat_graph(conversation_id: uuid.UUID, user_text: str) -> Async
             if tool_specs:
                 model = model.bind_tools(tool_specs)
 
-            graph = _build_graph(model, mcp_toolbox, tool_log, findings_texts)
+            checkpointer = await get_checkpointer()
+            graph = _build_graph(model, mcp_toolbox, tool_log, findings_texts, checkpointer)
+            # THREAD-ID TRAP: this runtime already loads the full
+            # conversation history from the messages table and re-seeds it
+            # as `lc_messages` on every turn (see above). LangGraph's
+            # add_messages reducer APPENDS new input to whatever the
+            # checkpointer already has for a thread_id — so if thread_id
+            # were stable per-conversation, turn 2 would contain turn 1's
+            # checkpointed messages PLUS the manually-reseeded history
+            # again, duplicating messages and inflating token cost every
+            # turn. Using a fresh, unique thread_id per turn keeps each
+            # turn's graph execution durable in Postgres (satisfying the
+            # "survives a restart/replica" requirement) without ever
+            # accumulating cross-turn state in the checkpointer — the
+            # messages table remains the single source of conversation
+            # memory, unchanged from before this change.
+            thread_id = f"{conversation_id}:{uuid.uuid4().hex}"
             config = {
-                "configurable": {"thread_id": str(conversation_id)},
+                "configurable": {"thread_id": thread_id},
                 "recursion_limit": RECURSION_LIMIT,
             }
 
