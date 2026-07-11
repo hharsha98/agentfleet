@@ -1,0 +1,401 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useState } from "react";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+type Agent = {
+  id: string;
+  slug: string;
+  name: string;
+};
+
+type UsageToday = {
+  tokens: number;
+  cost_usd: number;
+  messages: number;
+};
+
+type UsagePerAgent = {
+  agent_slug: string;
+  agent_name: string;
+  tokens: number;
+  cost_usd: number;
+  messages: number;
+};
+
+type UsageSummary = {
+  today: UsageToday;
+  per_agent: UsagePerAgent[];
+};
+
+type UsageDaily = {
+  date: string;
+  tokens: number;
+  cost_usd: number;
+};
+
+type Budget = {
+  id: string;
+  agent_id: string | null;
+  agent_slug: string | null;
+  daily_token_limit: number | null;
+  daily_usd_limit: number | null;
+};
+
+type BudgetRow = {
+  key: string;
+  agentId: string | null;
+  label: string;
+  budget: Budget | null;
+};
+
+const inputClass =
+  "w-24 rounded-md border border-hairline bg-transparent px-2 py-1 text-xs font-mono outline-none placeholder:text-muted focus:border-accent disabled:opacity-50";
+
+function fmtInt(n: number): string {
+  return n.toLocaleString();
+}
+
+function fmtUsd(n: number): string {
+  return `$${n.toFixed(4)}`;
+}
+
+export default function UsagePage() {
+  const [note, setNote] = useState<string | null>(null);
+
+  const [summary, setSummary] = useState<UsageSummary | null>(null);
+  const [daily, setDaily] = useState<UsageDaily[]>([]);
+  const [budgets, setBudgets] = useState<Budget[]>([]);
+  const [agents, setAgents] = useState<Agent[]>([]);
+
+  const [pendingAgentIds, setPendingAgentIds] = useState<string[]>([]);
+  const [edits, setEdits] = useState<Record<string, { token: string; usd: string }>>({});
+  const [addAgentId, setAddAgentId] = useState("");
+  const [busyKey, setBusyKey] = useState<string | null>(null);
+
+  async function refreshSummary() {
+    const res = await fetch(`${API_URL}/api/v1/usage/summary`);
+    if (res.ok) setSummary(await res.json());
+  }
+
+  async function refreshDaily() {
+    const res = await fetch(`${API_URL}/api/v1/usage/daily?days=14`);
+    if (res.ok) setDaily(await res.json());
+  }
+
+  async function refreshBudgets() {
+    const res = await fetch(`${API_URL}/api/v1/budgets`);
+    if (res.ok) setBudgets(await res.json());
+  }
+
+  async function refreshAgents() {
+    const res = await fetch(`${API_URL}/api/v1/agents`);
+    if (res.ok) setAgents(await res.json());
+  }
+
+  async function refreshAll() {
+    try {
+      await Promise.all([refreshSummary(), refreshDaily(), refreshBudgets(), refreshAgents()]);
+      setNote(null);
+    } catch {
+      setNote("API offline — start the backend and reload.");
+    }
+  }
+
+  useEffect(() => {
+    refreshAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const globalBudget = budgets.find((b) => b.agent_id === null) ?? null;
+  const agentBudgets = budgets.filter((b) => b.agent_id !== null);
+  const budgetedAgentIds = new Set(agentBudgets.map((b) => b.agent_id));
+
+  const rows: BudgetRow[] = [
+    { key: "global", agentId: null, label: "Global", budget: globalBudget },
+    ...agentBudgets.map((b) => ({
+      key: b.agent_id as string,
+      agentId: b.agent_id,
+      label: b.agent_slug ?? (b.agent_id as string),
+      budget: b,
+    })),
+    ...pendingAgentIds.map((id) => ({
+      key: id,
+      agentId: id,
+      label: agents.find((a) => a.id === id)?.slug ?? id,
+      budget: null,
+    })),
+  ];
+
+  const availableAgents = agents.filter(
+    (a) => !budgetedAgentIds.has(a.id) && !pendingAgentIds.includes(a.id),
+  );
+
+  function currentToken(row: BudgetRow): string {
+    if (edits[row.key]?.token !== undefined) return edits[row.key].token;
+    return row.budget?.daily_token_limit != null ? String(row.budget.daily_token_limit) : "";
+  }
+
+  function currentUsd(row: BudgetRow): string {
+    if (edits[row.key]?.usd !== undefined) return edits[row.key].usd;
+    return row.budget?.daily_usd_limit != null ? String(row.budget.daily_usd_limit) : "";
+  }
+
+  function setTokenEdit(row: BudgetRow, value: string) {
+    setEdits((prev) => ({ ...prev, [row.key]: { token: value, usd: currentUsd(row) } }));
+  }
+
+  function setUsdEdit(row: BudgetRow, value: string) {
+    setEdits((prev) => ({ ...prev, [row.key]: { token: currentToken(row), usd: value } }));
+  }
+
+  function clearRowEdits(key: string) {
+    setEdits((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  }
+
+  async function putBudget(
+    row: BudgetRow,
+    dailyTokenLimit: number | null,
+    dailyUsdLimit: number | null,
+  ) {
+    setBusyKey(row.key);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/budgets`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          agent_id: row.agentId,
+          daily_token_limit: dailyTokenLimit,
+          daily_usd_limit: dailyUsdLimit,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setNote(body.detail ?? `Save failed (${res.status})`);
+        return;
+      }
+      clearRowEdits(row.key);
+      if (row.agentId) setPendingAgentIds((ids) => ids.filter((id) => id !== row.agentId));
+      await refreshBudgets();
+    } finally {
+      setBusyKey(null);
+    }
+  }
+
+  function saveBudget(row: BudgetRow) {
+    const tokenStr = currentToken(row).trim();
+    const usdStr = currentUsd(row).trim();
+    putBudget(row, tokenStr === "" ? null : Number(tokenStr), usdStr === "" ? null : Number(usdStr));
+  }
+
+  function addAgentRow() {
+    if (!addAgentId) return;
+    setPendingAgentIds((ids) => [...ids, addAgentId]);
+    setAddAgentId("");
+  }
+
+  const maxTokens = Math.max(1, ...daily.map((d) => d.tokens));
+
+  return (
+    <div className="flex flex-1 flex-col">
+      <header className="flex items-center justify-between border-b border-hairline px-6 py-3">
+        <Link href="/" className="font-medium tracking-tight">
+          AgentFleet
+        </Link>
+        <nav className="flex gap-4 text-sm text-muted">
+          <Link href="/chat" className="hover:text-foreground">
+            Chat
+          </Link>
+          <Link href="/documents" className="hover:text-foreground">
+            Documents
+          </Link>
+          <Link href="/missions" className="hover:text-foreground">
+            Missions
+          </Link>
+          <Link href="/agents" className="hover:text-foreground">
+            Agents
+          </Link>
+          <Link href="/templates" className="hover:text-foreground">
+            Templates
+          </Link>
+          <Link href="/evals" className="hover:text-foreground">
+            Evals
+          </Link>
+          <span className="text-foreground">Usage</span>
+        </nav>
+      </header>
+
+      <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-8">
+        <h1 className="text-2xl font-medium tracking-tight">Usage &amp; cost</h1>
+        <p className="mt-1 text-sm text-muted">
+          Metering rolls up from Message rows — every assistant turn, across every agent.
+        </p>
+        {note && <p className="mt-3 font-mono text-xs text-muted">{note}</p>}
+
+        {/* Stat tiles */}
+        <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="rounded-lg border border-hairline p-4">
+            <p className="text-xs text-muted">Tokens today</p>
+            <p className="mt-1 font-mono text-3xl font-medium">
+              {summary ? fmtInt(summary.today.tokens) : "—"}
+            </p>
+          </div>
+          <div className="rounded-lg border border-hairline p-4">
+            <p className="text-xs text-muted">Cost today</p>
+            <p className="mt-1 font-mono text-3xl font-medium">
+              {summary ? fmtUsd(summary.today.cost_usd) : "—"}
+            </p>
+          </div>
+          <div className="rounded-lg border border-hairline p-4">
+            <p className="text-xs text-muted">Messages today</p>
+            <p className="mt-1 font-mono text-3xl font-medium">
+              {summary ? fmtInt(summary.today.messages) : "—"}
+            </p>
+          </div>
+        </div>
+
+        {/* 14-day bar chart */}
+        <div className="mt-8">
+          <h2 className="text-sm font-medium">Last 14 days (tokens)</h2>
+          <div className="mt-3 flex h-32 items-end gap-1 rounded-lg border border-hairline p-3">
+            {daily.map((d) => (
+              <div
+                key={d.date}
+                className="flex h-full flex-1 flex-col items-center justify-end"
+                title={`${d.date}: ${fmtInt(d.tokens)} tokens`}
+              >
+                <div
+                  className="w-full rounded-sm bg-accent"
+                  style={{ height: `${Math.max(2, (d.tokens / maxTokens) * 100)}%` }}
+                />
+              </div>
+            ))}
+            {daily.length === 0 && (
+              <p className="w-full text-center text-xs text-muted">No usage yet.</p>
+            )}
+          </div>
+        </div>
+
+        {/* Per-agent table */}
+        <div className="mt-8">
+          <h2 className="text-sm font-medium">Per agent (last 7 days)</h2>
+          <div className="mt-3 overflow-x-auto rounded-lg border border-hairline">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-hairline text-xs text-muted">
+                  <th className="px-3 py-2 font-normal">Agent</th>
+                  <th className="px-3 py-2 font-normal">Tokens</th>
+                  <th className="px-3 py-2 font-normal">Cost</th>
+                  <th className="px-3 py-2 font-normal">Messages</th>
+                </tr>
+              </thead>
+              <tbody>
+                {summary?.per_agent.map((a) => (
+                  <tr key={a.agent_slug} className="border-b border-hairline last:border-0">
+                    <td className="px-3 py-2">{a.agent_name}</td>
+                    <td className="px-3 py-2 font-mono">{fmtInt(a.tokens)}</td>
+                    <td className="px-3 py-2 font-mono">{fmtUsd(a.cost_usd)}</td>
+                    <td className="px-3 py-2 font-mono">{fmtInt(a.messages)}</td>
+                  </tr>
+                ))}
+                {(!summary || summary.per_agent.length === 0) && (
+                  <tr>
+                    <td colSpan={4} className="px-3 py-6 text-center text-sm text-muted">
+                      No usage in the last 7 days.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Budgets */}
+        <div className="mt-8">
+          <h2 className="text-sm font-medium">Budgets</h2>
+          <p className="mt-1 text-xs text-muted">
+            Daily caps checked before each reply — a violation on either the agent or the global
+            budget stops the turn.
+          </p>
+
+          <div className="mt-3 space-y-2">
+            {rows.map((row) => (
+              <div
+                key={row.key}
+                className="flex flex-wrap items-center gap-3 rounded-lg border border-hairline p-3"
+              >
+                <span className="w-32 shrink-0 text-sm">{row.label}</span>
+                <label className="flex items-center gap-1.5 text-xs text-muted">
+                  tokens
+                  <input
+                    value={currentToken(row)}
+                    onChange={(e) => setTokenEdit(row, e.target.value)}
+                    placeholder="none"
+                    inputMode="numeric"
+                    className={inputClass}
+                  />
+                </label>
+                <label className="flex items-center gap-1.5 text-xs text-muted">
+                  USD
+                  <input
+                    value={currentUsd(row)}
+                    onChange={(e) => setUsdEdit(row, e.target.value)}
+                    placeholder="none"
+                    inputMode="decimal"
+                    className={inputClass}
+                  />
+                </label>
+                <div className="ml-auto flex gap-2">
+                  <button
+                    onClick={() => saveBudget(row)}
+                    disabled={busyKey === row.key}
+                    className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-40"
+                  >
+                    {busyKey === row.key ? "Saving…" : "Save"}
+                  </button>
+                  <button
+                    onClick={() => putBudget(row, null, null)}
+                    disabled={busyKey === row.key}
+                    className="rounded-md border border-hairline px-3 py-1.5 text-xs text-muted hover:text-foreground disabled:opacity-40"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {availableAgents.length > 0 && (
+            <div className="mt-3 flex items-center gap-2 rounded-lg border border-hairline p-3">
+              <select
+                value={addAgentId}
+                onChange={(e) => setAddAgentId(e.target.value)}
+                className="rounded-md border border-hairline bg-transparent px-3 py-1.5 text-sm outline-none focus:border-accent"
+              >
+                <option value="">Add a budget for…</option>
+                {availableAgents.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name} ({a.slug})
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={addAgentRow}
+                disabled={!addAgentId}
+                className="rounded-md border border-hairline px-3 py-1.5 text-xs text-muted hover:text-foreground disabled:opacity-40"
+              >
+                Add
+              </button>
+            </div>
+          )}
+        </div>
+      </main>
+    </div>
+  );
+}

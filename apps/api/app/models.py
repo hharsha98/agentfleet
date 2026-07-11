@@ -180,6 +180,20 @@ class EvalRun(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class Budget(Base):
+    """A daily spend cap: per-agent, or the single GLOBAL row (agent_id NULL)."""
+
+    __tablename__ = "budgets"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    agent_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("agents.id", ondelete="CASCADE"), unique=True, nullable=True
+    )
+    daily_token_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    daily_usd_limit: Mapped[float | None] = mapped_column(Numeric(10, 4), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class Message(Base):
     """One chat turn, with the cost/latency metering that feeds the dashboards."""
 

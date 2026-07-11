@@ -101,3 +101,44 @@ class EvalRunSummaryOut(BaseModel):
     total: int
     passed: int
     created_at: datetime
+
+
+class BudgetOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    agent_id: uuid.UUID | None
+    agent_slug: str | None = None
+    daily_token_limit: int | None
+    daily_usd_limit: float | None
+
+
+class BudgetUpsert(BaseModel):
+    agent_id: uuid.UUID | None = None
+    daily_token_limit: int | None = Field(default=None, ge=0)
+    daily_usd_limit: float | None = Field(default=None, ge=0)
+
+
+class UsageTodayOut(BaseModel):
+    tokens: int
+    cost_usd: float
+    messages: int
+
+
+class UsagePerAgentOut(BaseModel):
+    agent_slug: str
+    agent_name: str
+    tokens: int
+    cost_usd: float
+    messages: int
+
+
+class UsageSummaryOut(BaseModel):
+    today: UsageTodayOut
+    per_agent: list[UsagePerAgentOut]
+
+
+class UsageDailyOut(BaseModel):
+    date: str
+    tokens: int
+    cost_usd: float

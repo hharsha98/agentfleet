@@ -79,6 +79,9 @@ export default function DocumentsPage() {
           <Link href="/evals" className="hover:text-foreground">
             Evals
           </Link>
+          <Link href="/usage" className="hover:text-foreground">
+            Usage
+          </Link>
         </nav>
       </header>
 

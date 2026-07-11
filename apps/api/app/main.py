@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.routes.agents import router as agents_router
+from app.routes.budgets import router as budgets_router
 from app.routes.chat import router as chat_router
 from app.routes.documents import router as documents_router
 from app.routes.evals import router as evals_router
@@ -9,6 +10,7 @@ from app.routes.keys import router as keys_router
 from app.routes.public import router as public_router
 from app.routes.runs import router as runs_router
 from app.routes.templates import router as templates_router
+from app.routes.usage import router as usage_router
 
 app = FastAPI(title="AgentFleet API", version="0.1.0")
 
@@ -29,6 +31,8 @@ app.include_router(keys_router, prefix="/api/v1/agents/{agent_id}/keys", tags=["
 app.include_router(evals_router, prefix="/api/v1/agents/{agent_id}/evals", tags=["evals"])
 app.include_router(public_router, prefix="/api/v1/public", tags=["public"])
 app.include_router(templates_router, prefix="/api/v1/templates", tags=["templates"])
+app.include_router(usage_router, prefix="/api/v1/usage", tags=["usage"])
+app.include_router(budgets_router, prefix="/api/v1/budgets", tags=["budgets"])
 
 
 @app.get("/health")

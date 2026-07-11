@@ -22,6 +22,7 @@ from app.costs import cost_usd
 from app.db import SessionLocal
 from app.models import Agent, Conversation, Message
 from app.providers import get_llm_client
+from app.services.budget import check_budget
 from app.services.mcp_client import McpToolbox
 from app.tools import run_tool, specs_for
 
@@ -52,6 +53,11 @@ async def stream_chat(conversation_id: uuid.UUID, user_text: str) -> AsyncGenera
                 yield _sse({"type": "error", "message": "Conversation not found"})
                 return
             agent = await session.get(Agent, conversation.agent_id)
+
+            violation = await check_budget(session, agent.id)
+            if violation:
+                yield _sse({"type": "error", "message": violation})
+                return
 
             recent = (
                 (

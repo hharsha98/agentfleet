@@ -221,6 +221,9 @@ export default function EvalsPage() {
             Templates
           </Link>
           <span className="text-foreground">Evals</span>
+          <Link href="/usage" className="hover:text-foreground">
+            Usage
+          </Link>
         </nav>
       </header>
 
