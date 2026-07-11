@@ -1,6 +1,8 @@
 name: evals
 
 on:
+  push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -23,6 +25,9 @@ jobs:
           --health-retries 5
     env:
       DATABASE_URL: postgresql+asyncpg://agentfleet:agentfleet@localhost:5432/agentfleet
+      # Secrets are allowed in job-level env, but NOT in a step's `if:` — so we
+      # surface the key here and gate the eval step on env below.
+      FREE_LLM_KEY: ${{ secrets.FREE_LLM_KEY }}
     steps:
       - uses: actions/checkout@v4
 
@@ -51,9 +56,7 @@ jobs:
       # this job is the regression gate, meant to be tightened once
       # FREE_LLM_KEY / ANTHROPIC_API_KEY are configured as repo secrets.
       - name: Run LLM eval gate
-        if: ${{ secrets.FREE_LLM_KEY != '' }}
+        if: ${{ env.FREE_LLM_KEY != '' }}
         continue-on-error: true
         working-directory: apps/api
-        env:
-          FREE_LLM_KEY: ${{ secrets.FREE_LLM_KEY }}
         run: uv run python -m scripts.run_evals
