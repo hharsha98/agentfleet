@@ -89,6 +89,9 @@ export default function TemplatesPage() {
           <Link href="/usage" className="hover:text-foreground">
             Usage
           </Link>
+          <Link href="/automations" className="hover:text-foreground">
+            Automations
+          </Link>
         </nav>
       </header>
 

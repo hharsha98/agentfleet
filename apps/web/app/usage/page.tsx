@@ -228,6 +228,9 @@ export default function UsagePage() {
             Evals
           </Link>
           <span className="text-foreground">Usage</span>
+          <Link href="/automations" className="hover:text-foreground">
+            Automations
+          </Link>
         </nav>
       </header>
 

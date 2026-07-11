@@ -116,6 +116,24 @@ class RunTask(Base):
     run: Mapped[Run] = relationship(back_populates="tasks")
 
 
+class ScheduledRun(Base):
+    """A goal + cron schedule: the arq worker's cron poller (see
+    app/services/scheduler.py) creates and dispatches a Run each time the
+    schedule is due. Firing requires the arq worker process to be running
+    (ORCHESTRATOR_MODE=arq) — see worker.py's WorkerSettings.cron_jobs.
+    """
+
+    __tablename__ = "scheduled_runs"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(120))
+    goal: Mapped[str] = mapped_column(Text)
+    cron: Mapped[str] = mapped_column(String(120))
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class Document(Base):
     __tablename__ = "documents"
 

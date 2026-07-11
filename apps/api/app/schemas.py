@@ -159,3 +159,15 @@ class UsageDailyOut(BaseModel):
     date: str
     tokens: int
     cost_usd: float
+
+
+class ScheduledRunOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+    goal: str
+    cron: str
+    enabled: bool
+    last_run_at: datetime | None
+    created_at: datetime
