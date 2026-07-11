@@ -31,6 +31,13 @@ type ApiKeyItem = {
   last_used_at: string | null;
 };
 
+type AgentVersion = {
+  id: string;
+  version: number;
+  note: string;
+  created_at: string;
+};
+
 type RedTeamCaseResult = {
   case_id: string | null;
   input: string;
@@ -96,6 +103,16 @@ export default function AgentsPage() {
   const [redTeamBusy, setRedTeamBusy] = useState<Record<string, boolean>>({});
   const [redTeamByAgent, setRedTeamByAgent] = useState<Record<string, RedTeamRun | null>>({});
   const [redTeamExpanded, setRedTeamExpanded] = useState<Record<string, boolean>>({});
+
+  // Versioning (Ops pillar): which agent's version history panel is
+  // expanded, the versions loaded for it, the "publish" note input, busy
+  // flags for publish/rollback, and a brief "restored" confirmation.
+  const [versionsOpenId, setVersionsOpenId] = useState<string | null>(null);
+  const [versionsByAgent, setVersionsByAgent] = useState<Record<string, AgentVersion[]>>({});
+  const [publishNote, setPublishNote] = useState<Record<string, string>>({});
+  const [publishBusy, setPublishBusy] = useState<Record<string, boolean>>({});
+  const [rollbackBusy, setRollbackBusy] = useState<Record<string, boolean>>({});
+  const [versionStatus, setVersionStatus] = useState<Record<string, string>>({});
 
   async function refresh() {
     try {
@@ -307,6 +324,66 @@ export default function AgentsPage() {
 
   function failedRedTeamCases(agentId: string): RedTeamCaseResult[] {
     return (redTeamByAgent[agentId]?.results ?? []).filter((r) => !r.passed);
+  }
+
+  async function fetchVersions(agentId: string) {
+    const res = await fetch(`${API_URL}/api/v1/agents/${agentId}/versions`);
+    if (res.ok) {
+      const data = await res.json();
+      setVersionsByAgent((v) => ({ ...v, [agentId]: data }));
+    }
+  }
+
+  function toggleVersions(agentId: string) {
+    if (versionsOpenId === agentId) {
+      setVersionsOpenId(null);
+      return;
+    }
+    setVersionsOpenId(agentId);
+    fetchVersions(agentId);
+  }
+
+  async function publishVersion(agentId: string) {
+    if (publishBusy[agentId]) return;
+    setPublishBusy((b) => ({ ...b, [agentId]: true }));
+    try {
+      const res = await fetch(`${API_URL}/api/v1/agents/${agentId}/publish`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ note: publishNote[agentId]?.trim() || "" }),
+      });
+      if (res.ok) {
+        setPublishNote((n) => ({ ...n, [agentId]: "" }));
+        await fetchVersions(agentId);
+      }
+    } finally {
+      setPublishBusy((b) => ({ ...b, [agentId]: false }));
+    }
+  }
+
+  async function rollbackVersion(agentId: string, version: AgentVersion) {
+    if (
+      !confirm(
+        `Roll back to v${version.version}? This restores that config and adds a new version.`
+      )
+    )
+      return;
+    setRollbackBusy((b) => ({ ...b, [agentId]: true }));
+    try {
+      const res = await fetch(
+        `${API_URL}/api/v1/agents/${agentId}/versions/${version.id}/rollback`,
+        { method: "POST" }
+      );
+      if (res.ok) {
+        setVersionStatus((s) => ({ ...s, [agentId]: `Restored to v${version.version}` }));
+        await Promise.all([refresh(), fetchVersions(agentId)]);
+        setTimeout(() => {
+          setVersionStatus((s) => ({ ...s, [agentId]: "" }));
+        }, 3000);
+      }
+    } finally {
+      setRollbackBusy((b) => ({ ...b, [agentId]: false }));
+    }
   }
 
   return (
@@ -568,6 +645,12 @@ export default function AgentsPage() {
                 >
                   {redTeamBusy[a.id] ? "Running red-team…" : "Red-team"}
                 </button>
+                <button
+                  onClick={() => toggleVersions(a.id)}
+                  className="text-xs text-muted hover:text-foreground"
+                >
+                  {versionsOpenId === a.id ? "Hide versions" : "Versions"}
+                </button>
               </div>
 
               {redTeamByAgent[a.id] && (
@@ -668,6 +751,59 @@ export default function AgentsPage() {
                       {keyBusy[a.id] ? "Creating…" : "Create key"}
                     </button>
                   </div>
+                </div>
+              )}
+
+              {versionsOpenId === a.id && (
+                <div className="mt-3 space-y-3 rounded-md border border-hairline p-3">
+                  <div className="flex gap-2">
+                    <input
+                      value={publishNote[a.id] ?? ""}
+                      onChange={(e) =>
+                        setPublishNote((n) => ({ ...n, [a.id]: e.target.value }))
+                      }
+                      placeholder="release note (optional)"
+                      className={`${inputClass} py-1.5`}
+                    />
+                    <button
+                      onClick={() => publishVersion(a.id)}
+                      disabled={publishBusy[a.id]}
+                      className="shrink-0 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-40"
+                    >
+                      {publishBusy[a.id] ? "Publishing…" : "Publish current"}
+                    </button>
+                  </div>
+
+                  {versionStatus[a.id] && (
+                    <p className="font-mono text-xs text-muted">{versionStatus[a.id]}</p>
+                  )}
+
+                  <ul className="space-y-2">
+                    {(versionsByAgent[a.id] ?? []).map((v) => (
+                      <li
+                        key={v.id}
+                        className="flex items-center justify-between gap-3 text-xs"
+                      >
+                        <div>
+                          <span className="font-mono">v{v.version}</span>{" "}
+                          <span>{v.note || "—"}</span>{" "}
+                          <span className="font-mono text-muted">
+                            {new Date(v.created_at).toLocaleString()}
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => rollbackVersion(a.id, v)}
+                          disabled={rollbackBusy[a.id]}
+                          className="shrink-0 rounded-md border border-hairline px-2.5 py-1 text-[11px] text-muted hover:text-foreground disabled:opacity-40"
+                        >
+                          Roll back
+                        </button>
+                      </li>
+                    ))}
+                    {(versionsByAgent[a.id] ?? []).length === 0 && (
+                      <li className="text-xs text-muted">No versions yet.</li>
+                    )}
+                  </ul>
                 </div>
               )}
             </li>

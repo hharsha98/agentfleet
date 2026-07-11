@@ -7,8 +7,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.db import get_session
-from app.models import Agent
-from app.schemas import AgentCreate, AgentOut, AgentUpdate
+from app.models import Agent, AgentVersion
+from app.schemas import (
+    AgentCreate,
+    AgentOut,
+    AgentPublish,
+    AgentUpdate,
+    AgentVersionDetailOut,
+    AgentVersionOut,
+)
+from app.services.versioning import publish_version, restore_version
 from app.tools import TOOLS
 
 router = APIRouter()
@@ -84,9 +92,15 @@ async def create_agent(
     session.add(agent)
     await session.commit()
     await session.refresh(agent)
+    await publish_version(session, agent, note="Initial version")
+    await session.commit()
     return agent
 
 
+# NOTE: publishing is an explicit user action (this create hook, or the
+# POST /{agent_id}/publish endpoint below) — PATCH deliberately does NOT
+# auto-publish a version on every edit, or the history would flood with a
+# version per keystroke-driven change.
 @router.patch("/{agent_id}", response_model=AgentOut)
 async def update_agent(
     agent_id: uuid.UUID, payload: AgentUpdate, session: AsyncSession = Depends(get_session)
@@ -118,3 +132,54 @@ async def delete_agent(
     await session.delete(agent)
     await session.commit()
     return {"ok": True}
+
+
+@router.post("/{agent_id}/publish", response_model=AgentVersionOut, status_code=201)
+async def publish_agent(
+    agent_id: uuid.UUID, payload: AgentPublish, session: AsyncSession = Depends(get_session)
+) -> AgentVersion:
+    agent = await session.get(Agent, agent_id)
+    if agent is None:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    version = await publish_version(session, agent, note=payload.note)
+    await session.commit()
+    await session.refresh(version)
+    return version
+
+
+@router.get("/{agent_id}/versions", response_model=list[AgentVersionOut])
+async def list_versions(
+    agent_id: uuid.UUID, session: AsyncSession = Depends(get_session)
+) -> list[AgentVersion]:
+    result = await session.execute(
+        select(AgentVersion)
+        .where(AgentVersion.agent_id == agent_id)
+        .order_by(AgentVersion.version.desc())
+    )
+    return list(result.scalars().all())
+
+
+@router.get("/{agent_id}/versions/{version_id}", response_model=AgentVersionDetailOut)
+async def get_version(
+    agent_id: uuid.UUID, version_id: uuid.UUID, session: AsyncSession = Depends(get_session)
+) -> AgentVersion:
+    version = await session.get(AgentVersion, version_id)
+    if version is None or version.agent_id != agent_id:
+        raise HTTPException(status_code=404, detail="Version not found")
+    return version
+
+
+@router.post("/{agent_id}/versions/{version_id}/rollback", response_model=AgentOut)
+async def rollback_agent(
+    agent_id: uuid.UUID, version_id: uuid.UUID, session: AsyncSession = Depends(get_session)
+) -> Agent:
+    agent = await session.get(Agent, agent_id)
+    if agent is None:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    version = await session.get(AgentVersion, version_id)
+    if version is None or version.agent_id != agent_id:
+        raise HTTPException(status_code=404, detail="Version not found")
+    await restore_version(session, agent, version)
+    await session.commit()
+    await session.refresh(agent)
+    return agent

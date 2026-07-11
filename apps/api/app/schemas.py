@@ -44,6 +44,23 @@ class AgentUpdate(BaseModel):
     mcp_servers: list[dict] | None = None
 
 
+class AgentVersionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    version: int
+    note: str
+    created_at: datetime
+
+
+class AgentVersionDetailOut(AgentVersionOut):
+    config: dict
+
+
+class AgentPublish(BaseModel):
+    note: str = ""
+
+
 class ConversationCreate(BaseModel):
     agent_id: uuid.UUID
 
