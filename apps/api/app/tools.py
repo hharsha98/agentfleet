@@ -350,6 +350,84 @@ async def sql_query(query: str) -> str:
     )
 
 
+# ── send_slack: post a short digest to the team Slack channel ───────────────
+#
+# Graceful degradation: with no SLACK_WEBHOOK_URL configured, the tool still
+# "succeeds" from the agent's point of view — it returns a clear message
+# showing what would have been sent, instead of erroring or crashing the
+# turn. That lets agents like Competitor Monitor be built and evaluated
+# before the user ever adds a Slack webhook.
+
+_SLACK_TIMEOUT = 10.0
+
+
+async def send_slack(message: str) -> str:
+    settings = get_settings()
+    if not settings.slack_webhook_url:
+        return (
+            "Slack is not configured (set SLACK_WEBHOOK_URL). Message that would "
+            f"be sent:\n{message[:500]}"
+        )
+    try:
+        async with httpx.AsyncClient(timeout=_SLACK_TIMEOUT) as client:
+            res = await client.post(settings.slack_webhook_url, json={"text": message})
+        if res.status_code == 200:
+            return "Posted to Slack."
+        return f"Slack post failed (status {res.status_code})"
+    except Exception as exc:
+        return f"Slack error: {type(exc).__name__}"
+
+
+# ── push_to_crm: upsert a contact into HubSpot ───────────────────────────────
+#
+# Same graceful-degradation shape as send_slack: no HUBSPOT_ACCESS_TOKEN ->
+# return what would have been upserted instead of failing the agent turn.
+
+_CRM_TIMEOUT = 10.0
+
+
+async def push_to_crm(contact_json: str) -> str:
+    try:
+        contact = json.loads(contact_json)
+    except Exception:
+        return "Invalid contact JSON"
+
+    settings = get_settings()
+    if not settings.hubspot_access_token:
+        pretty = json.dumps(contact, indent=2, ensure_ascii=False)
+        return (
+            "CRM is not configured (set HUBSPOT_ACCESS_TOKEN). Contact that "
+            f"would be upserted:\n{pretty}"
+        )
+
+    properties = {}
+    if contact.get("email"):
+        properties["email"] = contact["email"]
+    if contact.get("name"):
+        properties["firstname"] = contact["name"]
+    if contact.get("company"):
+        properties["company"] = contact["company"]
+    notes_bits = [str(v) for k, v in (("notes", contact.get("notes")), ("next_steps", contact.get("next_steps"))) if v]
+    if notes_bits:
+        properties["hs_content_membership_notes"] = "\n".join(notes_bits)
+
+    try:
+        async with httpx.AsyncClient(timeout=_CRM_TIMEOUT) as client:
+            res = await client.post(
+                "https://api.hubapi.com/crm/v3/objects/contacts",
+                headers={"Authorization": f"Bearer {settings.hubspot_access_token}"},
+                json={"properties": properties},
+            )
+        if res.status_code in (200, 201):
+            contact_id = res.json().get("id", "?")
+            return f"Upserted contact to HubSpot (id {contact_id})"
+        if res.status_code == 409:
+            return "Contact already in CRM"
+        return f"CRM post failed (status {res.status_code})"
+    except Exception as exc:
+        return f"CRM error: {type(exc).__name__}"
+
+
 TOOLS: dict[str, dict] = {
     "web_search": {
         "spec": {
@@ -439,6 +517,50 @@ TOOLS: dict[str, dict] = {
             },
         },
         "run": sql_query,
+    },
+    "send_slack": {
+        "spec": {
+            "type": "function",
+            "function": {
+                "name": "send_slack",
+                "description": "Send a short text message/digest to the team Slack channel.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "message": {
+                            "type": "string",
+                            "description": "The message text to post to Slack",
+                        },
+                    },
+                    "required": ["message"],
+                },
+            },
+        },
+        "run": send_slack,
+    },
+    "push_to_crm": {
+        "spec": {
+            "type": "function",
+            "function": {
+                "name": "push_to_crm",
+                "description": "Upsert a contact record (name/email/company/notes) into the CRM.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "contact_json": {
+                            "type": "string",
+                            "description": (
+                                "JSON object string with contact fields, e.g. "
+                                '{"name": "...", "email": "...", "company": "...", '
+                                '"notes": "...", "next_steps": "..."}'
+                            ),
+                        },
+                    },
+                    "required": ["contact_json"],
+                },
+            },
+        },
+        "run": push_to_crm,
     },
 }
 

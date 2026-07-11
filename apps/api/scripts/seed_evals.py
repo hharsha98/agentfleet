@@ -95,6 +95,32 @@ EVAL_CASES: dict[str, list[dict]] = {
             "judge_rubric": "",
         },
     ],
+    "meeting-notes": [
+        {
+            "input": (
+                "Call with Jane Doe from Acme Corp. Next step: send pricing by Friday."
+            ),
+            "expected_contains": ["Acme"],
+            "forbidden_contains": [],
+            "judge_rubric": "",
+        },
+    ],
+    "outreach": [
+        {
+            "input": "Draft outreach to a prospect at Acme Corp who just raised a Series A.",
+            "expected_contains": ["Acme"],
+            "forbidden_contains": [],
+            "judge_rubric": "",
+        },
+    ],
+    "competitor-monitor": [
+        {
+            "input": "What would you monitor for a competitor called Acme?",
+            "expected_contains": ["Acme"],
+            "forbidden_contains": [],
+            "judge_rubric": "",
+        },
+    ],
 }
 
 

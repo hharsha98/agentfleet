@@ -39,6 +39,12 @@ class Settings(BaseSettings):
 
     searxng_url: str = "http://localhost:8081"
 
+    # New-agent integrations (Phase 10 H): leave blank to disable that
+    # agent's external action — the agent still loads and runs, it just
+    # returns a graceful "not configured" message instead of calling out.
+    slack_webhook_url: str = ""  # Competitor Monitor's send_slack tool
+    hubspot_access_token: str = ""  # Meeting Notes -> CRM's push_to_crm tool
+
     # Optional dedicated Postgres for the SQL Analytics agent's sql_query
     # tool. Blank (default) -> sql_query reuses the main app database, where
     # scripts/seed_analytics.py seeds the demo analytics_sales /
