@@ -1,6 +1,11 @@
 # AgentFleet — Session Handoff (updated 2026-07-11, session 3)
 
-## NOW: P8 mostly done — LangGraph ✅ WIRED (default runtime), landing ✅, packaging ✅, CI ✅ GREEN, 36 tests
+## NOW: Production-hardening in progress (docs/PRODUCTION_PLAN.md) — building ALL optional items, deploy LAST
+
+User decided (2026-07-12): build everything to a production-ready, feature-complete app, THEN deploy. See **docs/PRODUCTION_PLAN.md** for the full sequenced plan (Phases 9-13). Auth/rate-limit deliberately LAST (Phase 12) to avoid threading auth through every feature executor's live tests.
+Phase 9 progress: ✅ A (robust web access — Tavily/Exa/SearXNG pluggable + fetch_url/trafilatura, SSRF-guarded; fixes citations), ✅ G (idempotent eval seeding + real CI gate), ✅ F1 (JSON logging + request-IDs + env CORS). 43 tests, all green. **NEXT: Phase 9 E (Postgres LangGraph checkpointer, replace MemorySaver in graph_runtime.py) then D (arq+Redis durable orchestrator), then Phase 10 features (extra agents, webhooks/schedules, artifacts, playground, 2nd-SDK, voice, ⌘K).** Rejected integrating "Agent Reach" repo (ToS-violating cookie-scraping CLI, wrong for a deployed app) — did robust web access properly instead.
+
+## Earlier: P8 done — LangGraph ✅ WIRED (default runtime), landing ✅, packaging ✅, CI ✅ GREEN
 
 LangGraph is now the real default agent runtime (`AGENT_RUNTIME=langgraph`): `services/graph_runtime.py` StateGraph (model↔tools, conditional edge, MemorySaver checkpointer) reusing our tool registry/guardrails/MCP/metering/budget; native `chat.py` loop kept as env fallback. **A regression was caught in live testing and fixed**: Groq aborts the stream on malformed tool calls; the LangGraph runtime now salvages (flatten tool notes → one tools-disabled final streamed answer) on `openai.APIError`/`GraphRecursionError`, verified live (my exact "search & cite" query returns a cited answer, 0 errors ×3; salvage path proven via forced recursion). Known minor gap: LangGraph doesn't proactively force-answer one round before the recursion cap like native does (functionally equivalent — still ends in a real answer). Docs (ADR-001, README, landing STACK) now honestly list LangGraph.
 

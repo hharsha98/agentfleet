@@ -34,3 +34,8 @@ Working model: Opus/Fable = brain (specs + review + live verification), Sonnet s
 
 ## Status log
 - (start 2026-07-12) Phase 9 kicking off with A.
+- ✅ A done (robust web access: pluggable Tavily/Exa/SearXNG + fetch_url via trafilatura, SSRF-guarded; deep-research live-verified search→fetch→cite). Chose over Agent Reach (ToS-violating cookie-scraping CLI — wrong for deployed multi-tenant).
+- ✅ G done (seed_evals.py idempotent golden cases; CI eval gate now seeds-then-runs).
+- ✅ F1 done (JSON logging + X-Request-ID middleware + env CORS_ORIGINS). 43 tests.
+- **NEXT (Phase 9 remainder): E (Postgres LangGraph checkpointer, replace MemorySaver), then D (arq+Redis durable orchestrator).** Then Phase 10 features.
+- User needs (optional, for best web search): a Tavily or Exa API key in .env (TAVILY_API_KEY / set WEB_SEARCH_PROVIDER=tavily). Works on SearXNG fallback without one.
