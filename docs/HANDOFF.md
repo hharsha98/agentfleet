@@ -1,6 +1,12 @@
 # AgentFleet — Session Handoff (updated 2026-07-11, session 3)
 
-## NOW: P8 in progress — landing page ✅ DONE, packaging ✅ DONE, CI ✅ GREEN
+## NOW: P8 mostly done — LangGraph ✅ WIRED (default runtime), landing ✅, packaging ✅, CI ✅ GREEN, 36 tests
+
+LangGraph is now the real default agent runtime (`AGENT_RUNTIME=langgraph`): `services/graph_runtime.py` StateGraph (model↔tools, conditional edge, MemorySaver checkpointer) reusing our tool registry/guardrails/MCP/metering/budget; native `chat.py` loop kept as env fallback. **A regression was caught in live testing and fixed**: Groq aborts the stream on malformed tool calls; the LangGraph runtime now salvages (flatten tool notes → one tools-disabled final streamed answer) on `openai.APIError`/`GraphRecursionError`, verified live (my exact "search & cite" query returns a cited answer, 0 errors ×3; salvage path proven via forced recursion). Known minor gap: LangGraph doesn't proactively force-answer one round before the recursion cap like native does (functionally equivalent — still ends in a real answer). Docs (ADR-001, README, landing STACK) now honestly list LangGraph.
+
+**P8 REMAINING (mostly USER tasks now):** screenshots for docs/screenshots/ (follow docs/DEMO.md, capture landing/chat/missions/evals) + record the demo video; OPTIONAL extra roster agents (SQL Analytics/Competitor Monitor — user deprioritized in favor of LangGraph) and ⌘K palette/changelog polish. The platform itself is feature-complete. Next big optional arc = cloud deploy (task #3, on-demand at interview time). Consider seeding a couple of eval cases per built-in agent so the CI eval-gate (scripts.run_evals) has something to run when a provider key is configured.
+
+## Earlier P8: landing page ✅ DONE, packaging ✅ DONE, CI ✅ GREEN
 
 P8 landing page shipped + browser-verified (premium dark/mono/single-accent, hero with animated agent-trace, bento 6-pillar grid, "Production controls not a demo" ops section). Task #10 packaging done (Dockerfiles, compose.full.yaml, k8s/). CI green. **P8 remaining:** (a) README/docs polish — stack line has DRIFT (says Next.js 15 → it's 16; lists arq/Terraform/shadcn that aren't actually used; LangGraph is listed but orchestrator is currently plain provider calls not LangGraph yet per ADR-001) + add a Mermaid architecture diagram + DEMO.md script; (b) OPTIONAL extra roster agents (SQL Analytics, Competitor Monitor, Meeting-Notes→CRM, Outreach — from the original spec, each needs real integration, lower ROI than polish); (c) OPTIONAL ⌘K palette / changelog. Demo video is the USER's task (provide them a script). Web app runs on 3002; use browser preview to visually verify UI changes.
 
