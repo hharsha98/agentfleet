@@ -23,14 +23,20 @@ Working model: Opus/Fable = brain (specs + review + live verification), Sonnet s
 ## Phase 11 — Quality
 - **O. E2E tests** — Playwright covering core flows (login → chat with tool → upload doc → mission with approval → build+red-team agent).
 - **P. Error monitoring** — Sentry (backend + frontend) with request-ID correlation.
+- **Pagination (nice-11)** — limit/offset on list endpoints (agents, runs, documents, conversations, versions) with sane defaults.
+- **Load testing (nice-15)** — a k6/locust script exercising chat + list endpoints + a short results note in docs.
 
 ## Phase 12 — Production hardening wrapper (right before deploy)
 - **B. API auth + resource ownership** — verify the Auth.js session (HS256 JWT shared secret) on every `/api/v1/*` route; set + enforce `user_id` on conversations/documents/agents/runs; gate app pages behind login. One migration to backfill ownership. THIS is the big one; do it once, comprehensively, at the end.
 - **C. Rate limiting** — per-user + per-IP limits (slowapi/Redis) on chat + public invoke.
-- **F2. Deploy-safety** — Alembic migration Job / init-container (multi-replica safe), readiness probe with DB check, fastembed pre-warm.
+- **F2. Deploy-safety** — Alembic migration Job / init-container (multi-replica safe), readiness probe with DB check, fastembed pre-warm, **SSR/browser URL split (nice-16)** (`INTERNAL_API_URL` for web-container SSR vs `NEXT_PUBLIC_API_URL` for the browser).
 
 ## Phase 13 — Q. Cloud deploy (LAST)
 - AWS via Terraform at interview time (~$100 credit); GCP configs after (~3mo free). ADR-007.
+- Managed Postgres (RDS / Cloud SQL) provides **backups + HA (nice-14)** out of the box; document the restore path.
+
+## .env keys for the new features
+All added to `.env.example` (commented/optional, grouped): AUTH_SECRET (shared with web, API-side), SLACK_WEBHOOK_URL, HUBSPOT_ACCESS_TOKEN, GITHUB_TOKEN, ANALYTICS_DATABASE_URL, OPENAI_API_KEY (optional Whisper), VAPI_API_KEY, WEBHOOK_SIGNING_SECRET, SENTRY_DSN, NEXT_PUBLIC_SENTRY_DSN, INTERNAL_API_URL. Every one degrades gracefully when blank.
 
 ## Status log
 - (start 2026-07-12) Phase 9 kicking off with A.
