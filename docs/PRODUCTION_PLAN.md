@@ -43,5 +43,6 @@ All added to `.env.example` (commented/optional, grouped): AUTH_SECRET (shared w
 - ✅ A done (robust web access: pluggable Tavily/Exa/SearXNG + fetch_url via trafilatura, SSRF-guarded; deep-research live-verified search→fetch→cite). Chose over Agent Reach (ToS-violating cookie-scraping CLI — wrong for deployed multi-tenant).
 - ✅ G done (seed_evals.py idempotent golden cases; CI eval gate now seeds-then-runs).
 - ✅ F1 done (JSON logging + X-Request-ID middleware + env CORS_ORIGINS). 43 tests.
-- **NEXT (Phase 9 remainder): E (Postgres LangGraph checkpointer, replace MemorySaver), then D (arq+Redis durable orchestrator).** Then Phase 10 features.
+- ✅ E done (durable Postgres LangGraph checkpointer, app/services/checkpointer.py; unique-per-turn thread_id avoids history double-count; graceful MemorySaver fallback; cold-start 782ms live-verified, no dup, checkpoint tables in PG). 47 tests.
+- **NEXT (last Phase 9 item): D — arq+Redis durable orchestrator (apps/worker/; run creation enqueues a job; worker executes plan_and_execute; in-process kept as fallback; +worker service in compose/k8s).** Then Phase 10 features.
 - User needs (optional, for best web search): a Tavily or Exa API key in .env (TAVILY_API_KEY / set WEB_SEARCH_PROVIDER=tavily). Works on SearXNG fallback without one.
