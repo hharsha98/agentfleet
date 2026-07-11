@@ -9,10 +9,10 @@ const GITHUB_URL = "https://github.com/hharsha98/agentfleet";
 
 const STACK = [
   "FastAPI",
-  "LangGraph",
   "Postgres + pgvector",
-  "Redis",
+  "fastembed",
   "Next.js",
+  "Auth.js",
   "Langfuse",
   "MCP",
   "Docker",
