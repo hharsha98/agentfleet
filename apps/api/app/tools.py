@@ -10,14 +10,18 @@ import ipaddress
 import json
 import re
 import socket
+from datetime import date, datetime
+from decimal import Decimal
 from urllib.parse import urlparse
 
 import httpx
 import trafilatura
-from sqlalchemy import select
+from sqlalchemy import select, text
+from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 from app.config import get_settings
 from app.db import SessionLocal
+from app.db import engine as _app_engine
 from app.models import Chunk, Document
 
 # ── web_search: pluggable provider with SearXNG fallback ────────────────────
@@ -267,6 +271,85 @@ async def fetch_url(url: str) -> str:
     return text[:_FETCH_TRUNCATE_CHARS]
 
 
+# ── sql_query: read-only, bounded SQL for the SQL Analytics agent ───────────
+#
+# Defense in depth: (1) validate the query text before it ever reaches the
+# database — must start with SELECT/WITH, single statement only, no
+# write/DDL keywords; (2) even a validated query only ever runs inside a
+# Postgres READ ONLY transaction with a 5s statement timeout, so a bug in
+# the validator still can't mutate data or hang the connection; (3) results
+# are capped at 50 rows and connection details never leak into the tool's
+# output, including on error.
+
+_SQL_DENYLIST = re.compile(
+    r"\b("
+    r"insert|update|delete|drop|alter|create|truncate|grant|revoke|copy|"
+    r"merge|into|call|do|vacuum|comment|reindex|refresh"
+    r")\b",
+    re.IGNORECASE,
+)
+
+_analytics_engine: AsyncEngine | None = None
+
+
+def _get_analytics_engine() -> AsyncEngine:
+    """Dedicated engine for ANALYTICS_DATABASE_URL if set, else the app's own."""
+    global _analytics_engine
+    settings = get_settings()
+    if not settings.analytics_database_url:
+        return _app_engine
+    if _analytics_engine is None:
+        _analytics_engine = create_async_engine(settings.analytics_database_url, echo=False)
+    return _analytics_engine
+
+
+def _json_safe(value):
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    return value
+
+
+async def sql_query(query: str) -> str:
+    q = query.strip()
+    lowered = q.lower()
+
+    if not (lowered.startswith("select") or lowered.startswith("with")):
+        return "Refused: only SELECT/WITH (read-only) queries are allowed."
+
+    # A single trailing semicolon is fine; anything past that is a second
+    # statement (e.g. "SELECT 1; DELETE FROM ...") and gets refused.
+    body = q[:-1] if q.endswith(";") else q
+    if ";" in body:
+        return "Refused: multiple statements are not allowed."
+
+    if _SQL_DENYLIST.search(q):
+        return "Refused: query contains a disallowed keyword."
+
+    engine = _get_analytics_engine()
+    try:
+        async with engine.connect() as conn:
+            await conn.execute(text("SET TRANSACTION READ ONLY"))
+            await conn.execute(text("SET LOCAL statement_timeout = '5s'"))
+            result = await conn.execute(text(q))
+            columns = list(result.keys())
+            rows = result.fetchmany(50)
+    except Exception as exc:
+        # Short, generic reason only — never leak connection details/DSN.
+        return f"Query error: {type(exc).__name__}"
+
+    return json.dumps(
+        {
+            "columns": columns,
+            "rows": [[_json_safe(v) for v in row] for row in rows],
+            "row_count": len(rows),
+            "truncated": len(rows) == 50,
+        },
+        ensure_ascii=False,
+    )
+
+
 TOOLS: dict[str, dict] = {
     "web_search": {
         "spec": {
@@ -331,6 +414,31 @@ TOOLS: dict[str, dict] = {
             },
         },
         "run": search_documents,
+    },
+    "sql_query": {
+        "spec": {
+            "type": "function",
+            "function": {
+                "name": "sql_query",
+                "description": (
+                    "Run a READ-ONLY SQL SELECT against the analytics database and get rows "
+                    "back. Tables: analytics_sales(region, product, quantity, unit_price, "
+                    "sale_date), analytics_customers(region, plan, signup_date). SELECT/WITH "
+                    "only — any write or multi-statement query is refused."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "A single read-only SQL SELECT (or WITH ... SELECT) statement",
+                        },
+                    },
+                    "required": ["query"],
+                },
+            },
+        },
+        "run": sql_query,
     },
 }
 

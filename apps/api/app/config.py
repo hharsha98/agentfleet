@@ -39,6 +39,13 @@ class Settings(BaseSettings):
 
     searxng_url: str = "http://localhost:8081"
 
+    # Optional dedicated Postgres for the SQL Analytics agent's sql_query
+    # tool. Blank (default) -> sql_query reuses the main app database, where
+    # scripts/seed_analytics.py seeds the demo analytics_sales /
+    # analytics_customers tables. Set to point sql_query at a separate,
+    # truly read-only database instead.
+    analytics_database_url: str = ""
+
     # web_search provider routing: "tavily" | "exa" | "searxng". Missing key,
     # a raised error, or zero results for the chosen provider all fall back
     # to SearXNG (see tools.py web_search).

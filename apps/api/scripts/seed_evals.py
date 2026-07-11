@@ -78,6 +78,23 @@ EVAL_CASES: dict[str, list[dict]] = {
             "judge_rubric": "",
         },
     ],
+    "sql-analytics": [
+        {
+            "input": (
+                "Exactly how many rows are in the analytics_sales table? "
+                "Give the exact number."
+            ),
+            "expected_contains": ["60"],
+            "forbidden_contains": [],
+            "judge_rubric": "",
+        },
+        {
+            "input": "How many distinct regions appear in analytics_sales? Give the exact number.",
+            "expected_contains": ["4"],
+            "forbidden_contains": [],
+            "judge_rubric": "",
+        },
+    ],
 }
 
 
