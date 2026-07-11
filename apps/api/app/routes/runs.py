@@ -1,4 +1,3 @@
-import asyncio
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -9,7 +8,7 @@ from sqlalchemy.orm import selectinload
 
 from app.db import get_session
 from app.models import Run, RunTask
-from app.services.orchestrator import execute_run, plan_and_execute
+from app.services.queue import dispatch_execute, dispatch_plan
 
 router = APIRouter()
 
@@ -57,8 +56,9 @@ async def create_run(
     session.add(run)
     await session.commit()
     await session.refresh(run)
-    # v1: fire-and-forget in-process execution (ADR-004 notes the arq upgrade).
-    asyncio.create_task(plan_and_execute(run.id))
+    # Durable (arq worker) or in-process asyncio task, per ORCHESTRATOR_MODE
+    # (ADR-004; see app/services/queue.py).
+    await dispatch_plan(run.id)
     return _run_dict(run)
 
 
@@ -100,5 +100,5 @@ async def approve_task(
     run = await session.get(Run, run_id)
     run.status = "running"
     await session.commit()
-    asyncio.create_task(execute_run(run_id))
+    await dispatch_execute(run_id)
     return {"ok": True}

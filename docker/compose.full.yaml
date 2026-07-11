@@ -67,6 +67,9 @@ services:
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
       LANGFUSE_HOST: ${LANGFUSE_HOST:-}
+      # Full-stack compose run: mission runs execute durably on the `worker`
+      # service instead of dying with the api container (ADR-004).
+      ORCHESTRATOR_MODE: arq
     depends_on:
       postgres:
         condition: service_healthy
@@ -74,6 +77,34 @@ services:
         condition: service_healthy
       searxng:
         condition: service_started
+
+  worker:
+    build:
+      context: ../apps/api
+    # Skip docker-entrypoint.sh (migrate/seed — the api service already does
+    # that); just run the arq worker so mission runs survive an api restart.
+    entrypoint: []
+    command: ["arq", "app.worker.WorkerSettings"]
+    env_file:
+      - ../.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://agentfleet:agentfleet@postgres:5432/agentfleet
+      REDIS_URL: redis://redis:6379/0
+      SEARXNG_URL: http://searxng:8080
+      FREE_LLM_BASE_URL: ${FREE_LLM_BASE_URL:-}
+      FREE_LLM_KEY: ${FREE_LLM_KEY:-}
+      DEFAULT_MODEL: ${DEFAULT_MODEL:-}
+      PLANNER_MODEL: ${PLANNER_MODEL:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_HOST: ${LANGFUSE_HOST:-}
+      ORCHESTRATOR_MODE: arq
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   web:
     build:

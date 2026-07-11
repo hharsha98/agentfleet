@@ -2,6 +2,12 @@
 
 Resume/demo artifact for a local kind/k3d/minikube cluster. Not applied in CI.
 
+Deploys 5 workloads: `postgres`, `redis`, `api`, `worker`, `web`. `worker`
+reuses the `agentfleet-api:local` image (no separate build) and runs
+`arq app.worker.WorkerSettings` instead of `uvicorn`, so mission runs execute
+durably and survive an `api` pod restart (`ORCHESTRATOR_MODE=arq`, set on
+both `api` and `worker` — see ARCHITECTURE.md ADR-004).
+
 ## 1. Build images
 
 ```bash

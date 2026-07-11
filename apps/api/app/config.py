@@ -9,6 +9,13 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://agentfleet:agentfleet@localhost:5432/agentfleet"
     redis_url: str = "redis://localhost:6379/0"
 
+    # How mission runs get dispatched: "inprocess" (default — asyncio.create_task
+    # in the API process; dies if the API restarts, but needs no extra
+    # service, so `uvicorn` dev flow and the test suite keep working
+    # unchanged) or "arq" (durable — enqueued to the Redis-backed arq worker
+    # in app/worker.py, survives an API restart; set by compose/k8s).
+    orchestrator_mode: str = "inprocess"  # "arq" | "inprocess"
+
     free_llm_base_url: str = "http://localhost:3001/v1"
     free_llm_key: str = ""
     default_model: str = "openai/gpt-oss-120b"
