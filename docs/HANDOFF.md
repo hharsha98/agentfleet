@@ -1,6 +1,10 @@
 # AgentFleet — Session Handoff (updated 2026-07-11, session 3)
 
-## NOW: P7 FULLY COMPLETE ✅ (through commit `fe2c702`, pushed) — next: task #10 local packaging (Docker/K8s)
+## CI FIXED ✅ (commit after `fe2c702`) — GitHub Actions now GREEN on push
+
+Root cause of the failure-email flood: `evals.yml` had `if: ${{ secrets.FREE_LLM_KEY != '' }}` — the `secrets` context is FORBIDDEN in a step-level `if:`, so GitHub rejected the whole file at parse time (0s failures on every push). Fix: moved the key to job-level `env` (secrets allowed there) and gate on `env.FREE_LLM_KEY`; added `push: [main]` trigger. Verified CI-safe by running the full 31-test suite locally with ONLY Postgres up (Redis+SearXNG stopped) — all pass; `web_search` degrades to an error string without SearXNG, no embedding download in tests. Live CI run went green (57s). Minor cosmetic-only: checkout@v4/setup-uv@v5 emit a Node-20-deprecation warning (non-fatal) — bump to newer action versions during packaging.
+
+## P7 FULLY COMPLETE ✅ (through commit `fe2c702`, pushed) — next: task #10 local packaging (Docker/K8s)
 
 P7c (guardrails): services/guardrails.py (12 injection patterns, 5 PII types), tool-output injection-wrap + guardrail SSE event in chat.py, /guardrails/scan endpoint + /evals sandbox, 6-case red-team suite (POST .../evals/red-team) + per-agent Red-team button. **Agents hardened with SAFETY_PREAMBLE in seed_agents.py — red-team went 4/6→6/6 (re-seed after pulling: `uv run python -m scripts.seed_agents`).** P7d (versioning): agent_versions table (migration `86e383c27ea0`), services/versioning.py, publish/versions/rollback routes, Versions panel on /agents; auto-v1 on create, append-only rollback. Groq reachable again (VPN off). **NEXT: task #10** — Dockerfiles for apps/api + apps/web, extend docker/compose.yaml to run the full app (api+web+worker) not just infra, one-command `docker compose up`, then K8s manifests (k8s/ dir) for the local-cluster story. Then P8 (roster agents, landing page, README polish, demo video). pytest now 31 passing.
 
