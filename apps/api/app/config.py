@@ -25,6 +25,13 @@ class Settings(BaseSettings):
 
     searxng_url: str = "http://localhost:8081"
 
+    # web_search provider routing: "tavily" | "exa" | "searxng". Missing key,
+    # a raised error, or zero results for the chosen provider all fall back
+    # to SearXNG (see tools.py web_search).
+    web_search_provider: str = "searxng"
+    tavily_api_key: str = ""
+    exa_api_key: str = ""
+
     # Optional Langfuse tracing — leave empty to run without it.
     langfuse_public_key: str = ""
     langfuse_secret_key: str = ""
