@@ -1,5 +1,9 @@
 # AgentFleet — Session Handoff (updated 2026-07-11, session 3)
 
+## NOW: P8 in progress — landing page ✅ DONE, packaging ✅ DONE, CI ✅ GREEN
+
+P8 landing page shipped + browser-verified (premium dark/mono/single-accent, hero with animated agent-trace, bento 6-pillar grid, "Production controls not a demo" ops section). Task #10 packaging done (Dockerfiles, compose.full.yaml, k8s/). CI green. **P8 remaining:** (a) README/docs polish — stack line has DRIFT (says Next.js 15 → it's 16; lists arq/Terraform/shadcn that aren't actually used; LangGraph is listed but orchestrator is currently plain provider calls not LangGraph yet per ADR-001) + add a Mermaid architecture diagram + DEMO.md script; (b) OPTIONAL extra roster agents (SQL Analytics, Competitor Monitor, Meeting-Notes→CRM, Outreach — from the original spec, each needs real integration, lower ROI than polish); (c) OPTIONAL ⌘K palette / changelog. Demo video is the USER's task (provide them a script). Web app runs on 3002; use browser preview to visually verify UI changes.
+
 ## CI FIXED ✅ (commit after `fe2c702`) — GitHub Actions now GREEN on push
 
 Root cause of the failure-email flood: `evals.yml` had `if: ${{ secrets.FREE_LLM_KEY != '' }}` — the `secrets` context is FORBIDDEN in a step-level `if:`, so GitHub rejected the whole file at parse time (0s failures on every push). Fix: moved the key to job-level `env` (secrets allowed there) and gate on `env.FREE_LLM_KEY`; added `push: [main]` trigger. Verified CI-safe by running the full 31-test suite locally with ONLY Postgres up (Redis+SearXNG stopped) — all pass; `web_search` degrades to an error string without SearXNG, no embedding download in tests. Live CI run went green (57s). Minor cosmetic-only: checkout@v4/setup-uv@v5 emit a Node-20-deprecation warning (non-fatal) — bump to newer action versions during packaging.
