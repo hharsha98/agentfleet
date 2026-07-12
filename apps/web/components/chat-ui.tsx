@@ -2,6 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { ArtifactPanel } from "@/components/artifact-panel";
+import { parseMessageParts, type Artifact } from "@/lib/artifacts";
+
+const ARTIFACT_ICON: Record<Artifact["type"], string> = {
+  code: "{ }",
+  markdown: "M↓",
+  chart: "📊",
+};
+
 export type AgentInfo = {
   id: string;
   slug: string;
@@ -37,6 +46,7 @@ export function ChatUI({ agents, apiUrl }: { agents: AgentInfo[]; apiUrl: string
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
+  const [activeArtifact, setActiveArtifact] = useState<Artifact | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -160,7 +170,12 @@ export function ChatUI({ agents, apiUrl }: { agents: AgentInfo[]; apiUrl: string
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-4">
+    <div className="flex w-full flex-1 overflow-hidden">
+      <div
+        className={`flex min-w-0 flex-1 flex-col px-4 ${
+          activeArtifact ? "" : "mx-auto max-w-3xl"
+        }`}
+      >
       <div className="flex gap-2 overflow-x-auto py-3">
         {agents.map((a) => (
           <button
@@ -205,7 +220,24 @@ export function ChatUI({ agents, apiUrl }: { agents: AgentInfo[]; apiUrl: string
                   </pre>
                 </details>
               ))}
-              {m.content}
+              {m.role === "assistant"
+                ? parseMessageParts(m.content).map((part, k) =>
+                    part.kind === "text" ? (
+                      <span key={k}>{part.value}</span>
+                    ) : (
+                      <button
+                        key={k}
+                        type="button"
+                        onClick={() => setActiveArtifact(part.artifact)}
+                        className="mx-1 inline-flex items-center gap-1 rounded-full border border-hairline px-2 py-0.5 align-middle font-mono text-[11px] text-muted transition-colors hover:border-accent hover:text-foreground"
+                      >
+                        <span>{ARTIFACT_ICON[part.artifact.type]}</span>
+                        <span>{part.artifact.lang}</span>
+                        <span className="text-accent">open</span>
+                      </button>
+                    )
+                  )
+                : m.content}
               {m.role === "assistant" && streaming && i === messages.length - 1 && (
                 <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-accent align-middle" />
               )}
@@ -251,6 +283,10 @@ export function ChatUI({ agents, apiUrl }: { agents: AgentInfo[]; apiUrl: string
           </button>
         )}
       </form>
+      </div>
+      {activeArtifact && (
+        <ArtifactPanel artifact={activeArtifact} onClose={() => setActiveArtifact(null)} />
+      )}
     </div>
   );
 }
