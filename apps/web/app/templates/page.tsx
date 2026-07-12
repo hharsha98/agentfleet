@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { EmptyState } from "@/components/empty-state";
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 type Template = {
@@ -161,9 +163,13 @@ export default function TemplatesPage() {
             );
           })}
           {templates.length === 0 && !note && (
-            <p className="col-span-full pt-8 text-center text-sm text-muted">
-              No templates available.
-            </p>
+            <div className="col-span-full">
+              <EmptyState
+                glyph="🧩"
+                title="No templates available"
+                description="The template gallery is empty — check back once the backend seeds starter agents."
+              />
+            </div>
           )}
         </div>
       </main>

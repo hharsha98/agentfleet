@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { EmptyState } from "@/components/empty-state";
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 type Agent = {
@@ -423,8 +425,12 @@ export default function EvalsPage() {
                 </li>
               ))}
               {cases.length === 0 && (
-                <li className="pt-6 text-center text-sm text-muted">
-                  No eval cases yet — add one to build this agent&apos;s regression suite.
+                <li>
+                  <EmptyState
+                    glyph="🧪"
+                    title="No eval cases yet"
+                    description="Add one above to build this agent's regression suite."
+                  />
                 </li>
               )}
             </ul>

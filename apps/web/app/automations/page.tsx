@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { EmptyState } from "@/components/empty-state";
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 type ScheduledRun = {
@@ -323,8 +325,12 @@ export default function AutomationsPage() {
             </li>
           ))}
           {schedules.length === 0 && !note && (
-            <li className="pt-8 text-center text-sm text-muted">
-              No automations yet — create one to run a goal on a schedule.
+            <li>
+              <EmptyState
+                glyph="⏱"
+                title="No automations yet"
+                description="Create one above to run a goal on a schedule."
+              />
             </li>
           )}
         </ul>
@@ -434,8 +440,12 @@ export default function AutomationsPage() {
             </li>
           ))}
           {webhooks.length === 0 && !note && (
-            <li className="pt-8 text-center text-sm text-muted">
-              No webhooks yet — create one to trigger a mission from an external system.
+            <li>
+              <EmptyState
+                glyph="🪝"
+                title="No webhooks yet"
+                description="Create one above to trigger a mission from an external system."
+              />
             </li>
           )}
         </ul>

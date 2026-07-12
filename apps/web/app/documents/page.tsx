@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
+import { EmptyState } from "@/components/empty-state";
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 type Doc = {
@@ -125,9 +127,12 @@ export default function DocumentsPage() {
             </li>
           ))}
           {docs.length === 0 && (
-            <li className="pt-8 text-center text-sm text-muted">
-              No documents yet — upload a .txt, .md, or .pdf to give your agents
-              a knowledge base.
+            <li>
+              <EmptyState
+                glyph="📄"
+                title="No documents yet"
+                description="Upload a .txt, .md, or .pdf above to give your agents a knowledge base."
+              />
             </li>
           )}
         </ul>

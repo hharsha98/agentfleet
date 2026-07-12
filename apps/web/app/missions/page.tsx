@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { EmptyState } from "@/components/empty-state";
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 type Task = {
@@ -271,12 +273,14 @@ export default function MissionsPage() {
               })}
             </div>
           </>
+        ) : selected ? (
+          <p className="pt-24 text-center text-sm text-muted">Loading run…</p>
         ) : (
-          <p className="pt-24 text-center text-sm text-muted">
-            {selected
-              ? "Loading run…"
-              : "Launch a goal or pick a previous run — tasks appear here as a live board."}
-          </p>
+          <EmptyState
+            glyph="🚀"
+            title="No mission running"
+            description="Launch a goal above — tasks appear here as a live board, agent by agent."
+          />
         )}
       </main>
     </div>

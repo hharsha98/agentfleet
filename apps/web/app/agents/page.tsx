@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { EmptyState } from "@/components/empty-state";
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 type McpServer = {
@@ -812,8 +814,12 @@ export default function AgentsPage() {
             </li>
           ))}
           {agents.length === 0 && !note && (
-            <li className="pt-8 text-center text-sm text-muted">
-              No agents yet — create one to give it a prompt, model, and tools.
+            <li>
+              <EmptyState
+                glyph="🤖"
+                title="No agents yet"
+                description="Create one above to give it a prompt, model, and tools."
+              />
             </li>
           )}
         </ul>

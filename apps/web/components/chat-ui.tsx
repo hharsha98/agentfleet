@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { ArtifactPanel } from "@/components/artifact-panel";
+import { EmptyState } from "@/components/empty-state";
 import { parseMessageParts, type Artifact } from "@/lib/artifacts";
 
 const ARTIFACT_ICON: Record<Artifact["type"], string> = {
@@ -195,9 +196,15 @@ export function ChatUI({ agents, apiUrl }: { agents: AgentInfo[]; apiUrl: string
 
       <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto py-4">
         {messages.length === 0 && (
-          <p className="pt-16 text-center text-sm text-muted">
-            {agent ? `Chatting with ${agent.name} — ask anything.` : "Pick an agent to start."}
-          </p>
+          <EmptyState
+            glyph="💬"
+            title={agent ? "Ask anything" : "Pick an agent to start"}
+            description={
+              agent
+                ? `Chat with ${agent.name} — tool calls, artifacts, and usage show up right here.`
+                : "Choose an agent above, then send your first message."
+            }
+          />
         )}
         {messages.map((m, i) => (
           <div key={i} className={m.role === "user" ? "flex justify-end" : "flex justify-start"}>
