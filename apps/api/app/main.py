@@ -21,6 +21,7 @@ from app.routes.runs import router as runs_router
 from app.routes.schedules import router as schedules_router
 from app.routes.templates import router as templates_router
 from app.routes.usage import router as usage_router
+from app.routes.voice import router as voice_router
 from app.routes.webhooks import router as webhooks_router
 
 setup_logging()
@@ -87,6 +88,7 @@ app.include_router(templates_router, prefix="/api/v1/templates", tags=["template
 app.include_router(usage_router, prefix="/api/v1/usage", tags=["usage"])
 app.include_router(budgets_router, prefix="/api/v1/budgets", tags=["budgets"])
 app.include_router(playground_router, prefix="/api/v1/playground", tags=["playground"])
+app.include_router(voice_router, prefix="/api/v1/voice", tags=["voice"])
 
 
 @app.get("/health")

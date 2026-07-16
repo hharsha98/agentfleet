@@ -59,3 +59,10 @@ Short, honest records of the trade-offs behind AgentFleet. Format: context → d
 **Why:** ADR-001 flagged Pydantic AI as a framework to demonstrate breadth on later; this is that agent. It reuses the same OpenAI-compatible proxy, `app.tools` functions (wrapped as thin Pydantic AI tools rather than rewritten), budget checks, and `app.costs` metering — only the model↔tool loop implementation differs.
 **Contract parity, not feature parity:** the SSE frames (`token`/`done`/`error`) and usage/cost shape are identical to `graph_runtime.py`'s, so the frontend and the eval harness can't tell which runtime answered. Scope is deliberately narrower than the LangGraph runtime — two wrapped tools, no MCP dispatch, no guardrail scanning, no recursion-limit salvage path — since the goal is showing a second SDK works, not re-implementing the whole roster.
 **Trade-off:** a second code path to keep in sync with `app.tools`' function signatures; accepted because it's isolated to one opt-in agent.
+
+## Voice agent (Vapi) (Phase 10 N)
+
+**Decision (2026-07-16):** A single `GET /api/v1/voice/config` endpoint gates the whole feature on whether `vapi_public_key` is set — blank returns `{"enabled": false}` and the `/voice` page shows a static "not configured" state; set, it returns a static Vapi-shaped "transient assistant" config (`name`, `firstMessage`, `model`, `voice`) the frontend passes to `vapi.start()` verbatim.
+**Why:** Vapi's web SDK (`@vapi-ai/web`, dynamically imported so it never enters the shared bundle) does mic capture, STT, TTS, and telephony entirely in the browser once handed a public key + assistant config — our backend never touches audio and needs no dedicated call-handling code.
+**Secrecy:** only `vapi_public_key` is ever returned to the browser; `vapi_api_key` (reserved for future server-side Vapi management) is never read or serialized by the route, verified by a dedicated test.
+**Trade-off:** the assistant config is static/demo-only (no persistence, no per-user customization) — acceptable for a scoped portfolio demo; a real deployment would move assistant definition server-side into Vapi's dashboard/API.

@@ -68,6 +68,13 @@ class Settings(BaseSettings):
     # CORS_ORIGINS. Default matches the web app's local dev port.
     cors_origins: str = "http://localhost:3002"
 
+    # Voice agent (Phase 10 N): Vapi bundles browser mic capture, STT, TTS,
+    # and telephony behind one web SDK. Blank public key -> GET
+    # /api/v1/voice/config returns {"enabled": false} and the frontend shows
+    # a "not configured" state instead of attempting a call.
+    vapi_public_key: str = ""  # browser SDK uses this to start a call
+    vapi_api_key: str = ""  # reserved for server-side Vapi management, unused for now
+
 
 @lru_cache
 def get_settings() -> Settings:

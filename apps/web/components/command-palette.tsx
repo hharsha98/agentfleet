@@ -18,6 +18,7 @@ const COMMANDS: Command[] = [
   { label: "Templates", hint: "/templates", glyph: "🧩", href: "/templates" },
   { label: "Evals", hint: "/evals", glyph: "🧪", href: "/evals" },
   { label: "Playground", hint: "/playground", glyph: "⚗️", href: "/playground" },
+  { label: "Voice", hint: "/voice", glyph: "🎙", href: "/voice" },
   { label: "Usage", hint: "/usage", glyph: "📊", href: "/usage" },
   { label: "Automations", hint: "/automations", glyph: "⏱", href: "/automations" },
   { label: "Changelog", hint: "/changelog", glyph: "🗒", href: "/changelog" },
