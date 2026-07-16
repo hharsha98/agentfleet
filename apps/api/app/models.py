@@ -259,6 +259,25 @@ class Budget(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class PlaygroundExperiment(Base):
+    """A saved Prompt Playground A/B run (Phase 10 L): the shared prompt plus
+    two variant configs+outputs, so a prompt-engineering comparison can be
+    reloaded later instead of re-run from scratch. Unlike Message, these are
+    NOT chat turns — POST /playground/run that produces the output is
+    stateless and only persisted here on an explicit "Save experiment".
+    """
+
+    __tablename__ = "playground_experiments"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    title: Mapped[str] = mapped_column(String(200))
+    system_prompt: Mapped[str] = mapped_column(Text, default="")
+    user_message: Mapped[str] = mapped_column(Text)
+    variant_a: Mapped[dict] = mapped_column(JSONB)  # {model, temperature, output, usage}
+    variant_b: Mapped[dict] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class Message(Base):
     """One chat turn, with the cost/latency metering that feeds the dashboards."""
 

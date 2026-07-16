@@ -161,6 +161,72 @@ class UsageDailyOut(BaseModel):
     cost_usd: float
 
 
+class PlaygroundRunRequest(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
+    system_prompt: str = Field(default="", max_length=8000)
+    user_message: str = Field(min_length=1, max_length=8000)
+    model: str = Field(min_length=1, max_length=120)
+    temperature: float = Field(default=0.7, ge=0, le=2)
+    max_tokens: int | None = Field(default=None, ge=1, le=32000)
+
+
+class PlaygroundUsageOut(BaseModel):
+    tokens_in: int
+    tokens_out: int
+    cost_usd: float
+    latency_ms: int
+
+
+class PlaygroundRunResponse(BaseModel):
+    output: str
+    usage: PlaygroundUsageOut
+
+
+class PlaygroundModelsOut(BaseModel):
+    models: list[str]
+
+
+class PlaygroundVariant(BaseModel):
+    """One A/B variant: the config that produced `output`, plus its usage."""
+
+    model_config = ConfigDict(protected_namespaces=())
+
+    model: str = Field(min_length=1, max_length=120)
+    temperature: float = Field(ge=0, le=2)
+    output: str
+    usage: PlaygroundUsageOut
+
+
+class PlaygroundExperimentCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    system_prompt: str = Field(default="", max_length=8000)
+    user_message: str = Field(min_length=1, max_length=8000)
+    variant_a: PlaygroundVariant
+    variant_b: PlaygroundVariant
+
+
+class PlaygroundExperimentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    title: str
+    system_prompt: str
+    user_message: str
+    variant_a: dict
+    variant_b: dict
+    created_at: datetime
+
+
+class PlaygroundExperimentSummaryOut(BaseModel):
+    """Lightweight list entry — omits prompts/outputs (see PlaygroundExperimentOut)."""
+
+    id: uuid.UUID
+    title: str
+    created_at: datetime
+    models: list[str]
+
+
 class ScheduledRunOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

@@ -15,6 +15,7 @@ from app.routes.evals import router as evals_router
 from app.routes.guardrails import router as guardrails_router
 from app.routes.hooks import router as hooks_router
 from app.routes.keys import router as keys_router
+from app.routes.playground import router as playground_router
 from app.routes.public import router as public_router
 from app.routes.runs import router as runs_router
 from app.routes.schedules import router as schedules_router
@@ -85,6 +86,7 @@ app.include_router(public_router, prefix="/api/v1/public", tags=["public"])
 app.include_router(templates_router, prefix="/api/v1/templates", tags=["templates"])
 app.include_router(usage_router, prefix="/api/v1/usage", tags=["usage"])
 app.include_router(budgets_router, prefix="/api/v1/budgets", tags=["budgets"])
+app.include_router(playground_router, prefix="/api/v1/playground", tags=["playground"])
 
 
 @app.get("/health")
