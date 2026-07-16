@@ -1,8 +1,8 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -63,12 +63,26 @@ async def create_run(
 
 
 @router.get("")
-async def list_runs(session: AsyncSession = Depends(get_session)) -> list[dict]:
+async def list_runs(
+    response: Response,
+    limit: int = Query(default=20, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    session: AsyncSession = Depends(get_session),
+) -> list[dict]:
+    total = (await session.execute(select(func.count()).select_from(Run))).scalar_one()
     runs = (
-        (await session.execute(select(Run).order_by(Run.created_at.desc()).limit(20)))
+        (
+            await session.execute(
+                select(Run)
+                .order_by(Run.created_at.desc(), Run.id)
+                .offset(offset)
+                .limit(limit)
+            )
+        )
         .scalars()
         .all()
     )
+    response.headers["X-Total-Count"] = str(total)
     return [_run_dict(r) for r in runs]
 
 

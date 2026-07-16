@@ -18,8 +18,8 @@ import time
 import uuid
 
 import openai
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -133,13 +133,23 @@ async def create_experiment(
 
 
 @router.get("/experiments")
-async def list_experiments(session: AsyncSession = Depends(get_session)) -> list[dict]:
+async def list_experiments(
+    response: Response,
+    limit: int = Query(default=MAX_EXPERIMENTS_LISTED, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    session: AsyncSession = Depends(get_session),
+) -> list[dict]:
+    total = (
+        await session.execute(select(func.count()).select_from(PlaygroundExperiment))
+    ).scalar_one()
     result = await session.execute(
         select(PlaygroundExperiment)
-        .order_by(PlaygroundExperiment.created_at.desc())
-        .limit(MAX_EXPERIMENTS_LISTED)
+        .order_by(PlaygroundExperiment.created_at.desc(), PlaygroundExperiment.id)
+        .offset(offset)
+        .limit(limit)
     )
     experiments = result.scalars().all()
+    response.headers["X-Total-Count"] = str(total)
     # Lightweight on purpose (spec: "keep list lightweight") — omit the full
     # prompts/outputs, which the detail endpoint below returns in full.
     return [

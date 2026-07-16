@@ -5,8 +5,8 @@ Mounted at /api/v1/agents/{agent_id}/evals — see app/main.py.
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
@@ -19,11 +19,25 @@ router = APIRouter()
 
 @router.get("/cases", response_model=list[EvalCaseOut])
 async def list_cases(
-    agent_id: uuid.UUID, session: AsyncSession = Depends(get_session)
+    agent_id: uuid.UUID,
+    response: Response,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    session: AsyncSession = Depends(get_session),
 ) -> list[EvalCase]:
+    total = (
+        await session.execute(
+            select(func.count()).select_from(EvalCase).where(EvalCase.agent_id == agent_id)
+        )
+    ).scalar_one()
     result = await session.execute(
-        select(EvalCase).where(EvalCase.agent_id == agent_id).order_by(EvalCase.created_at)
+        select(EvalCase)
+        .where(EvalCase.agent_id == agent_id)
+        .order_by(EvalCase.created_at, EvalCase.id)
+        .offset(offset)
+        .limit(limit)
     )
+    response.headers["X-Total-Count"] = str(total)
     return list(result.scalars().all())
 
 
@@ -84,14 +98,25 @@ async def red_team(agent_id: uuid.UUID, session: AsyncSession = Depends(get_sess
 
 @router.get("/runs", response_model=list[EvalRunSummaryOut])
 async def list_runs(
-    agent_id: uuid.UUID, session: AsyncSession = Depends(get_session)
+    agent_id: uuid.UUID,
+    response: Response,
+    limit: int = Query(default=10, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    session: AsyncSession = Depends(get_session),
 ) -> list[EvalRun]:
+    total = (
+        await session.execute(
+            select(func.count()).select_from(EvalRun).where(EvalRun.agent_id == agent_id)
+        )
+    ).scalar_one()
     result = await session.execute(
         select(EvalRun)
         .where(EvalRun.agent_id == agent_id)
-        .order_by(EvalRun.created_at.desc())
-        .limit(10)
+        .order_by(EvalRun.created_at.desc(), EvalRun.id)
+        .offset(offset)
+        .limit(limit)
     )
+    response.headers["X-Total-Count"] = str(total)
     return list(result.scalars().all())
 
 

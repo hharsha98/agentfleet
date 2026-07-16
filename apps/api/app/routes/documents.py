@@ -1,5 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, UploadFile
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
@@ -34,12 +34,26 @@ async def upload_document(
 
 
 @router.get("")
-async def list_documents(session: AsyncSession = Depends(get_session)) -> list[dict]:
+async def list_documents(
+    response: Response,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    session: AsyncSession = Depends(get_session),
+) -> list[dict]:
+    total = (await session.execute(select(func.count()).select_from(Document))).scalar_one()
     documents = (
-        (await session.execute(select(Document).order_by(Document.created_at.desc())))
+        (
+            await session.execute(
+                select(Document)
+                .order_by(Document.created_at.desc(), Document.id)
+                .offset(offset)
+                .limit(limit)
+            )
+        )
         .scalars()
         .all()
     )
+    response.headers["X-Total-Count"] = str(total)
     return [
         {
             "id": str(d.id),

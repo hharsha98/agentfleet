@@ -1,9 +1,9 @@
 import uuid
 
 from croniter import CroniterBadCronError, croniter
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
@@ -46,10 +46,20 @@ async def create_schedule(
 
 
 @router.get("", response_model=list[ScheduledRunOut])
-async def list_schedules(session: AsyncSession = Depends(get_session)) -> list[ScheduledRun]:
+async def list_schedules(
+    response: Response,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    session: AsyncSession = Depends(get_session),
+) -> list[ScheduledRun]:
+    total = (await session.execute(select(func.count()).select_from(ScheduledRun))).scalar_one()
     result = await session.execute(
-        select(ScheduledRun).order_by(ScheduledRun.created_at.desc())
+        select(ScheduledRun)
+        .order_by(ScheduledRun.created_at.desc(), ScheduledRun.id)
+        .offset(offset)
+        .limit(limit)
     )
+    response.headers["X-Total-Count"] = str(total)
     return list(result.scalars().all())
 
 

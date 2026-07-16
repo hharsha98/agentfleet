@@ -10,9 +10,9 @@ import hashlib
 import secrets
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
@@ -66,13 +66,30 @@ async def create_key(
 @router.get("")
 async def list_keys(
     agent_id: uuid.UUID,
+    response: Response,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_session),
 ) -> list[dict]:
+    total = (
+        await session.execute(
+            select(func.count()).select_from(ApiKey).where(ApiKey.agent_id == agent_id)
+        )
+    ).scalar_one()
     keys = (
-        (await session.execute(select(ApiKey).where(ApiKey.agent_id == agent_id)))
+        (
+            await session.execute(
+                select(ApiKey)
+                .where(ApiKey.agent_id == agent_id)
+                .order_by(ApiKey.created_at.desc(), ApiKey.id)
+                .offset(offset)
+                .limit(limit)
+            )
+        )
         .scalars()
         .all()
     )
+    response.headers["X-Total-Count"] = str(total)
     # NEVER include key_hash or the full key here.
     return [
         {

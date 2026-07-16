@@ -1,8 +1,8 @@
 import re
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -54,8 +54,17 @@ def _validate_mcp_servers(servers: list[dict]) -> None:
 
 
 @router.get("", response_model=list[AgentOut])
-async def list_agents(session: AsyncSession = Depends(get_session)) -> list[Agent]:
-    result = await session.execute(select(Agent).order_by(Agent.name))
+async def list_agents(
+    response: Response,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    session: AsyncSession = Depends(get_session),
+) -> list[Agent]:
+    total = (await session.execute(select(func.count()).select_from(Agent))).scalar_one()
+    result = await session.execute(
+        select(Agent).order_by(Agent.name, Agent.id).offset(offset).limit(limit)
+    )
+    response.headers["X-Total-Count"] = str(total)
     return list(result.scalars().all())
 
 
@@ -149,13 +158,27 @@ async def publish_agent(
 
 @router.get("/{agent_id}/versions", response_model=list[AgentVersionOut])
 async def list_versions(
-    agent_id: uuid.UUID, session: AsyncSession = Depends(get_session)
+    agent_id: uuid.UUID,
+    response: Response,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    session: AsyncSession = Depends(get_session),
 ) -> list[AgentVersion]:
+    total = (
+        await session.execute(
+            select(func.count())
+            .select_from(AgentVersion)
+            .where(AgentVersion.agent_id == agent_id)
+        )
+    ).scalar_one()
     result = await session.execute(
         select(AgentVersion)
         .where(AgentVersion.agent_id == agent_id)
         .order_by(AgentVersion.version.desc())
+        .offset(offset)
+        .limit(limit)
     )
+    response.headers["X-Total-Count"] = str(total)
     return list(result.scalars().all())
 
 
