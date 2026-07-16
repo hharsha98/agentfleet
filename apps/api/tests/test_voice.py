@@ -10,12 +10,19 @@ attribute is how tests flip a "configured" flag without needing a real key).
 from httpx import ASGITransport, AsyncClient
 
 from app.config import get_settings
+from app.db import engine
 from app.main import app
 
 
 async def test_voice_config_disabled_by_default() -> None:
     """No VAPI_PUBLIC_KEY in this environment -> disabled, and nothing else
     is present in the response (no leaked assistant config)."""
+    # Phase 12 B: current_user now touches the DB (users lookup/create) on
+    # every route, including this one — release any connections a prior
+    # test's event loop left pooled (see test_playground.py's docstring for
+    # why: asyncpg connections are bound to the loop that created them).
+    await engine.dispose()
+
     settings = get_settings()
     assert settings.vapi_public_key == ""  # sanity: matches the real, key-less env
 
@@ -26,6 +33,8 @@ async def test_voice_config_disabled_by_default() -> None:
 
 
 async def test_voice_config_enabled_shape(monkeypatch) -> None:
+    await engine.dispose()
+
     settings = get_settings()
     monkeypatch.setattr(settings, "vapi_public_key", "pk_test_123")
     monkeypatch.setattr(settings, "vapi_api_key", "sk_test_secret_should_never_leak")
@@ -51,6 +60,8 @@ async def test_voice_config_enabled_shape(monkeypatch) -> None:
 async def test_voice_config_never_leaks_api_key(monkeypatch) -> None:
     """The secret vapi_api_key must never appear anywhere in the response,
     whether enabled or disabled."""
+    await engine.dispose()
+
     settings = get_settings()
     monkeypatch.setattr(settings, "vapi_api_key", "sk_super_secret_do_not_leak")
 

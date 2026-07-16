@@ -25,6 +25,11 @@ jobs:
           --health-retries 5
     env:
       DATABASE_URL: postgresql+asyncpg://agentfleet:agentfleet@localhost:5432/agentfleet
+      # Dummy HS256 signing secret for the test suite (Phase 12 B auth) — not
+      # a real credential, just needs to be present so app.auth.current_user
+      # doesn't fail CLOSED with 503. tests/conftest.py mints its tokens with
+      # this exact same value.
+      AUTH_SECRET: test-secret-for-ci
       # Secrets are allowed in job-level env, but NOT in a step's `if:` — so we
       # surface the key here and gate the eval step on env below.
       FREE_LLM_KEY: ${{ secrets.FREE_LLM_KEY }}

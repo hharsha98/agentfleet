@@ -25,6 +25,11 @@ class Settings(BaseSettings):
 
     anthropic_api_key: str = ""
 
+    # Shared HS256 JWT signing secret (Phase 12 B): same value the web app
+    # uses to mint tokens. Blank -> app.auth.current_user fails CLOSED (503),
+    # never open. Env: AUTH_SECRET.
+    auth_secret: str = ""
+
     # Which agent loop implementation runs chat turns: the LangGraph
     # StateGraph runtime (default, ADR-001) or the original hand-built
     # while-loop (services/chat.py), kept as a documented fallback.

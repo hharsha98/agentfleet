@@ -50,6 +50,9 @@ class Agent(Base):
     tools: Mapped[list] = mapped_column(JSONB, default=list)
     mcp_servers: Mapped[list] = mapped_column(JSONB, default=list)  # [{"name","url"}]
     is_builtin: Mapped[bool] = mapped_column(Boolean, default=False)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     # Which chat-turn executor runs this agent: "langgraph" (default,
     # services/graph_runtime.py) or "pydantic-ai" (services/pydantic_runtime.py,
     # Phase 10 M — see ARCHITECTURE.md ADR-001). Routed in routes/chat.py.
@@ -86,6 +89,9 @@ class Run(Base):
     status: Mapped[str] = mapped_column(
         String(20), default="planning"
     )  # planning|running|awaiting_approval|done|failed
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     tasks: Mapped[list["RunTask"]] = relationship(
@@ -166,6 +172,9 @@ class Document(Base):
     mime: Mapped[str] = mapped_column(String(100), default="text/plain")
     size_bytes: Mapped[int] = mapped_column(Integer, default=0)
     status: Mapped[str] = mapped_column(String(20), default="ready")  # processing|ready|failed
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     chunks: Mapped[list["Chunk"]] = relationship(
@@ -215,7 +224,9 @@ class Conversation(Base):
     title: Mapped[str] = mapped_column(String(200), default="New conversation")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    messages: Mapped[list["Message"]] = relationship(back_populates="conversation")
+    messages: Mapped[list["Message"]] = relationship(
+        back_populates="conversation", cascade="all, delete-orphan", passive_deletes=True
+    )
 
 
 class EvalCase(Base):

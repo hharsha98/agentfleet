@@ -2,9 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth import current_user
 from app.config import get_settings
 from app.db import get_session
-from app.models import Agent
+from app.models import Agent, User
 from app.schemas import AgentOut
 from app.templates_catalog import TEMPLATES
 
@@ -12,13 +13,15 @@ router = APIRouter()
 
 
 @router.get("")
-async def list_templates() -> list[dict]:
+async def list_templates(user: User = Depends(current_user)) -> list[dict]:
     return TEMPLATES
 
 
 @router.post("/{slug}/install", response_model=AgentOut, status_code=201)
 async def install_template(
-    slug: str, session: AsyncSession = Depends(get_session)
+    slug: str,
+    session: AsyncSession = Depends(get_session),
+    user: User = Depends(current_user),
 ) -> Agent:
     template = next((t for t in TEMPLATES if t["slug"] == slug), None)
     if template is None:
@@ -38,6 +41,7 @@ async def install_template(
         model=get_settings().default_model,
         tools=template["tools"],
         is_builtin=False,
+        user_id=user.id,
     )
     session.add(agent)
     await session.commit()

@@ -2,8 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, UploadFi
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth import current_user
 from app.db import get_session
-from app.models import Document
+from app.models import Document, User
+from app.ownership import visibility_clause
 from app.services.ingest import ingest_document
 
 router = APIRouter()
@@ -15,6 +17,7 @@ MAX_UPLOAD_BYTES = 5 * 1024 * 1024  # same reasoning as the chat input cap
 async def upload_document(
     file: UploadFile,
     session: AsyncSession = Depends(get_session),
+    user: User = Depends(current_user),
 ) -> dict:
     data = await file.read()
     if not data:
@@ -27,6 +30,7 @@ async def upload_document(
             filename=file.filename or "unnamed",
             mime=file.content_type or "application/octet-stream",
             data=data,
+            user_id=user.id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -39,12 +43,17 @@ async def list_documents(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_session),
+    user: User = Depends(current_user),
 ) -> list[dict]:
-    total = (await session.execute(select(func.count()).select_from(Document))).scalar_one()
+    visible = visibility_clause(Document, user)
+    total = (
+        await session.execute(select(func.count()).select_from(Document).where(visible))
+    ).scalar_one()
     documents = (
         (
             await session.execute(
                 select(Document)
+                .where(visible)
                 .order_by(Document.created_at.desc(), Document.id)
                 .offset(offset)
                 .limit(limit)

@@ -17,8 +17,9 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth import current_user
 from app.db import get_session
-from app.models import Webhook
+from app.models import User, Webhook
 
 router = APIRouter()
 
@@ -38,6 +39,7 @@ def _hash_secret(secret: str) -> str:
 async def create_webhook(
     payload: WebhookCreate,
     session: AsyncSession = Depends(get_session),
+    user: User = Depends(current_user),
 ) -> dict:
     secret = SECRET_PREFIX + secrets.token_hex(24)
     webhook = Webhook(
@@ -68,6 +70,7 @@ async def list_webhooks(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_session),
+    user: User = Depends(current_user),
 ) -> list[dict]:
     total = (await session.execute(select(func.count()).select_from(Webhook))).scalar_one()
     webhooks = (
@@ -101,6 +104,7 @@ async def list_webhooks(
 async def delete_webhook(
     webhook_id: uuid.UUID,
     session: AsyncSession = Depends(get_session),
+    user: User = Depends(current_user),
 ) -> dict:
     webhook = await session.get(Webhook, webhook_id)
     if webhook is None:

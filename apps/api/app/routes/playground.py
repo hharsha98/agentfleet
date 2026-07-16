@@ -22,10 +22,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth import current_user
 from app.config import get_settings
 from app.costs import cost_usd
 from app.db import get_session
-from app.models import PlaygroundExperiment
+from app.models import PlaygroundExperiment, User
 from app.providers import get_llm_client
 from app.schemas import (
     PlaygroundExperimentCreate,
@@ -43,7 +44,9 @@ MAX_EXPERIMENTS_LISTED = 50
 
 
 @router.post("/run", response_model=PlaygroundRunResponse)
-async def run_playground(payload: PlaygroundRunRequest) -> dict:
+async def run_playground(
+    payload: PlaygroundRunRequest, user: User = Depends(current_user)
+) -> dict:
     client = get_llm_client()
     messages: list[dict] = []
     if payload.system_prompt:
@@ -93,7 +96,7 @@ async def run_playground(payload: PlaygroundRunRequest) -> dict:
 
 
 @router.get("/models", response_model=PlaygroundModelsOut)
-async def list_playground_models() -> dict:
+async def list_playground_models(user: User = Depends(current_user)) -> dict:
     """Best-effort model list for the frontend's <datalist>. Must never raise
     — the model field stays free-text either way, so a failed/empty listing
     only costs autocomplete, not functionality."""
@@ -117,7 +120,9 @@ async def list_playground_models() -> dict:
 
 @router.post("/experiments", response_model=PlaygroundExperimentOut, status_code=201)
 async def create_experiment(
-    payload: PlaygroundExperimentCreate, session: AsyncSession = Depends(get_session)
+    payload: PlaygroundExperimentCreate,
+    session: AsyncSession = Depends(get_session),
+    user: User = Depends(current_user),
 ) -> PlaygroundExperiment:
     experiment = PlaygroundExperiment(
         title=payload.title,
@@ -138,6 +143,7 @@ async def list_experiments(
     limit: int = Query(default=MAX_EXPERIMENTS_LISTED, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_session),
+    user: User = Depends(current_user),
 ) -> list[dict]:
     total = (
         await session.execute(select(func.count()).select_from(PlaygroundExperiment))
@@ -165,7 +171,9 @@ async def list_experiments(
 
 @router.get("/experiments/{experiment_id}", response_model=PlaygroundExperimentOut)
 async def get_experiment(
-    experiment_id: uuid.UUID, session: AsyncSession = Depends(get_session)
+    experiment_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+    user: User = Depends(current_user),
 ) -> PlaygroundExperiment:
     experiment = await session.get(PlaygroundExperiment, experiment_id)
     if experiment is None:

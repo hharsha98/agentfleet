@@ -5,9 +5,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth import current_user
 from app.config import get_settings
 from app.db import get_session
-from app.models import Agent, AgentVersion
+from app.models import Agent, AgentVersion, User
+from app.ownership import is_mutable, is_visible, visibility_clause
 from app.schemas import (
     AgentCreate,
     AgentOut,
@@ -59,10 +61,14 @@ async def list_agents(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_session),
+    user: User = Depends(current_user),
 ) -> list[Agent]:
-    total = (await session.execute(select(func.count()).select_from(Agent))).scalar_one()
+    visible = visibility_clause(Agent, user, builtin=True)
+    total = (
+        await session.execute(select(func.count()).select_from(Agent).where(visible))
+    ).scalar_one()
     result = await session.execute(
-        select(Agent).order_by(Agent.name, Agent.id).offset(offset).limit(limit)
+        select(Agent).where(visible).order_by(Agent.name, Agent.id).offset(offset).limit(limit)
     )
     response.headers["X-Total-Count"] = str(total)
     return list(result.scalars().all())
@@ -71,13 +77,15 @@ async def list_agents(
 # Registered before "/{agent_id}" so the literal "tools" path segment isn't
 # shadowed by the agent-id path parameter.
 @router.get("/tools")
-async def list_tools() -> list[str]:
+async def list_tools(user: User = Depends(current_user)) -> list[str]:
     return sorted(TOOLS.keys())
 
 
 @router.post("", response_model=AgentOut, status_code=201)
 async def create_agent(
-    payload: AgentCreate, session: AsyncSession = Depends(get_session)
+    payload: AgentCreate,
+    session: AsyncSession = Depends(get_session),
+    user: User = Depends(current_user),
 ) -> Agent:
     _validate_tools(payload.tools)
     _validate_mcp_servers(payload.mcp_servers)
@@ -97,6 +105,7 @@ async def create_agent(
         tools=payload.tools,
         mcp_servers=payload.mcp_servers,
         is_builtin=False,
+        user_id=user.id,
     )
     session.add(agent)
     await session.commit()
@@ -112,11 +121,16 @@ async def create_agent(
 # version per keystroke-driven change.
 @router.patch("/{agent_id}", response_model=AgentOut)
 async def update_agent(
-    agent_id: uuid.UUID, payload: AgentUpdate, session: AsyncSession = Depends(get_session)
+    agent_id: uuid.UUID,
+    payload: AgentUpdate,
+    session: AsyncSession = Depends(get_session),
+    user: User = Depends(current_user),
 ) -> Agent:
     agent = await session.get(Agent, agent_id)
-    if agent is None:
+    if agent is None or not is_visible(agent, user, builtin=True):
         raise HTTPException(status_code=404, detail="Agent not found")
+    if not is_mutable(agent, user):
+        raise HTTPException(status_code=403, detail="Built-in agents cannot be modified")
     updates = payload.model_dump(exclude_unset=True)
     if "tools" in updates and updates["tools"] is not None:
         _validate_tools(updates["tools"])
@@ -131,13 +145,15 @@ async def update_agent(
 
 @router.delete("/{agent_id}")
 async def delete_agent(
-    agent_id: uuid.UUID, session: AsyncSession = Depends(get_session)
+    agent_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+    user: User = Depends(current_user),
 ) -> dict:
     agent = await session.get(Agent, agent_id)
-    if agent is None:
+    if agent is None or not is_visible(agent, user, builtin=True):
         raise HTTPException(status_code=404, detail="Agent not found")
-    if agent.is_builtin:
-        raise HTTPException(status_code=409, detail="Built-in agents cannot be deleted")
+    if not is_mutable(agent, user):
+        raise HTTPException(status_code=403, detail="Built-in agents cannot be deleted")
     await session.delete(agent)
     await session.commit()
     return {"ok": True}
@@ -145,11 +161,16 @@ async def delete_agent(
 
 @router.post("/{agent_id}/publish", response_model=AgentVersionOut, status_code=201)
 async def publish_agent(
-    agent_id: uuid.UUID, payload: AgentPublish, session: AsyncSession = Depends(get_session)
+    agent_id: uuid.UUID,
+    payload: AgentPublish,
+    session: AsyncSession = Depends(get_session),
+    user: User = Depends(current_user),
 ) -> AgentVersion:
     agent = await session.get(Agent, agent_id)
-    if agent is None:
+    if agent is None or not is_visible(agent, user, builtin=True):
         raise HTTPException(status_code=404, detail="Agent not found")
+    if not is_mutable(agent, user):
+        raise HTTPException(status_code=403, detail="Built-in agents cannot be modified")
     version = await publish_version(session, agent, note=payload.note)
     await session.commit()
     await session.refresh(version)
@@ -163,7 +184,11 @@ async def list_versions(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_session),
+    user: User = Depends(current_user),
 ) -> list[AgentVersion]:
+    agent = await session.get(Agent, agent_id)
+    if agent is None or not is_visible(agent, user, builtin=True):
+        raise HTTPException(status_code=404, detail="Agent not found")
     total = (
         await session.execute(
             select(func.count())
@@ -184,8 +209,14 @@ async def list_versions(
 
 @router.get("/{agent_id}/versions/{version_id}", response_model=AgentVersionDetailOut)
 async def get_version(
-    agent_id: uuid.UUID, version_id: uuid.UUID, session: AsyncSession = Depends(get_session)
+    agent_id: uuid.UUID,
+    version_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+    user: User = Depends(current_user),
 ) -> AgentVersion:
+    agent = await session.get(Agent, agent_id)
+    if agent is None or not is_visible(agent, user, builtin=True):
+        raise HTTPException(status_code=404, detail="Agent not found")
     version = await session.get(AgentVersion, version_id)
     if version is None or version.agent_id != agent_id:
         raise HTTPException(status_code=404, detail="Version not found")
@@ -194,11 +225,16 @@ async def get_version(
 
 @router.post("/{agent_id}/versions/{version_id}/rollback", response_model=AgentOut)
 async def rollback_agent(
-    agent_id: uuid.UUID, version_id: uuid.UUID, session: AsyncSession = Depends(get_session)
+    agent_id: uuid.UUID,
+    version_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+    user: User = Depends(current_user),
 ) -> Agent:
     agent = await session.get(Agent, agent_id)
-    if agent is None:
+    if agent is None or not is_visible(agent, user, builtin=True):
         raise HTTPException(status_code=404, detail="Agent not found")
+    if not is_mutable(agent, user):
+        raise HTTPException(status_code=403, detail="Built-in agents cannot be modified")
     version = await session.get(AgentVersion, version_id)
     if version is None or version.agent_id != agent_id:
         raise HTTPException(status_code=404, detail="Version not found")

@@ -6,8 +6,10 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.auth import current_user
 from app.db import get_session
-from app.models import Run, RunTask
+from app.models import Run, RunTask, User
+from app.ownership import is_mutable, is_visible, visibility_clause
 from app.services.queue import dispatch_execute, dispatch_plan
 
 router = APIRouter()
@@ -51,8 +53,9 @@ def _run_dict(r: Run, with_tasks: bool = False) -> dict:
 async def create_run(
     payload: RunCreate,
     session: AsyncSession = Depends(get_session),
+    user: User = Depends(current_user),
 ) -> dict:
-    run = Run(goal=payload.goal)
+    run = Run(goal=payload.goal, user_id=user.id)
     session.add(run)
     await session.commit()
     await session.refresh(run)
@@ -68,12 +71,17 @@ async def list_runs(
     limit: int = Query(default=20, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_session),
+    user: User = Depends(current_user),
 ) -> list[dict]:
-    total = (await session.execute(select(func.count()).select_from(Run))).scalar_one()
+    visible = visibility_clause(Run, user)
+    total = (
+        await session.execute(select(func.count()).select_from(Run).where(visible))
+    ).scalar_one()
     runs = (
         (
             await session.execute(
                 select(Run)
+                .where(visible)
                 .order_by(Run.created_at.desc(), Run.id)
                 .offset(offset)
                 .limit(limit)
@@ -87,13 +95,17 @@ async def list_runs(
 
 
 @router.get("/{run_id}")
-async def get_run(run_id: uuid.UUID, session: AsyncSession = Depends(get_session)) -> dict:
+async def get_run(
+    run_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+    user: User = Depends(current_user),
+) -> dict:
     run = (
         await session.execute(
             select(Run).where(Run.id == run_id).options(selectinload(Run.tasks))
         )
     ).scalar_one_or_none()
-    if run is None:
+    if run is None or not is_visible(run, user):
         raise HTTPException(status_code=404, detail="Run not found")
     return _run_dict(run, with_tasks=True)
 
@@ -103,7 +115,13 @@ async def approve_task(
     run_id: uuid.UUID,
     task_id: uuid.UUID,
     session: AsyncSession = Depends(get_session),
+    user: User = Depends(current_user),
 ) -> dict:
+    run = await session.get(Run, run_id)
+    if run is None or not is_visible(run, user):
+        raise HTTPException(status_code=404, detail="Run not found")
+    if not is_mutable(run, user):
+        raise HTTPException(status_code=403, detail="Not permitted to modify this run")
     task = await session.get(RunTask, task_id)
     if task is None or task.run_id != run_id:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -111,7 +129,6 @@ async def approve_task(
         raise HTTPException(status_code=409, detail=f"Task is {task.status}, not review")
     task.status = "todo"
     task.needs_approval = False
-    run = await session.get(Run, run_id)
     run.status = "running"
     await session.commit()
     await dispatch_execute(run_id)

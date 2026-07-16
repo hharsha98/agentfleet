@@ -12,8 +12,9 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth import current_user
 from app.db import get_session
-from app.models import Agent, Conversation, Message
+from app.models import Agent, Conversation, Message, User
 from app.schemas import UsageDailyOut, UsagePerAgentOut, UsageSummaryOut, UsageTodayOut
 
 router = APIRouter()
@@ -29,7 +30,9 @@ def _date_start_utc(d: date) -> datetime:
 
 
 @router.get("/summary", response_model=UsageSummaryOut)
-async def summary(session: AsyncSession = Depends(get_session)) -> UsageSummaryOut:
+async def summary(
+    session: AsyncSession = Depends(get_session), user: User = Depends(current_user)
+) -> UsageSummaryOut:
     today_start = _today_start_utc()
 
     today_row = (
@@ -84,6 +87,7 @@ async def summary(session: AsyncSession = Depends(get_session)) -> UsageSummaryO
 async def daily(
     days: int = Query(default=14, ge=1, le=60),
     session: AsyncSession = Depends(get_session),
+    user: User = Depends(current_user),
 ) -> list[UsageDailyOut]:
     today = datetime.now(timezone.utc).date()
     start_date = today - timedelta(days=days - 1)

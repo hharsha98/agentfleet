@@ -82,11 +82,12 @@ async def test_agent_builder_crud() -> None:
             assert patch_res.status_code == 200, patch_res.text
             assert patch_res.json()["temperature"] == 1.2
 
-            # DELETE a builtin -> 409.
+            # DELETE a builtin -> 403 (Phase 12 B: builtins are never
+            # mutable via the API, even for an authenticated caller).
             builtin_res = await client.get("/api/v1/agents")
             builtin = next(a for a in builtin_res.json() if a["is_builtin"])
             delete_builtin_res = await client.delete(f"/api/v1/agents/{builtin['id']}")
-            assert delete_builtin_res.status_code == 409
+            assert delete_builtin_res.status_code == 403
 
             # DELETE the created agent -> ok.
             delete_res = await client.delete(f"/api/v1/agents/{agent['id']}")

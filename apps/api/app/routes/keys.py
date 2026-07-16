@@ -15,8 +15,10 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth import current_user
 from app.db import get_session
-from app.models import Agent, ApiKey
+from app.models import Agent, ApiKey, User
+from app.ownership import is_visible
 
 router = APIRouter()
 
@@ -36,9 +38,10 @@ async def create_key(
     agent_id: uuid.UUID,
     payload: ApiKeyCreate,
     session: AsyncSession = Depends(get_session),
+    user: User = Depends(current_user),
 ) -> dict:
     agent = await session.get(Agent, agent_id)
-    if agent is None:
+    if agent is None or not is_visible(agent, user, builtin=True):
         raise HTTPException(status_code=404, detail="Agent not found")
 
     key = KEY_PREFIX + secrets.token_hex(24)
@@ -70,7 +73,11 @@ async def list_keys(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_session),
+    user: User = Depends(current_user),
 ) -> list[dict]:
+    agent = await session.get(Agent, agent_id)
+    if agent is None or not is_visible(agent, user, builtin=True):
+        raise HTTPException(status_code=404, detail="Agent not found")
     total = (
         await session.execute(
             select(func.count()).select_from(ApiKey).where(ApiKey.agent_id == agent_id)
@@ -108,7 +115,11 @@ async def delete_key(
     agent_id: uuid.UUID,
     key_id: uuid.UUID,
     session: AsyncSession = Depends(get_session),
+    user: User = Depends(current_user),
 ) -> dict:
+    agent = await session.get(Agent, agent_id)
+    if agent is None or not is_visible(agent, user, builtin=True):
+        raise HTTPException(status_code=404, detail="Agent not found")
     api_key = await session.get(ApiKey, key_id)
     if api_key is None or api_key.agent_id != agent_id:
         raise HTTPException(status_code=404, detail="Key not found")

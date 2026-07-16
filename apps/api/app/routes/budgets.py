@@ -6,15 +6,19 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth import current_user
 from app.db import get_session
-from app.models import Agent, Budget
+from app.models import Agent, Budget, User
+from app.ownership import is_visible
 from app.schemas import BudgetOut, BudgetUpsert
 
 router = APIRouter()
 
 
 @router.get("", response_model=list[BudgetOut])
-async def list_budgets(session: AsyncSession = Depends(get_session)) -> list[BudgetOut]:
+async def list_budgets(
+    session: AsyncSession = Depends(get_session), user: User = Depends(current_user)
+) -> list[BudgetOut]:
     rows = (
         await session.execute(
             select(Budget, Agent.slug).outerjoin(Agent, Agent.id == Budget.agent_id)
@@ -36,11 +40,13 @@ async def list_budgets(session: AsyncSession = Depends(get_session)) -> list[Bud
 
 @router.put("")
 async def upsert_budget(
-    payload: BudgetUpsert, session: AsyncSession = Depends(get_session)
+    payload: BudgetUpsert,
+    session: AsyncSession = Depends(get_session),
+    user: User = Depends(current_user),
 ) -> dict:
     if payload.agent_id is not None:
         agent = await session.get(Agent, payload.agent_id)
-        if agent is None:
+        if agent is None or not is_visible(agent, user, builtin=True):
             raise HTTPException(status_code=404, detail="Agent not found")
 
     existing = (

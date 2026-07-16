@@ -6,8 +6,9 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth import current_user
 from app.db import get_session
-from app.models import ScheduledRun
+from app.models import ScheduledRun, User
 from app.schemas import ScheduledRunOut
 
 router = APIRouter()
@@ -35,7 +36,9 @@ class ScheduledRunUpdate(BaseModel):
 
 @router.post("", response_model=ScheduledRunOut, status_code=201)
 async def create_schedule(
-    payload: ScheduledRunCreate, session: AsyncSession = Depends(get_session)
+    payload: ScheduledRunCreate,
+    session: AsyncSession = Depends(get_session),
+    user: User = Depends(current_user),
 ) -> ScheduledRun:
     _validate_cron(payload.cron)
     schedule = ScheduledRun(name=payload.name, goal=payload.goal, cron=payload.cron)
@@ -51,6 +54,7 @@ async def list_schedules(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_session),
+    user: User = Depends(current_user),
 ) -> list[ScheduledRun]:
     total = (await session.execute(select(func.count()).select_from(ScheduledRun))).scalar_one()
     result = await session.execute(
@@ -68,6 +72,7 @@ async def update_schedule(
     schedule_id: uuid.UUID,
     payload: ScheduledRunUpdate,
     session: AsyncSession = Depends(get_session),
+    user: User = Depends(current_user),
 ) -> ScheduledRun:
     schedule = await session.get(ScheduledRun, schedule_id)
     if schedule is None:
@@ -84,7 +89,9 @@ async def update_schedule(
 
 @router.delete("/{schedule_id}")
 async def delete_schedule(
-    schedule_id: uuid.UUID, session: AsyncSession = Depends(get_session)
+    schedule_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+    user: User = Depends(current_user),
 ) -> dict:
     schedule = await session.get(ScheduledRun, schedule_id)
     if schedule is None:

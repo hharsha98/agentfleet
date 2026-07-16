@@ -5,9 +5,11 @@ exposes services/guardrails.py over HTTP for the web "try it" panel and is
 trivially unit-testable (see tests/test_guardrails.py).
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
+from app.auth import current_user
+from app.models import User
 from app.services.guardrails import mask_pii, scan_tool_output
 
 router = APIRouter()
@@ -28,7 +30,9 @@ class GuardrailScanOut(BaseModel):
 
 
 @router.post("/scan", response_model=GuardrailScanOut)
-async def scan(payload: GuardrailScanIn) -> GuardrailScanOut:
+async def scan(
+    payload: GuardrailScanIn, user: User = Depends(current_user)
+) -> GuardrailScanOut:
     flags = scan_tool_output(payload.text)
     masked, replacements = mask_pii(payload.text)
     return GuardrailScanOut(

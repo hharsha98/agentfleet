@@ -7,6 +7,7 @@ no data leaves the machine. The model (~130MB) downloads once on first use.
 import asyncio
 import io
 import logging
+import uuid
 
 from fastembed import TextEmbedding
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -60,7 +61,11 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
 
 
 async def ingest_document(
-    session: AsyncSession, filename: str, mime: str, data: bytes
+    session: AsyncSession,
+    filename: str,
+    mime: str,
+    data: bytes,
+    user_id: uuid.UUID | None = None,
 ) -> tuple[Document, int]:
     text = extract_text(filename, data)
     pieces = chunk_text(text)
@@ -69,7 +74,9 @@ async def ingest_document(
     # CPU-bound embedding runs off the event loop so requests keep flowing.
     vectors = await asyncio.to_thread(embed_texts, pieces)
 
-    document = Document(filename=filename, mime=mime, size_bytes=len(data), status="ready")
+    document = Document(
+        filename=filename, mime=mime, size_bytes=len(data), status="ready", user_id=user_id
+    )
     session.add(document)
     await session.flush()  # assigns document.id
     for i, (piece, vector) in enumerate(zip(pieces, vectors)):

@@ -9,8 +9,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth import current_user
 from app.db import get_session
-from app.models import Agent, EvalCase, EvalRun
+from app.models import Agent, EvalCase, EvalRun, User
+from app.ownership import is_visible
 from app.schemas import EvalCaseCreate, EvalCaseOut, EvalRunOut, EvalRunSummaryOut
 from app.services.evals import run_eval, run_red_team
 
@@ -24,7 +26,11 @@ async def list_cases(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_session),
+    user: User = Depends(current_user),
 ) -> list[EvalCase]:
+    agent = await session.get(Agent, agent_id)
+    if agent is None or not is_visible(agent, user, builtin=True):
+        raise HTTPException(status_code=404, detail="Agent not found")
     total = (
         await session.execute(
             select(func.count()).select_from(EvalCase).where(EvalCase.agent_id == agent_id)
@@ -46,9 +52,10 @@ async def create_case(
     agent_id: uuid.UUID,
     payload: EvalCaseCreate,
     session: AsyncSession = Depends(get_session),
+    user: User = Depends(current_user),
 ) -> EvalCase:
     agent = await session.get(Agent, agent_id)
-    if agent is None:
+    if agent is None or not is_visible(agent, user, builtin=True):
         raise HTTPException(status_code=404, detail="Agent not found")
     case = EvalCase(
         agent_id=agent_id,
@@ -65,8 +72,14 @@ async def create_case(
 
 @router.delete("/cases/{case_id}")
 async def delete_case(
-    agent_id: uuid.UUID, case_id: uuid.UUID, session: AsyncSession = Depends(get_session)
+    agent_id: uuid.UUID,
+    case_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+    user: User = Depends(current_user),
 ) -> dict:
+    agent = await session.get(Agent, agent_id)
+    if agent is None or not is_visible(agent, user, builtin=True):
+        raise HTTPException(status_code=404, detail="Agent not found")
     case = await session.get(EvalCase, case_id)
     if case is None or case.agent_id != agent_id:
         raise HTTPException(status_code=404, detail="Eval case not found")
@@ -76,9 +89,13 @@ async def delete_case(
 
 
 @router.post("/run", response_model=EvalRunOut)
-async def run(agent_id: uuid.UUID, session: AsyncSession = Depends(get_session)) -> EvalRun:
+async def run(
+    agent_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+    user: User = Depends(current_user),
+) -> EvalRun:
     agent = await session.get(Agent, agent_id)
-    if agent is None:
+    if agent is None or not is_visible(agent, user, builtin=True):
         raise HTTPException(status_code=404, detail="Agent not found")
     # May take seconds: one LLM call per case (plus a judge call per rubric),
     # run sequentially — that's expected for a manual/CI eval gate.
@@ -86,9 +103,13 @@ async def run(agent_id: uuid.UUID, session: AsyncSession = Depends(get_session))
 
 
 @router.post("/red-team")
-async def red_team(agent_id: uuid.UUID, session: AsyncSession = Depends(get_session)) -> dict:
+async def red_team(
+    agent_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+    user: User = Depends(current_user),
+) -> dict:
     agent = await session.get(Agent, agent_id)
-    if agent is None:
+    if agent is None or not is_visible(agent, user, builtin=True):
         raise HTTPException(status_code=404, detail="Agent not found")
     # Adversarial suite, not persisted — one LLM call per case (plus a judge
     # call where a rubric is set), same "expected to take seconds" budget as
@@ -103,7 +124,11 @@ async def list_runs(
     limit: int = Query(default=10, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_session),
+    user: User = Depends(current_user),
 ) -> list[EvalRun]:
+    agent = await session.get(Agent, agent_id)
+    if agent is None or not is_visible(agent, user, builtin=True):
+        raise HTTPException(status_code=404, detail="Agent not found")
     total = (
         await session.execute(
             select(func.count()).select_from(EvalRun).where(EvalRun.agent_id == agent_id)
@@ -122,8 +147,14 @@ async def list_runs(
 
 @router.get("/runs/{run_id}", response_model=EvalRunOut)
 async def get_run(
-    agent_id: uuid.UUID, run_id: uuid.UUID, session: AsyncSession = Depends(get_session)
+    agent_id: uuid.UUID,
+    run_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+    user: User = Depends(current_user),
 ) -> EvalRun:
+    agent = await session.get(Agent, agent_id)
+    if agent is None or not is_visible(agent, user, builtin=True):
+        raise HTTPException(status_code=404, detail="Agent not found")
     run_obj = await session.get(EvalRun, run_id)
     if run_obj is None or run_obj.agent_id != agent_id:
         raise HTTPException(status_code=404, detail="Eval run not found")

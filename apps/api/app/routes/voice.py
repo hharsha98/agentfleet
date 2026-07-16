@@ -16,9 +16,11 @@ per-call instead of pre-created in the Vapi dashboard).
 returned here — this route only ever hands the browser the public key.
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
+from app.auth import current_user
 from app.config import get_settings
+from app.models import User
 
 router = APIRouter()
 
@@ -46,7 +48,7 @@ def _assistant_config() -> dict:
 
 
 @router.get("/config")
-async def get_voice_config() -> dict:
+async def get_voice_config(user: User = Depends(current_user)) -> dict:
     settings = get_settings()
     if not settings.vapi_public_key:
         return {"enabled": False}

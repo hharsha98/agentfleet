@@ -35,6 +35,10 @@ async def test_playground_run_happy_path(monkeypatch) -> None:
     """Happy path with a canned completion shaped like the OpenAI SDK's
     (choices[0].message.content + usage.prompt/completion_tokens) — exactly
     the fields the route reads."""
+    # Phase 12 B: current_user now touches the DB (users lookup/create) on
+    # every route, including this one — same cross-event-loop dispose this
+    # file's other DB-touching tests already need (see module docstring).
+    await engine.dispose()
 
     fake_completion = SimpleNamespace(
         choices=[SimpleNamespace(message=SimpleNamespace(content="OK"))],
@@ -74,6 +78,10 @@ async def test_playground_run_happy_path(monkeypatch) -> None:
 
 
 async def test_playground_run_provider_error_returns_502(monkeypatch) -> None:
+    # Phase 12 B: see test_playground_run_happy_path — current_user's DB
+    # lookup needs a fresh pool bound to this test's event loop.
+    await engine.dispose()
+
     class _FakeCompletions:
         async def create(self, **kwargs):
             raise openai.APIConnectionError(
