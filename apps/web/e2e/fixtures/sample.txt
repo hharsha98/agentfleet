@@ -1,0 +1,8 @@
+AgentFleet E2E fixture document.
+
+This is a small plain-text file used by e2e/documents.spec.ts to exercise
+the Knowledge base upload flow — it gets chunked and embedded locally by
+fastembed so agents can search it with the search_documents tool.
+
+AgentFleet is a self-hosted multi-agent operations platform built with
+FastAPI, LangGraph, Postgres + pgvector, and Next.js.

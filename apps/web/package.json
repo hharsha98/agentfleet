@@ -6,7 +6,9 @@
     "dev": "next dev -p 3002",
     "build": "next build",
     "start": "next start -p 3002",
-    "lint": "eslint"
+    "lint": "eslint",
+    "e2e": "playwright test",
+    "e2e:fast": "E2E_SKIP_LLM=1 playwright test"
   },
   "dependencies": {
     "@vapi-ai/web": "^2.6.1",
@@ -19,6 +21,7 @@
     "vega-lite": "^5.23.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
