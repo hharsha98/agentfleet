@@ -47,6 +47,11 @@ import os
 # docstring points 1 and 3.
 os.environ.setdefault("AUTH_SECRET", "test-secret-for-ci")
 os.environ.setdefault("RATE_LIMIT_DISABLED", "1")
+# Phase 12 F2: never download the ~130MB fastembed model during tests. Belt
+# and braces — the pre-warm runs from the app lifespan, which starlette only
+# triggers inside a `with TestClient(app)` / lifespan-aware ASGI run, and no
+# existing test does that; this env guard keeps it off even if one ever does.
+os.environ.setdefault("EMBEDDINGS_PREWARM", "0")
 
 import fastapi.testclient
 import httpx

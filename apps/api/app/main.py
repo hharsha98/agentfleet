@@ -1,11 +1,15 @@
+import asyncio
 import logging
+import threading
 import time
 import uuid
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
+from sqlalchemy import text
 
 from app.config import get_settings
 from app.logging_config import request_id_var, setup_logging
@@ -43,7 +47,45 @@ logger.info(
     type(limiter._storage).__name__,
 )
 
-app = FastAPI(title="AgentFleet API", version="0.1.0")
+def _start_embeddings_prewarm() -> None:
+    """Kick off a background load of the fastembed model (Phase 12 F2).
+
+    The first document upload otherwise pays a multi-second cold start
+    (model load, plus a ~130MB download on a fresh container). Runs in a
+    daemon thread so it never blocks startup, and it is deliberately NOT
+    part of /health/ready — embeddings are only needed for document
+    upload/search, not core traffic, so readiness stays DB-only by design.
+
+    Guard: EMBEDDINGS_PREWARM=0 skips entirely (CI/tests must not download
+    models — tests/conftest.py sets it, and pytest never runs the lifespan
+    anyway since tests construct TestClient(app)/ASGITransport without a
+    `with` block, which is what triggers lifespan in starlette).
+    """
+    if get_settings().embeddings_prewarm == "0":
+        logger.info("embeddings pre-warm skipped (EMBEDDINGS_PREWARM=0)")
+        return
+
+    def _warm() -> None:
+        logger.info("embeddings pre-warm started")
+        try:
+            from app.services import ingest
+
+            ingest._get_embedder()
+            logger.info("embeddings pre-warm done")
+        except Exception:
+            # Non-fatal: uploads fall back to loading the model on demand.
+            logger.warning("embeddings pre-warm failed", exc_info=True)
+
+    threading.Thread(target=_warm, name="embeddings-prewarm", daemon=True).start()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    _start_embeddings_prewarm()
+    yield
+
+
+app = FastAPI(title="AgentFleet API", version="0.1.0", lifespan=lifespan)
 
 app.state.limiter = limiter
 
@@ -138,4 +180,28 @@ app.include_router(voice_router, prefix="/api/v1/voice", tags=["voice"])
 
 @app.get("/health")
 async def health() -> dict[str, str]:
+    """Liveness: cheap, no dependencies — must stay DB-free so a slow/down
+    database never gets the process killed by a liveness probe."""
     return {"status": "ok", "service": "agentfleet-api"}
+
+
+@app.get("/health/ready")
+async def health_ready() -> JSONResponse:
+    """Readiness (Phase 12 F2): can this replica serve real traffic?
+
+    One `SELECT 1` through the async engine with a 2s budget. DB-only by
+    design: embeddings (fastembed) are needed only for document
+    upload/search, so a replica is 'ready' as soon as the DB answers — see
+    _start_embeddings_prewarm above. Imports app.db at call time so tests
+    can monkeypatch `db.engine`.
+    """
+    from app import db
+
+    try:
+        async with asyncio.timeout(2):
+            async with db.engine.connect() as conn:
+                await conn.execute(text("SELECT 1"))
+    except Exception as exc:  # noqa: BLE001 — any failure means "not ready"
+        reason = f"{type(exc).__name__}: {exc}"[:200]
+        return JSONResponse({"status": "not ready", "reason": reason}, status_code=503)
+    return JSONResponse({"status": "ready"})

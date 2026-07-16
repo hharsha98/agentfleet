@@ -11,6 +11,11 @@ data:
   FREE_LLM_BASE_URL: http://localhost:3001/v1
   LANGFUSE_HOST: https://cloud.langfuse.com
 ---
+# NOTE (Phase 12 F2): the one-shot `migrate` Job (migrate-job.yaml) must run
+# before api pods can serve — the entrypoint no longer runs migrations
+# per-replica (multi-replica race). An initContainer was considered but a Job
+# is correct for >1 replica: it runs exactly once cluster-wide. Until the Job
+# completes, api pods stay out of the Service via the /health/ready probe.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -37,12 +42,20 @@ spec:
                 name: agentfleet-config
             - secretRef:
                 name: agentfleet-secrets
+          # Readiness = DB answers SELECT 1 (/health/ready); liveness stays
+          # the cheap DB-free /health so a slow DB never kills the process.
           readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
             httpGet:
               path: /health
               port: 8000
             initialDelaySeconds: 10
-            periodSeconds: 5
+            periodSeconds: 15
 ---
 apiVersion: v1
 kind: Service

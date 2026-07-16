@@ -5,15 +5,15 @@
 #   open http://localhost:3002
 #
 # Networking note: the browser talks to the api at http://localhost:8000
-# (published port), while the web container's SSR fetches happen inside the
-# compose network. NEXT_PUBLIC_API_URL is baked into the client bundle as
-# http://localhost:8000 (reachable from the host browser), so any *server*
-# component fetch that happens during SSR from *inside* the web container
-# will also try localhost:8000 — which isn't the api container from inside
-# the network. That's acceptable for this local demo: pages using SSR fetch
-# degrade to client-side re-fetch (see apps/web/app/chat/page.tsx and
-# components/api-status.tsx, both client components that already re-fetch on
-# mount), so the UI still loads correctly once the browser makes the request.
+# (published port, NEXT_PUBLIC_API_URL baked into the client bundle), while
+# the web container's *server-side* (SSR) fetches go straight to the api
+# container over the compose network via INTERNAL_API_URL=http://api:8000
+# (Phase 12 F2 — read at runtime by apiFetchServer in apps/web/lib/api.ts).
+#
+# Migrations (Phase 12 F2): the one-shot `migrate` service runs
+# `alembic upgrade head` exactly once; api and worker only start after it
+# exits 0 (service_completed_successfully). This avoids multiple replicas
+# racing migrations at boot — the per-replica entrypoint no longer migrates.
 name: agentfleet
 
 services:
@@ -48,6 +48,23 @@ services:
     environment:
       SEARXNG_BASE_URL: http://localhost:8081/
 
+  # One-shot migration runner (Phase 12 F2): same image as the api, skips
+  # docker-entrypoint.sh (entrypoint: []) and just applies migrations, then
+  # exits 0. api/worker wait for it via service_completed_successfully.
+  migrate:
+    build:
+      context: ../apps/api
+    entrypoint: []
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+    env_file:
+      - ../.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://agentfleet:agentfleet@postgres:5432/agentfleet
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   api:
     build:
       context: ../apps/api
@@ -71,6 +88,8 @@ services:
       # service instead of dying with the api container (ADR-004).
       ORCHESTRATOR_MODE: arq
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
@@ -101,6 +120,8 @@ services:
       LANGFUSE_HOST: ${LANGFUSE_HOST:-}
       ORCHESTRATOR_MODE: arq
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
@@ -113,6 +134,10 @@ services:
         NEXT_PUBLIC_API_URL: http://localhost:8000
     ports:
       - "3002:3002"
+    environment:
+      # SSR fetches reach the api over the compose network (runtime env, not
+      # baked at build time like NEXT_PUBLIC_API_URL) — Phase 12 F2.
+      INTERNAL_API_URL: http://api:8000
     depends_on:
       - api
 

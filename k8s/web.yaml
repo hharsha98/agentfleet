@@ -24,6 +24,10 @@ spec:
               value: "3002"
             - name: HOSTNAME
               value: 0.0.0.0
+            # SSR fetches reach the api Service over cluster DNS (Phase 12
+            # F2) — the browser keeps the baked-in NEXT_PUBLIC_API_URL.
+            - name: INTERNAL_API_URL
+              value: http://api:8000
 ---
 apiVersion: v1
 kind: Service

@@ -1,0 +1,37 @@
+# One-shot Alembic migration Job (Phase 12 F2).
+#
+# Why a Job and not an initContainer on the api Deployment: with >1 api
+# replica, every pod's initContainer would race `alembic upgrade head`
+# simultaneously — a Job runs it exactly once cluster-wide. The api pods
+# must not serve until this has completed; their entrypoint no longer
+# migrates (see apps/api/docker-entrypoint.sh) and the readiness probe
+# (/health/ready) keeps them out of the Service until the DB answers.
+#
+# Jobs are immutable once completed — before re-applying after an image
+# change, delete the old one:
+#   kubectl delete job -n agentfleet migrate --ignore-not-found
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: migrate
+  namespace: agentfleet
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app: migrate
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: agentfleet-api:local
+          imagePullPolicy: IfNotPresent
+          # `command` overrides the image ENTRYPOINT (docker-entrypoint.sh),
+          # so this container only migrates, then exits.
+          command: ["alembic", "upgrade", "head"]
+          envFrom:
+            - configMapRef:
+                name: agentfleet-config
+            - secretRef:
+                name: agentfleet-secrets

@@ -96,6 +96,12 @@ class Settings(BaseSettings):
     # used by the test suite (tests/conftest.py) and available for local dev.
     rate_limit_disabled: bool = False
 
+    # Deploy safety (Phase 12 F2): load the fastembed model in a background
+    # thread at API startup so the first document upload doesn't eat the
+    # multi-second cold start. Set EMBEDDINGS_PREWARM=0 to skip (CI/tests —
+    # the model is a ~130MB download; tests/conftest.py sets this).
+    embeddings_prewarm: str = "1"
+
 
 @lru_cache
 def get_settings() -> Settings:

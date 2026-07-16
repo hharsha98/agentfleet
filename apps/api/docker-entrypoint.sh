@@ -3,9 +3,17 @@
 #   1. wait for Postgres to accept connections (compose healthchecks already
 #      gate this, but we double check since `depends_on: condition: service_started`
 #      races can still slip through on some Docker versions)
-#   2. run migrations
-#   3. seed the built-in agent roster (idempotent — see scripts/seed_agents.py)
-#   4. exec the real CMD (uvicorn), so it becomes PID 1 and receives signals
+#   2. seed the built-in agent roster (idempotent — see scripts/seed_agents.py)
+#   3. exec the real CMD (uvicorn), so it becomes PID 1 and receives signals
+#
+# Migrations are deliberately NOT run here (Phase 12 F2): with >1 API
+# replica, every replica racing `alembic upgrade head` at boot can deadlock
+# or double-apply. A one-shot runner owns migrations instead — the `migrate`
+# service in docker/compose.full.yaml (api/worker wait on
+# service_completed_successfully) and k8s/migrate-job.yaml on Kubernetes.
+# Local dev keeps using `uv run alembic upgrade head` directly.
+# Seeding stays here: it's idempotent and needs the tables the migration
+# runner has already created by the time this container is allowed to start.
 set -e
 
 python3 - <<'PYEOF'
@@ -33,9 +41,6 @@ for attempt in range(60):
 else:
     raise SystemExit(f"[entrypoint] postgres not reachable at {host}:{port} after 60s")
 PYEOF
-
-echo "[entrypoint] running migrations..."
-alembic upgrade head
 
 echo "[entrypoint] seeding built-in agents..."
 python -m scripts.seed_agents

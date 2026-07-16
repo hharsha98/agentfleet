@@ -44,6 +44,16 @@ See `secret.example.yaml` for the placeholder shape — do not `kubectl apply` i
 kubectl apply -k k8s/
 ```
 
+Migrations run as a one-shot `migrate` Job (Phase 12 F2 — api pods no longer
+migrate at boot; their `/health/ready` probe keeps them out of the Service
+until the schema exists). Jobs are immutable once completed, so when
+re-applying after rebuilding the image:
+
+```bash
+kubectl delete job -n agentfleet migrate --ignore-not-found
+kubectl apply -k k8s/
+```
+
 ## 5. Reach the web app
 
 ```bash

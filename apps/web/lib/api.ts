@@ -22,6 +22,15 @@ import { SignJWT } from "jose";
 import { auth } from "@/auth";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+// Phase 12 F2 (nice-16): SSR/browser URL split. Server components run
+// *inside* the web container/pod, where the browser-facing
+// NEXT_PUBLIC_API_URL (http://localhost:8000) doesn't point at the api
+// container — INTERNAL_API_URL (e.g. http://api:8000, plain runtime env,
+// never sent to the browser) does. Unset locally -> falls back to the same
+// base the client uses, so `next dev` behavior is unchanged.
+const SERVER_API_BASE =
+  process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const REFRESH_SKEW_SECONDS = 60;
 export const TOKEN_TTL_SECONDS = 15 * 60; // keep exp short per the B1 contract
 
@@ -129,5 +138,5 @@ export async function apiFetchServer(path: string, init: RequestInit = {}): Prom
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  return fetch(`${API_BASE}${path}`, { ...init, headers });
+  return fetch(`${SERVER_API_BASE}${path}`, { ...init, headers });
 }
