@@ -27,14 +27,26 @@ fixture), because they must be visible to `from httpx import AsyncClient`
 modules that haven't been imported yet when conftest.py runs. This has no
 effect on production code — nothing under app/ imports httpx.AsyncClient
 or TestClient this way.
+
+3. Sets RATE_LIMIT_DISABLED=1 in os.environ (same "before any app.* import"
+   requirement as AUTH_SECRET above — app.ratelimit builds its module-level
+   `limiter` singleton with `enabled=not settings.rate_limit_disabled` at
+   import time). Every existing test predates rate limiting and reuses the
+   same DEFAULT_TEST_EMAIL across dozens of calls to chat send / document
+   upload / public invoke within one pytest session — without this, the
+   suite would trip real limits (30/min chat, 10/min upload, 60/min
+   public) well before finishing. tests/test_ratelimit.py is the only file
+   that needs limiting actually ON; it re-enables it per-test via
+   `monkeypatch.setattr(app.ratelimit.limiter, "enabled", True)`.
 """
 
 import datetime as _dt
 import os
 
 # Must happen before ANY app.* import in this process — see module
-# docstring point 1.
+# docstring points 1 and 3.
 os.environ.setdefault("AUTH_SECRET", "test-secret-for-ci")
+os.environ.setdefault("RATE_LIMIT_DISABLED", "1")
 
 import fastapi.testclient
 import httpx

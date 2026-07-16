@@ -1,10 +1,15 @@
-// AgentFleet API load test (Phase 11, nice-15).
+// AgentFleet API load test (Phase 11, nice-15; auth-token regression fix
+// Phase 12 C).
 //
 // Targets the FastAPI backend directly (not the Next.js web app).
 //
+// Every /api/v1 route requires a Bearer JWT since Phase 12 B — this script
+// predates that and needs a minted token now. Mint one and pass it via
+// API_TOKEN (see docs/LOAD_TEST.md "How to run" for the exact one-liner):
+//
 // Usage:
-//   BASE_URL=http://localhost:8000 k6 run load/k6-api.js          # lists + writes only (no LLM calls)
-//   BASE_URL=http://localhost:8000 CHAT=1 k6 run load/k6-api.js   # also runs the chat_smoke scenario (hits the LLM proxy)
+//   API_TOKEN=<jwt> BASE_URL=http://localhost:8000 k6 run load/k6-api.js          # lists + writes only (no LLM calls)
+//   API_TOKEN=<jwt> BASE_URL=http://localhost:8000 CHAT=1 k6 run load/k6-api.js   # also runs the chat_smoke scenario (hits the LLM proxy)
 //
 // Scenarios:
 //   lists       - round-robins GET /agents, /runs, /documents, /schedules. Ramp 0->20 VUs
@@ -16,11 +21,26 @@
 //   chat_smoke  - opt-in via CHAT=1 env var. 1 VU, 3 iterations. Creates a conversation, then
 //                 posts a tiny message and reads the SSE stream to completion. Proves the
 //                 real chat path works under k6 without doing a real load run against the LLM.
+//
+// Rate limiting (Phase 12 C) note: chat send / document upload / the public
+// invoke endpoint are limited per-user (30/min, 10/min, 60/min by default —
+// RATE_LIMIT_* env on the API). This script's default run (lists + writes)
+// never touches any of those three routes, so it is NOT affected by rate
+// limiting at all. CHAT=1's chat_smoke scenario sends only 3 messages from
+// a single token/VU — well under the 30/minute chat default — so it isn't
+// affected either. See docs/LOAD_TEST.md for the live-verified numbers.
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 
 const BASE_URL = __ENV.BASE_URL || 'http://localhost:8000';
 const CHAT_ENABLED = __ENV.CHAT === '1';
+const API_TOKEN = __ENV.API_TOKEN || '';
+
+// Merged into every request's `headers` object below. Spreading this in
+// when API_TOKEN is unset would send `Authorization: Bearer ` (empty) —
+// setup() throws before any VU traffic starts in that case anyway, but
+// AUTH_HEADERS stays an empty object rather than a broken header either way.
+const AUTH_HEADERS = API_TOKEN ? { Authorization: `Bearer ${API_TOKEN}` } : {};
 
 const LIST_ENDPOINTS = [
   '/api/v1/agents',
@@ -68,9 +88,19 @@ export const options = {
 };
 
 // setup() runs once before any VU traffic starts, so the writes/chat_smoke
-// scenarios get a real agent id instead of a hardcoded one.
+// scenarios get a real agent id instead of a hardcoded one. Also the one
+// place API_TOKEN gets validated — fail fast with a clear message rather
+// than letting every VU independently discover 401s (Phase 12 B: every
+// /api/v1 route is auth-gated now, no exceptions this script touches).
 export function setup() {
-  const res = http.get(`${BASE_URL}/api/v1/agents`);
+  if (!API_TOKEN) {
+    throw new Error(
+      'setup: API_TOKEN is not set. Every /api/v1 route requires a Bearer JWT ' +
+        '(Phase 12 B) — mint one and re-run with API_TOKEN=<jwt>. ' +
+        'See docs/LOAD_TEST.md "How to run" for the one-liner.'
+    );
+  }
+  const res = http.get(`${BASE_URL}/api/v1/agents`, { headers: AUTH_HEADERS });
   if (res.status !== 200) {
     throw new Error(`setup: GET /api/v1/agents failed with status ${res.status}`);
   }
@@ -83,7 +113,7 @@ export function setup() {
 
 export function listsScenario() {
   const path = LIST_ENDPOINTS[__ITER % LIST_ENDPOINTS.length];
-  const res = http.get(`${BASE_URL}${path}`, { tags: { name: 'list' } });
+  const res = http.get(`${BASE_URL}${path}`, { headers: AUTH_HEADERS, tags: { name: 'list' } });
   check(res, {
     'status is 200': (r) => r.status === 200,
     'has X-Total-Count header': (r) => r.headers['X-Total-Count'] !== undefined,
@@ -95,7 +125,7 @@ export function writesScenario(data) {
     `${BASE_URL}/api/v1/conversations`,
     JSON.stringify({ agent_id: data.agentId }),
     {
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...AUTH_HEADERS, 'Content-Type': 'application/json' },
       tags: { name: 'create_conversation' },
     }
   );
@@ -108,7 +138,7 @@ export function chatSmokeScenario(data) {
   const convRes = http.post(
     `${BASE_URL}/api/v1/conversations`,
     JSON.stringify({ agent_id: data.agentId }),
-    { headers: { 'Content-Type': 'application/json' } }
+    { headers: { ...AUTH_HEADERS, 'Content-Type': 'application/json' } }
   );
   const convOk = check(convRes, {
     'chat_smoke: conversation created': (r) => r.status === 200 || r.status === 201,
@@ -122,7 +152,7 @@ export function chatSmokeScenario(data) {
     `${BASE_URL}/api/v1/conversations/${conversation.id}/messages`,
     JSON.stringify({ content: 'Reply with the word OK.' }),
     {
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...AUTH_HEADERS, 'Content-Type': 'application/json' },
       timeout: '60s', // generous: this hits the LLM proxy and streams a full SSE response
     }
   );

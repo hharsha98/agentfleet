@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,6 +9,7 @@ from app.config import get_settings
 from app.db import get_session
 from app.models import Agent, Conversation, User
 from app.ownership import is_visible
+from app.ratelimit import chat_limit, limiter
 from app.schemas import ConversationCreate, ConversationOut, MessageIn
 from app.services.chat import stream_chat
 from app.services.graph_runtime import stream_chat_graph
@@ -34,7 +35,9 @@ async def create_conversation(
 
 
 @router.post("/{conversation_id}/messages")
+@limiter.limit(chat_limit)
 async def send_message(
+    request: Request,
     conversation_id: uuid.UUID,
     payload: MessageIn,
     session: AsyncSession = Depends(get_session),

@@ -9,13 +9,14 @@ import hashlib
 import json
 import logging
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
 from app.models import Agent, ApiKey, Conversation
+from app.ratelimit import limiter, public_limit
 from app.services.chat import stream_chat
 
 logger = logging.getLogger(__name__)
@@ -58,7 +59,9 @@ async def _authenticate(
 
 
 @router.post("/agents/{slug}/invoke")
+@limiter.limit(public_limit)
 async def invoke_agent(
+    request: Request,
     slug: str,
     payload: InvokeRequest,
     authorization: str | None = Header(default=None),

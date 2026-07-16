@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, UploadFile
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -6,6 +6,7 @@ from app.auth import current_user
 from app.db import get_session
 from app.models import Document, User
 from app.ownership import visibility_clause
+from app.ratelimit import limiter, upload_limit
 from app.services.ingest import ingest_document
 
 router = APIRouter()
@@ -14,7 +15,9 @@ MAX_UPLOAD_BYTES = 5 * 1024 * 1024  # same reasoning as the chat input cap
 
 
 @router.post("", status_code=201)
+@limiter.limit(upload_limit)
 async def upload_document(
+    request: Request,
     file: UploadFile,
     session: AsyncSession = Depends(get_session),
     user: User = Depends(current_user),

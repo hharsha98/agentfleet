@@ -85,6 +85,17 @@ class Settings(BaseSettings):
     sentry_dsn: str = ""
     sentry_environment: str = "dev"
 
+    # Rate limiting (Phase 12 C, app/ratelimit.py): slowapi + `limits`, keyed
+    # per-user (JWT email) else per-IP. Applied only to chat send, document
+    # upload, and the public invoke endpoint — see ARCHITECTURE.md. Strings
+    # use the `limits` ratelimit-string format ("N/second|minute|hour|day").
+    rate_limit_chat: str = "30/minute"
+    rate_limit_upload: str = "10/minute"
+    rate_limit_public: str = "60/minute"
+    # Set to true (env RATE_LIMIT_DISABLED=1) to turn all rate limiting off —
+    # used by the test suite (tests/conftest.py) and available for local dev.
+    rate_limit_disabled: bool = False
+
 
 @lru_cache
 def get_settings() -> Settings:

@@ -74,3 +74,11 @@ Short, honest records of the trade-offs behind AgentFleet. Format: context → d
 **Sample rate:** `traces_sample_rate` / `tracesSampleRate` is `0.1` (10%) on both sides — enough to see performance trends without paying for full tracing on every request, appropriate for a low-traffic demo/portfolio deployment.
 **Sourcemap upload deferred:** no webpack plugin, no `SENTRY_AUTH_TOKEN`, no `next.config.ts` changes — sourcemap upload requires a Sentry auth token that isn't available in this environment; runtime-only init today, source-mapped stack traces are a deploy-phase (Phase 12/13) follow-up.
 **Trade-off:** without sourcemaps, client-side stack traces in Sentry will show minified code until that follow-up lands; acceptable since no DSN is configured yet regardless.
+
+## Rate limiting (Phase 12 C)
+
+**Decision (2026-07-16):** `slowapi` (+ `limits`) rate-limits exactly three routes — chat send, document upload, the public invoke endpoint — via `app/ratelimit.py`, wired into `main.py` with a custom `RateLimitExceeded` handler (not slowapi's built-in one — see that module's docstring for why).
+**Key + storage:** per-user (the verified JWT's email claim, reusing `app.auth.decode_token`) when a Bearer token is present, else per-IP (`request.client.host`; `X-Forwarded-For` stays untrusted until a real reverse proxy is confirmed). Storage is Redis when reachable at startup, else `limits`' in-memory backend — logged once so it's obvious which is live; this is also what keeps CI green with no Redis service.
+**Env-driven limits:** `RATE_LIMIT_CHAT` (30/minute), `RATE_LIMIT_UPLOAD` (10/minute), `RATE_LIMIT_PUBLIC` (60/minute) — read dynamically per request (not baked in at decoration time) specifically so tests can exercise a tiny limit via monkeypatched `Settings`.
+**Disabled switch:** `RATE_LIMIT_DISABLED=1` flips `limiter.enabled = False`; the test suite sets this by default (`tests/conftest.py`) since dozens of existing tests reuse one test user across many calls.
+**Trade-off:** `limits`' Redis backend is synchronous (blocks the event loop briefly per hit) — acceptable at this traffic scale; a truly async storage backend is a future upgrade if it ever isn't.

@@ -4,10 +4,13 @@ import uuid
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from slowapi.errors import RateLimitExceeded
 
 from app.config import get_settings
 from app.logging_config import request_id_var, setup_logging
 from app.observability import init_sentry
+from app.ratelimit import limiter
 from app.routes.agents import router as agents_router
 from app.routes.budgets import router as budgets_router
 from app.routes.chat import router as chat_router
@@ -29,7 +32,46 @@ setup_logging()
 init_sentry()
 logger = logging.getLogger("app.request")
 
+# app.ratelimit's own startup log line (which storage backend it picked)
+# fires at import time, before setup_logging() above has attached a
+# handler, so it's silently dropped by Python's logging lastResort
+# fallback — re-log the already-decided outcome here instead, now that
+# logging is actually configured.
+logger.info(
+    "rate limiting: enabled=%s storage=%s",
+    limiter.enabled,
+    type(limiter._storage).__name__,
+)
+
 app = FastAPI(title="AgentFleet API", version="0.1.0")
+
+app.state.limiter = limiter
+
+
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
+    """Custom handler rather than slowapi's built-in
+    `_rate_limit_exceeded_handler`: that default only writes Retry-After
+    when `Limiter(headers_enabled=True)`, which app/ratelimit.py
+    deliberately leaves off (see that module's docstring — headers_enabled
+    crashes the two routes here that return a plain dict instead of a
+    Response). Retry-After is still a hard requirement on 429s, so it's
+    computed by hand from the limiter's own window stats, which
+    `_check_request_limit` stashes on `request.state.view_rate_limit`
+    before raising."""
+    retry_after = 60
+    view_limit = getattr(request.state, "view_rate_limit", None)
+    if view_limit is not None:
+        item, identifiers = view_limit
+        try:
+            reset_at, _remaining = limiter.limiter.get_window_stats(item, *identifiers)
+            retry_after = max(1, int(reset_at - time.time()) + 1)
+        except Exception:
+            pass
+    response = JSONResponse({"detail": f"Rate limit exceeded: {exc.detail}"}, status_code=429)
+    response.headers["Retry-After"] = str(retry_after)
+    return response
+
 
 app.add_middleware(
     CORSMiddleware,
