@@ -17,6 +17,7 @@ class AgentOut(BaseModel):
     tools: list
     mcp_servers: list
     is_builtin: bool
+    runtime: str
 
 
 class AgentCreate(BaseModel):

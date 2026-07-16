@@ -50,6 +50,10 @@ class Agent(Base):
     tools: Mapped[list] = mapped_column(JSONB, default=list)
     mcp_servers: Mapped[list] = mapped_column(JSONB, default=list)  # [{"name","url"}]
     is_builtin: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Which chat-turn executor runs this agent: "langgraph" (default,
+    # services/graph_runtime.py) or "pydantic-ai" (services/pydantic_runtime.py,
+    # Phase 10 M — see ARCHITECTURE.md ADR-001). Routed in routes/chat.py.
+    runtime: Mapped[str] = mapped_column(String(20), server_default="langgraph")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

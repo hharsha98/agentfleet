@@ -10,6 +10,7 @@ from app.models import Agent, Conversation
 from app.schemas import ConversationCreate, ConversationOut, MessageIn
 from app.services.chat import stream_chat
 from app.services.graph_runtime import stream_chat_graph
+from app.services.pydantic_runtime import stream_chat_pydantic
 
 router = APIRouter()
 
@@ -38,11 +39,21 @@ async def send_message(
     conversation = await session.get(Conversation, conversation_id)
     if conversation is None:
         raise HTTPException(status_code=404, detail="Conversation not found")
+    agent = await session.get(Agent, conversation.agent_id)
     # The generator opens its own DB session: it outlives this handler's one.
-    # Runtime choice is an env switch (Settings.agent_runtime / AGENT_RUNTIME,
-    # ADR-001): LangGraph is the default; the hand-built loop is the fallback.
+    # Runtime dispatch (single point): a per-agent choice (Agent.runtime,
+    # Phase 10 M / ARCHITECTURE.md ADR-001) takes priority — "pydantic-ai"
+    # routes to services/pydantic_runtime.py. Every other agent (runtime
+    # defaults to "langgraph") falls through to the existing process-wide
+    # env switch (Settings.agent_runtime / AGENT_RUNTIME): LangGraph is the
+    # default, the original hand-built loop is the documented fallback.
     settings = get_settings()
-    runner = stream_chat_graph if settings.agent_runtime == "langgraph" else stream_chat
+    if agent.runtime == "pydantic-ai":
+        runner = stream_chat_pydantic
+    elif settings.agent_runtime == "langgraph":
+        runner = stream_chat_graph
+    else:
+        runner = stream_chat
     return StreamingResponse(
         runner(conversation_id, payload.content),
         media_type="text/event-stream",

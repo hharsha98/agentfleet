@@ -52,3 +52,10 @@ Short, honest records of the trade-offs behind AgentFleet. Format: context → d
 **Decision:** On AWS, Redis runs as a container alongside the worker instead of ElastiCache.
 **Why:** ElastiCache's smallest node adds ~€11/month for a demo deployment; our Redis holds only queues and pub/sub (ephemeral, rebuildable).
 **Trade-off:** No HA, data lost on restart — fine for queues, wrong for anything durable (which lives in Postgres).
+
+## Second runtime: Pydantic AI (Phase 10 M)
+
+**Decision (2026-07-16):** Add a `runtime` column to `Agent` (`"langgraph"` default, `"pydantic-ai"` opt-in) and a second chat-turn executor, `services/pydantic_runtime.py`, built on `pydantic-ai-slim[openai]`. `routes/chat.py`'s `send_message` dispatches on `agent.runtime` at a single point — every existing agent is unaffected, only the new built-in `fact-checker` agent opts in.
+**Why:** ADR-001 flagged Pydantic AI as a framework to demonstrate breadth on later; this is that agent. It reuses the same OpenAI-compatible proxy, `app.tools` functions (wrapped as thin Pydantic AI tools rather than rewritten), budget checks, and `app.costs` metering — only the model↔tool loop implementation differs.
+**Contract parity, not feature parity:** the SSE frames (`token`/`done`/`error`) and usage/cost shape are identical to `graph_runtime.py`'s, so the frontend and the eval harness can't tell which runtime answered. Scope is deliberately narrower than the LangGraph runtime — two wrapped tools, no MCP dispatch, no guardrail scanning, no recursion-limit salvage path — since the goal is showing a second SDK works, not re-implementing the whole roster.
+**Trade-off:** a second code path to keep in sync with `app.tools`' function signatures; accepted because it's isolated to one opt-in agent.

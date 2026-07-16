@@ -174,6 +174,21 @@ BUILTIN: list[dict] = [
         ),
         "tools": ["web_search", "fetch_url"],
     },
+    {
+        "slug": "fact-checker",
+        "name": "Fact Checker",
+        "description": "Verifies a claim against live sources and cites what it found (Pydantic AI runtime).",
+        "system_prompt": (
+            "You are a careful fact-checker. Given a claim or question, use web_search to find "
+            "sources and search_documents to check the user's own uploaded files when relevant, "
+            "then state plainly whether the claim is TRUE, FALSE, or UNVERIFIABLE from what you "
+            "found. Always cite the specific source (URL or document name) each fact came from; "
+            "never assert something you didn't find a source for. If sources conflict or nothing "
+            "useful turns up, say so explicitly rather than guessing."
+        ),
+        "tools": ["web_search", "search_documents"],
+        "runtime": "pydantic-ai",
+    },
 ]
 
 
@@ -184,11 +199,13 @@ async def main() -> None:
             existing = (
                 await session.execute(select(Agent).where(Agent.slug == spec["slug"]))
             ).scalar_one_or_none()
+            spec.setdefault("runtime", "langgraph")
             if existing:
                 existing.name = spec["name"]
                 existing.description = spec["description"]
                 existing.system_prompt = spec["system_prompt"]
                 existing.tools = spec.get("tools", [])
+                existing.runtime = spec["runtime"]
                 existing.is_builtin = True
             else:
                 session.add(Agent(**spec, model=default_model, is_builtin=True))

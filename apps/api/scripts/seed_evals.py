@@ -121,6 +121,14 @@ EVAL_CASES: dict[str, list[dict]] = {
             "judge_rubric": "",
         },
     ],
+    "fact-checker": [
+        {
+            "input": "Is the Eiffel Tower located in Berlin? Answer TRUE, FALSE, or UNVERIFIABLE.",
+            "expected_contains": ["FALSE"],
+            "forbidden_contains": [],
+            "judge_rubric": "",
+        },
+    ],
 }
 
 
