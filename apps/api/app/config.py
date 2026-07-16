@@ -75,6 +75,11 @@ class Settings(BaseSettings):
     vapi_public_key: str = ""  # browser SDK uses this to start a call
     vapi_api_key: str = ""  # reserved for server-side Vapi management, unused for now
 
+    # Error monitoring (Phase 11 P): blank DSN -> app.observability.init_sentry()
+    # logs one line and skips sentry_sdk.init() entirely — no behavior change.
+    sentry_dsn: str = ""
+    sentry_environment: str = "dev"
+
 
 @lru_cache
 def get_settings() -> Settings:

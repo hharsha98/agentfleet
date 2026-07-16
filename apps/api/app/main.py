@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.logging_config import request_id_var, setup_logging
+from app.observability import init_sentry
 from app.routes.agents import router as agents_router
 from app.routes.budgets import router as budgets_router
 from app.routes.chat import router as chat_router
@@ -25,6 +26,7 @@ from app.routes.voice import router as voice_router
 from app.routes.webhooks import router as webhooks_router
 
 setup_logging()
+init_sentry()
 logger = logging.getLogger("app.request")
 
 app = FastAPI(title="AgentFleet API", version="0.1.0")
