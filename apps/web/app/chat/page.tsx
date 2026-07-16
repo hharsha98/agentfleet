@@ -1,13 +1,12 @@
 import Link from "next/link";
 
 import { ChatUI, type AgentInfo } from "@/components/chat-ui";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+import { apiFetchServer } from "@/lib/api";
 
 export default async function ChatPage() {
   let agents: AgentInfo[] = [];
   try {
-    const res = await fetch(`${API_URL}/api/v1/agents`, { cache: "no-store" });
+    const res = await apiFetchServer("/api/v1/agents", { cache: "no-store" });
     if (res.ok) agents = await res.json();
   } catch {
     // API offline — ChatUI renders the empty-state hint.
@@ -45,7 +44,7 @@ export default async function ChatPage() {
           <span className="font-mono text-xs">{agents.length} agents online</span>
         </nav>
       </header>
-      <ChatUI agents={agents} apiUrl={API_URL} />
+      <ChatUI agents={agents} />
     </div>
   );
 }

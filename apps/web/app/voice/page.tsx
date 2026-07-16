@@ -4,8 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import { EmptyState } from "@/components/empty-state";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+import { apiFetch } from "@/lib/api";
 
 type VoiceConfig =
   | { enabled: false }
@@ -32,7 +31,7 @@ export default function VoicePage() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`${API_URL}/api/v1/voice/config`)
+    apiFetch("/api/v1/voice/config")
       .then((res) => res.json())
       .then((body: VoiceConfig) => {
         if (!cancelled) setConfig(body);

@@ -4,8 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import { EmptyState } from "@/components/empty-state";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+import { apiFetch } from "@/lib/api";
 
 type Doc = {
   id: string;
@@ -23,7 +22,7 @@ export default function DocumentsPage() {
 
   async function refresh() {
     try {
-      const res = await fetch(`${API_URL}/api/v1/documents`);
+      const res = await apiFetch("/api/v1/documents");
       if (res.ok) setDocs(await res.json());
     } catch {
       setNote("API offline — start the backend and reload.");
@@ -42,7 +41,7 @@ export default function DocumentsPage() {
     try {
       const form = new FormData();
       form.append("file", file);
-      const res = await fetch(`${API_URL}/api/v1/documents`, { method: "POST", body: form });
+      const res = await apiFetch("/api/v1/documents", { method: "POST", body: form });
       const body = await res.json();
       setNote(
         res.ok

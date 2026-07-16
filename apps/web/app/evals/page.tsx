@@ -4,8 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { EmptyState } from "@/components/empty-state";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+import { apiFetch } from "@/lib/api";
 
 type Agent = {
   id: string;
@@ -106,7 +105,7 @@ export default function EvalsPage() {
 
   async function refreshAgents() {
     try {
-      const res = await fetch(`${API_URL}/api/v1/agents`);
+      const res = await apiFetch("/api/v1/agents");
       if (res.ok) {
         const data: Agent[] = await res.json();
         setAgents(data);
@@ -127,13 +126,13 @@ export default function EvalsPage() {
 
   async function refreshCases() {
     if (!agentId) return;
-    const res = await fetch(`${API_URL}/api/v1/agents/${agentId}/evals/cases`);
+    const res = await apiFetch(`/api/v1/agents/${agentId}/evals/cases`);
     if (res.ok) setCases(await res.json());
   }
 
   async function refreshRuns() {
     if (!agentId) return;
-    const res = await fetch(`${API_URL}/api/v1/agents/${agentId}/evals/runs`);
+    const res = await apiFetch(`/api/v1/agents/${agentId}/evals/runs`);
     if (res.ok) setRecentRuns(await res.json());
   }
 
@@ -160,7 +159,7 @@ export default function EvalsPage() {
     setCaseBusy(true);
     setCaseError(null);
     try {
-      const res = await fetch(`${API_URL}/api/v1/agents/${agentId}/evals/cases`, {
+      const res = await apiFetch(`/api/v1/agents/${agentId}/evals/cases`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -186,7 +185,7 @@ export default function EvalsPage() {
   async function deleteCase(caseId: string) {
     if (!agentId) return;
     if (!confirm("Delete this eval case? This cannot be undone.")) return;
-    await fetch(`${API_URL}/api/v1/agents/${agentId}/evals/cases/${caseId}`, {
+    await apiFetch(`/api/v1/agents/${agentId}/evals/cases/${caseId}`, {
       method: "DELETE",
     });
     await refreshCases();
@@ -196,7 +195,7 @@ export default function EvalsPage() {
     if (running || !agentId) return;
     setRunning(true);
     try {
-      const res = await fetch(`${API_URL}/api/v1/agents/${agentId}/evals/run`, {
+      const res = await apiFetch(`/api/v1/agents/${agentId}/evals/run`, {
         method: "POST",
       });
       if (res.ok) {
@@ -216,7 +215,7 @@ export default function EvalsPage() {
     setGuardrailBusy(true);
     setGuardrailError(null);
     try {
-      const res = await fetch(`${API_URL}/api/v1/guardrails/scan`, {
+      const res = await apiFetch("/api/v1/guardrails/scan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: guardrailText }),

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { ArtifactPanel } from "@/components/artifact-panel";
 import { EmptyState } from "@/components/empty-state";
+import { apiFetch } from "@/lib/api";
 import { parseMessageParts, type Artifact } from "@/lib/artifacts";
 
 const ARTIFACT_ICON: Record<Artifact["type"], string> = {
@@ -41,7 +42,7 @@ type ChatMessage = {
   tools?: ToolActivity[];
 };
 
-export function ChatUI({ agents, apiUrl }: { agents: AgentInfo[]; apiUrl: string }) {
+export function ChatUI({ agents }: { agents: AgentInfo[] }) {
   const [agent, setAgent] = useState<AgentInfo | null>(agents[0] ?? null);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -84,7 +85,7 @@ export function ChatUI({ agents, apiUrl }: { agents: AgentInfo[]; apiUrl: string
     try {
       let convId = conversationId;
       if (!convId) {
-        const res = await fetch(`${apiUrl}/api/v1/conversations`, {
+        const res = await apiFetch("/api/v1/conversations", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ agent_id: agent.id }),
@@ -96,7 +97,7 @@ export function ChatUI({ agents, apiUrl }: { agents: AgentInfo[]; apiUrl: string
 
       const controller = new AbortController();
       abortRef.current = controller;
-      const res = await fetch(`${apiUrl}/api/v1/conversations/${convId}/messages`, {
+      const res = await apiFetch(`/api/v1/conversations/${convId}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content: text }),

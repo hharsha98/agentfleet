@@ -28,9 +28,16 @@ export default defineConfig({
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   reporter: "list",
+  // Phase 12 B2: forges a real Auth.js session cookie (see auth.setup.ts)
+  // before any test runs, since every page below is now auth-gated. Both
+  // projects start every test already signed in as e2e@test.local;
+  // auth.spec.ts explicitly opts OUT of storageState for its fresh-context
+  // signed-out assertions.
+  globalSetup: "./e2e/auth.setup.ts",
   use: {
     baseURL: "http://localhost:3002",
     trace: "retain-on-failure",
+    storageState: "./e2e/.auth/state.json",
   },
   projects: [
     {
@@ -40,6 +47,7 @@ export default defineConfig({
         "palette.spec.ts",
         "documents.spec.ts",
         "automations.spec.ts",
+        "auth.spec.ts",
       ],
       retries: 0,
       timeout: 30_000,

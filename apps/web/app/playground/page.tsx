@@ -4,8 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { EmptyState } from "@/components/empty-state";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+import { apiFetch } from "@/lib/api";
 
 const inputClass =
   "w-full rounded-md border border-hairline bg-transparent px-3 py-2 text-sm outline-none placeholder:text-muted focus:border-accent disabled:opacity-50";
@@ -82,9 +81,9 @@ export default function PlaygroundPage() {
   async function refreshAll() {
     try {
       const [modelsRes, agentsRes, experimentsRes] = await Promise.all([
-        fetch(`${API_URL}/api/v1/playground/models`),
-        fetch(`${API_URL}/api/v1/agents`),
-        fetch(`${API_URL}/api/v1/playground/experiments`),
+        apiFetch("/api/v1/playground/models"),
+        apiFetch("/api/v1/agents"),
+        apiFetch("/api/v1/playground/experiments"),
       ]);
       if (modelsRes.ok) setModels((await modelsRes.json()).models);
       if (agentsRes.ok) setAgents(await agentsRes.json());
@@ -104,7 +103,7 @@ export default function PlaygroundPage() {
     if (!variant.model.trim() || !userMessage.trim()) return;
     setVariant((v) => ({ ...v, loading: true, error: null }));
     try {
-      const res = await fetch(`${API_URL}/api/v1/playground/run`, {
+      const res = await apiFetch("/api/v1/playground/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -157,7 +156,7 @@ export default function PlaygroundPage() {
     const title = window.prompt("Experiment title", defaultTitle);
     if (!title) return;
     try {
-      const res = await fetch(`${API_URL}/api/v1/playground/experiments`, {
+      const res = await apiFetch("/api/v1/playground/experiments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -188,7 +187,7 @@ export default function PlaygroundPage() {
 
   async function loadExperiment(id: string) {
     try {
-      const res = await fetch(`${API_URL}/api/v1/playground/experiments/${id}`);
+      const res = await apiFetch(`/api/v1/playground/experiments/${id}`);
       if (!res.ok) return;
       const body: ExperimentDetail = await res.json();
       setSystemPrompt(body.system_prompt);

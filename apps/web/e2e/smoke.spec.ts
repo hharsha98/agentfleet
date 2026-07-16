@@ -2,10 +2,14 @@ import { test, expect, type Page } from "@playwright/test";
 
 // Deterministic project: no LLM calls, just page loads and static content.
 //
-// NOTE (Phase 12): none of these pages are auth-gated yet — the auth wrapper
-// lands in Phase 12. Until then there's no login flow to drive here, so the
-// landing-page test below only asserts the sign-in *affordance* renders
-// (the "Continue with Google" button), not a full OAuth round trip.
+// NOTE (Phase 12 B2): every /chat.../voice page below is now auth-gated
+// (proxy.ts), but this whole suite runs signed in via the forged session
+// cookie from e2e/auth.setup.ts (see playwright.config.ts's storageState),
+// so these page-load checks pass the same as before the gate landed. There
+// is still no full Google OAuth round trip driven here — the landing-page
+// test below only asserts the sign-in *affordance* renders (the "Continue
+// with Google" button). The signed-out path (no cookie) is covered
+// separately by auth.spec.ts.
 
 // Next.js always mounts a `<nextjs-portal>` custom element in dev mode (it's
 // the dev-tools indicator, present even on a healthy page), so its mere
@@ -19,7 +23,14 @@ async function expectNoNextErrorOverlay(page: Page) {
   await expect(page.getByText(/Unhandled Runtime Error/i)).toHaveCount(0);
 }
 
-test("landing page renders the hero and a sign-in affordance", async ({ page }) => {
+test("landing page renders the hero and a sign-in affordance", async ({ browser }) => {
+  // The rest of this suite runs signed in (see the NOTE above), but this
+  // test is specifically checking what an anonymous visitor sees, so it
+  // opens its own fresh context rather than using the suite's default
+  // (authed) storageState — otherwise UserMenu renders "Sign out" instead
+  // of "Continue with Google" here.
+  const context = await browser.newContext({ storageState: { cookies: [], origins: [] } });
+  const page = await context.newPage();
   await page.goto("/");
   await expect(page.getByRole("heading", { level: 1 })).toContainText(
     "operations platform",
@@ -28,6 +39,7 @@ test("landing page renders the hero and a sign-in affordance", async ({ page }) 
     page.getByRole("button", { name: "Continue with Google" }),
   ).toBeVisible();
   await expectNoNextErrorOverlay(page);
+  await context.close();
 });
 
 test("changelog shows the release timeline", async ({ page }) => {

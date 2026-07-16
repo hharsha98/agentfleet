@@ -4,8 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { EmptyState } from "@/components/empty-state";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+import { apiFetch } from "@/lib/api";
 
 type Template = {
   slug: string;
@@ -29,7 +28,7 @@ export default function TemplatesPage() {
 
   async function refresh() {
     try {
-      const res = await fetch(`${API_URL}/api/v1/templates`);
+      const res = await apiFetch("/api/v1/templates");
       if (res.ok) {
         setTemplates(await res.json());
         setNote(null);
@@ -48,7 +47,7 @@ export default function TemplatesPage() {
   async function install(slug: string) {
     setInstalled((s) => ({ ...s, [slug]: { status: "busy" } }));
     try {
-      const res = await fetch(`${API_URL}/api/v1/templates/${slug}/install`, {
+      const res = await apiFetch(`/api/v1/templates/${slug}/install`, {
         method: "POST",
       });
       const body = await res.json().catch(() => ({}));

@@ -5,13 +5,20 @@ import { test, expect } from "@playwright/test";
 
 const API_URL = "http://localhost:8000";
 
-test("running both variants shows two outputs and two usage footers", async ({
-  page,
-  request,
-}) => {
+test("running both variants shows two outputs and two usage footers", async ({ page }) => {
   // Fetch real, currently-available models from the API rather than
-  // hardcoding one that might not exist behind the proxy.
-  const modelsRes = await request.get(`${API_URL}/api/v1/playground/models`);
+  // hardcoding one that might not exist behind the proxy. Phase 12 B1
+  // requires Authorization on every /api/v1/* route, so this mints a token
+  // from the web app's own /api/token route first — using `page.request`
+  // (not the standalone `request` fixture) so the call carries the page's
+  // storageState cookies, i.e. the same forged E2E session the browser use.
+  const tokenRes = await page.request.get("/api/token");
+  expect(tokenRes.ok()).toBeTruthy();
+  const { token } = (await tokenRes.json()) as { token: string };
+
+  const modelsRes = await page.request.get(`${API_URL}/api/v1/playground/models`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
   expect(modelsRes.ok()).toBeTruthy();
   const { models } = (await modelsRes.json()) as { models: string[] };
   expect(models.length).toBeGreaterThanOrEqual(2);

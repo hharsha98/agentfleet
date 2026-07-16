@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+import { apiFetch } from "@/lib/api";
 
 type Agent = {
   id: string;
@@ -76,22 +76,22 @@ export default function UsagePage() {
   const [busyKey, setBusyKey] = useState<string | null>(null);
 
   async function refreshSummary() {
-    const res = await fetch(`${API_URL}/api/v1/usage/summary`);
+    const res = await apiFetch("/api/v1/usage/summary");
     if (res.ok) setSummary(await res.json());
   }
 
   async function refreshDaily() {
-    const res = await fetch(`${API_URL}/api/v1/usage/daily?days=14`);
+    const res = await apiFetch("/api/v1/usage/daily?days=14");
     if (res.ok) setDaily(await res.json());
   }
 
   async function refreshBudgets() {
-    const res = await fetch(`${API_URL}/api/v1/budgets`);
+    const res = await apiFetch("/api/v1/budgets");
     if (res.ok) setBudgets(await res.json());
   }
 
   async function refreshAgents() {
-    const res = await fetch(`${API_URL}/api/v1/agents`);
+    const res = await apiFetch("/api/v1/agents");
     if (res.ok) setAgents(await res.json());
   }
 
@@ -166,7 +166,7 @@ export default function UsagePage() {
   ) {
     setBusyKey(row.key);
     try {
-      const res = await fetch(`${API_URL}/api/v1/budgets`, {
+      const res = await apiFetch("/api/v1/budgets", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

@@ -4,7 +4,12 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { EmptyState } from "@/components/empty-state";
+import { apiFetch } from "@/lib/api";
 
+// Only used to render the curl example for the webhook trigger URL below —
+// /api/v1/hooks/* is public (B1 gate excludes it, webhooks authenticate via
+// their own per-webhook secret, not the user's session), so that one string
+// build stays a plain API_URL reference rather than going through apiFetch.
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 type ScheduledRun = {
@@ -53,7 +58,7 @@ export default function AutomationsPage() {
 
   async function refresh() {
     try {
-      const res = await fetch(`${API_URL}/api/v1/schedules`);
+      const res = await apiFetch("/api/v1/schedules");
       if (res.ok) {
         setSchedules(await res.json());
         setNote(null);
@@ -67,7 +72,7 @@ export default function AutomationsPage() {
 
   async function refreshWebhooks() {
     try {
-      const res = await fetch(`${API_URL}/api/v1/webhooks`);
+      const res = await apiFetch("/api/v1/webhooks");
       if (res.ok) setWebhooks(await res.json());
     } catch {
       // note already covers API-offline state via refresh()
@@ -84,7 +89,7 @@ export default function AutomationsPage() {
     setBusy(true);
     setFormError(null);
     try {
-      const res = await fetch(`${API_URL}/api/v1/schedules`, {
+      const res = await apiFetch("/api/v1/schedules", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: name.trim(), goal: goal.trim(), cron: cron.trim() }),
@@ -107,7 +112,7 @@ export default function AutomationsPage() {
     if (toggleBusy[schedule.id]) return;
     setToggleBusy((b) => ({ ...b, [schedule.id]: true }));
     try {
-      const res = await fetch(`${API_URL}/api/v1/schedules/${schedule.id}`, {
+      const res = await apiFetch(`/api/v1/schedules/${schedule.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ enabled: !schedule.enabled }),
@@ -122,7 +127,7 @@ export default function AutomationsPage() {
     if (!confirm(`Delete automation "${schedule.name}"? This cannot be undone.`)) return;
     setDeleteBusy((b) => ({ ...b, [schedule.id]: true }));
     try {
-      const res = await fetch(`${API_URL}/api/v1/schedules/${schedule.id}`, {
+      const res = await apiFetch(`/api/v1/schedules/${schedule.id}`, {
         method: "DELETE",
       });
       if (res.ok) refresh();
@@ -136,7 +141,7 @@ export default function AutomationsPage() {
     setWhBusy(true);
     setWhFormError(null);
     try {
-      const res = await fetch(`${API_URL}/api/v1/webhooks`, {
+      const res = await apiFetch("/api/v1/webhooks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: whName.trim(), goal_template: whGoal.trim() }),
@@ -161,7 +166,7 @@ export default function AutomationsPage() {
     if (!confirm(`Delete webhook "${webhook.name}"? This cannot be undone.`)) return;
     setWhDeleteBusy((b) => ({ ...b, [webhook.id]: true }));
     try {
-      const res = await fetch(`${API_URL}/api/v1/webhooks/${webhook.id}`, {
+      const res = await apiFetch(`/api/v1/webhooks/${webhook.id}`, {
         method: "DELETE",
       });
       if (res.ok) {

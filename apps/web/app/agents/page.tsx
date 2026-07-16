@@ -4,8 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { EmptyState } from "@/components/empty-state";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+import { apiFetch } from "@/lib/api";
 
 type McpServer = {
   name: string;
@@ -119,8 +118,8 @@ export default function AgentsPage() {
   async function refresh() {
     try {
       const [agentsRes, toolsRes] = await Promise.all([
-        fetch(`${API_URL}/api/v1/agents`),
-        fetch(`${API_URL}/api/v1/agents/tools`),
+        apiFetch("/api/v1/agents"),
+        apiFetch("/api/v1/agents/tools"),
       ]);
       if (agentsRes.ok) setAgents(await agentsRes.json());
       if (toolsRes.ok) setToolNames(await toolsRes.json());
@@ -197,7 +196,7 @@ export default function AgentsPage() {
     try {
       const temperature = Number(form.temperature);
       if (editingId) {
-        const res = await fetch(`${API_URL}/api/v1/agents/${editingId}`, {
+        const res = await apiFetch(`/api/v1/agents/${editingId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -216,7 +215,7 @@ export default function AgentsPage() {
           return;
         }
       } else {
-        const res = await fetch(`${API_URL}/api/v1/agents`, {
+        const res = await apiFetch("/api/v1/agents", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -245,12 +244,12 @@ export default function AgentsPage() {
 
   async function deleteAgent(agent: Agent) {
     if (!confirm(`Delete agent "${agent.name}"? This cannot be undone.`)) return;
-    await fetch(`${API_URL}/api/v1/agents/${agent.id}`, { method: "DELETE" });
+    await apiFetch(`/api/v1/agents/${agent.id}`, { method: "DELETE" });
     refresh();
   }
 
   async function fetchKeys(agentId: string) {
-    const res = await fetch(`${API_URL}/api/v1/agents/${agentId}/keys`);
+    const res = await apiFetch(`/api/v1/agents/${agentId}/keys`);
     if (res.ok) {
       const data = await res.json();
       setKeysByAgent((k) => ({ ...k, [agentId]: data }));
@@ -275,7 +274,7 @@ export default function AgentsPage() {
     if (keyBusy[agentId]) return;
     setKeyBusy((b) => ({ ...b, [agentId]: true }));
     try {
-      const res = await fetch(`${API_URL}/api/v1/agents/${agentId}/keys`, {
+      const res = await apiFetch(`/api/v1/agents/${agentId}/keys`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: newKeyName[agentId]?.trim() || "default" }),
@@ -293,7 +292,7 @@ export default function AgentsPage() {
 
   async function revokeKey(agentId: string, key: ApiKeyItem) {
     if (!confirm(`Revoke key "${key.name}" (${key.prefix}…)? This cannot be undone.`)) return;
-    await fetch(`${API_URL}/api/v1/agents/${agentId}/keys/${key.id}`, { method: "DELETE" });
+    await apiFetch(`/api/v1/agents/${agentId}/keys/${key.id}`, { method: "DELETE" });
     await fetchKeys(agentId);
   }
 
@@ -307,7 +306,7 @@ export default function AgentsPage() {
     if (redTeamBusy[agentId]) return;
     setRedTeamBusy((b) => ({ ...b, [agentId]: true }));
     try {
-      const res = await fetch(`${API_URL}/api/v1/agents/${agentId}/evals/red-team`, {
+      const res = await apiFetch(`/api/v1/agents/${agentId}/evals/red-team`, {
         method: "POST",
       });
       if (res.ok) {
@@ -329,7 +328,7 @@ export default function AgentsPage() {
   }
 
   async function fetchVersions(agentId: string) {
-    const res = await fetch(`${API_URL}/api/v1/agents/${agentId}/versions`);
+    const res = await apiFetch(`/api/v1/agents/${agentId}/versions`);
     if (res.ok) {
       const data = await res.json();
       setVersionsByAgent((v) => ({ ...v, [agentId]: data }));
@@ -349,7 +348,7 @@ export default function AgentsPage() {
     if (publishBusy[agentId]) return;
     setPublishBusy((b) => ({ ...b, [agentId]: true }));
     try {
-      const res = await fetch(`${API_URL}/api/v1/agents/${agentId}/publish`, {
+      const res = await apiFetch(`/api/v1/agents/${agentId}/publish`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ note: publishNote[agentId]?.trim() || "" }),
@@ -372,8 +371,8 @@ export default function AgentsPage() {
       return;
     setRollbackBusy((b) => ({ ...b, [agentId]: true }));
     try {
-      const res = await fetch(
-        `${API_URL}/api/v1/agents/${agentId}/versions/${version.id}/rollback`,
+      const res = await apiFetch(
+        `/api/v1/agents/${agentId}/versions/${version.id}/rollback`,
         { method: "POST" }
       );
       if (res.ok) {

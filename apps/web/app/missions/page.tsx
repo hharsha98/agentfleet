@@ -4,8 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { EmptyState } from "@/components/empty-state";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+import { apiFetch } from "@/lib/api";
 
 type Task = {
   id: string;
@@ -56,7 +55,7 @@ export default function MissionsPage() {
 
   async function refreshRuns() {
     try {
-      const res = await fetch(`${API_URL}/api/v1/runs`);
+      const res = await apiFetch("/api/v1/runs");
       if (res.ok) setRuns(await res.json());
     } catch {
       /* API offline — page shows empty state */
@@ -73,7 +72,7 @@ export default function MissionsPage() {
     let timer: ReturnType<typeof setInterval> | null = null;
     async function tick() {
       try {
-        const res = await fetch(`${API_URL}/api/v1/runs/${selected}`);
+        const res = await apiFetch(`/api/v1/runs/${selected}`);
         if (!res.ok || cancelled) return;
         const r: Run = await res.json();
         setDetail(r);
@@ -98,7 +97,7 @@ export default function MissionsPage() {
     if (!text || busy) return;
     setBusy(true);
     try {
-      const res = await fetch(`${API_URL}/api/v1/runs`, {
+      const res = await apiFetch("/api/v1/runs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ goal: text }),
@@ -117,10 +116,10 @@ export default function MissionsPage() {
 
   async function approve(taskId: string) {
     if (!selected) return;
-    await fetch(`${API_URL}/api/v1/runs/${selected}/tasks/${taskId}/approve`, {
+    await apiFetch(`/api/v1/runs/${selected}/tasks/${taskId}/approve`, {
       method: "POST",
     });
-    const res = await fetch(`${API_URL}/api/v1/runs/${selected}`);
+    const res = await apiFetch(`/api/v1/runs/${selected}`);
     if (res.ok) setDetail(await res.json());
   }
 
