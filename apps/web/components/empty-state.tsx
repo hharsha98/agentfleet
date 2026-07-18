@@ -1,22 +1,30 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 
 // Shared "nothing here yet" block — pure presentation, no data logic, so it
 // can be dropped into any page's already-working fetch/loading flow without
 // touching that flow. Server component: no hooks, no interactivity.
+//
+// `glyph` accepts a ReactNode (an inline SVG icon, per-page) rather than an
+// emoji string — see the hand-inlined icons at each call site. A default
+// muted-stroke "diamond" glyph covers any caller that doesn't pass one.
 export function EmptyState({
-  glyph = "◇",
+  glyph = <DefaultGlyph />,
   title,
   description,
   action,
 }: {
-  glyph?: string;
+  glyph?: ReactNode;
   title: string;
   description: string;
   action?: { href: string; label: string };
 }) {
   return (
-    <div className="flex flex-col items-center gap-2 py-12 text-center">
-      <span aria-hidden="true" className="text-3xl text-muted">
+    <div className="flex flex-col items-center gap-3 py-12 text-center">
+      <span
+        aria-hidden="true"
+        className="flex h-12 w-12 items-center justify-center rounded-full border border-hairline text-muted"
+      >
         {glyph}
       </span>
       <p className="text-sm font-medium text-foreground">{title}</p>
@@ -24,11 +32,28 @@ export function EmptyState({
       {action && (
         <Link
           href={action.href}
-          className="mt-1 text-sm font-medium text-accent hover:opacity-80"
+          className="mt-1 cursor-pointer text-sm font-medium text-accent transition-opacity duration-200 hover:opacity-80"
         >
           {action.label} →
         </Link>
       )}
     </div>
+  );
+}
+
+function DefaultGlyph() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-5 w-5"
+      aria-hidden="true"
+    >
+      <path d="M12 3.5 20.5 12 12 20.5 3.5 12Z" />
+    </svg>
   );
 }

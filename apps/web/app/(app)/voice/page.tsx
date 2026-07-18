@@ -1,10 +1,27 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import { EmptyState } from "@/components/empty-state";
 import { apiFetch } from "@/lib/api";
+
+function MicIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <rect x="9" y="3.5" width="6" height="11" rx="3" />
+      <path d="M6 11.5a6 6 0 0 0 12 0M12 17.5V21M9 21h6" />
+    </svg>
+  );
+}
 
 type VoiceConfig =
   | { enabled: false }
@@ -85,66 +102,28 @@ export default function VoicePage() {
   }
 
   return (
-    <div className="flex flex-1 flex-col">
-      <header className="flex items-center justify-between border-b border-hairline px-6 py-3">
-        <Link href="/" className="font-medium tracking-tight">
-          AgentFleet
-        </Link>
-        <nav className="flex flex-wrap items-center gap-4 text-sm text-muted">
-          <Link href="/chat" className="hover:text-foreground">
-            Chat
-          </Link>
-          <Link href="/documents" className="hover:text-foreground">
-            Documents
-          </Link>
-          <Link href="/missions" className="hover:text-foreground">
-            Missions
-          </Link>
-          <Link href="/agents" className="hover:text-foreground">
-            Agents
-          </Link>
-          <Link href="/templates" className="hover:text-foreground">
-            Templates
-          </Link>
-          <Link href="/evals" className="hover:text-foreground">
-            Evals
-          </Link>
-          <Link href="/playground" className="hover:text-foreground">
-            Playground
-          </Link>
-          <Link href="/usage" className="hover:text-foreground">
-            Usage
-          </Link>
-          <Link href="/automations" className="hover:text-foreground">
-            Automations
-          </Link>
-          <span className="text-foreground">Voice</span>
-        </nav>
-      </header>
+    <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-8 sm:px-6">
+      <h1 className="text-2xl font-medium tracking-tight">Voice Agent</h1>
+      <p className="mt-1 text-sm text-muted">
+        Talk to AgentFleet out loud — the browser handles the mic, Vapi handles the call.
+      </p>
+      {note && <p className="mt-3 font-mono text-xs text-muted">{note}</p>}
 
-      <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-8">
-        <h1 className="text-2xl font-medium tracking-tight">Voice Agent</h1>
-        <p className="mt-1 text-sm text-muted">
-          Talk to AgentFleet out loud — the browser handles the mic, Vapi handles the call.
-        </p>
-        {note && <p className="mt-3 font-mono text-xs text-muted">{note}</p>}
+      {config === null && !note && (
+        <p className="mt-10 text-center text-sm text-muted">Loading…</p>
+      )}
 
-        {config === null && !note && (
-          <p className="mt-10 text-center text-sm text-muted">Loading…</p>
-        )}
+      {config && !config.enabled && <DisabledState />}
 
-        {config && !config.enabled && <DisabledState />}
-
-        {config && config.enabled && (
-          <CallPanel
-            callState={callState}
-            error={error}
-            onStart={startCall}
-            onEnd={endCall}
-          />
-        )}
-      </main>
-    </div>
+      {config && config.enabled && (
+        <CallPanel
+          callState={callState}
+          error={error}
+          onStart={startCall}
+          onEnd={endCall}
+        />
+      )}
+    </main>
   );
 }
 
@@ -152,11 +131,11 @@ function DisabledState() {
   return (
     <div className="mt-6">
       <EmptyState
-        glyph="🎙"
+        glyph={<MicIcon className="h-7 w-7" />}
         title="Voice is not configured"
         description={`Add VAPI_PUBLIC_KEY to .env and restart the API to enable a live voice call with an AgentFleet assistant.`}
       />
-      <div className="mx-auto mt-8 max-w-sm rounded-lg border border-hairline p-4">
+      <div className="mx-auto mt-8 max-w-sm rounded-lg border border-hairline p-4 transition-colors duration-200 hover:border-accent/30">
         <p className="font-mono text-xs text-muted">how it works</p>
         <ul className="mt-3 space-y-2 text-sm text-muted">
           <li className="flex gap-2">
@@ -214,7 +193,7 @@ function CallPanel({
       {callState === "idle" || callState === "ended" ? (
         <button
           onClick={onStart}
-          className="flex h-32 w-32 items-center justify-center rounded-full bg-accent text-4xl text-white shadow-lg transition-opacity hover:opacity-90"
+          className="flex h-32 w-32 cursor-pointer items-center justify-center rounded-full bg-accent text-4xl text-white shadow-lg transition-opacity duration-200 hover:opacity-90"
           aria-label="Start call"
         >
           🎙
@@ -223,7 +202,7 @@ function CallPanel({
         <button
           onClick={onEnd}
           disabled={callState === "connecting"}
-          className="flex h-32 w-32 items-center justify-center rounded-full border border-hairline text-4xl transition-colors hover:border-accent disabled:opacity-50"
+          className="flex h-32 w-32 cursor-pointer items-center justify-center rounded-full border border-hairline text-4xl transition-colors duration-200 hover:border-accent disabled:cursor-not-allowed disabled:opacity-50"
           aria-label="End call"
         >
           ⏹

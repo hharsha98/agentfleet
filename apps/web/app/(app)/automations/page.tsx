@@ -1,10 +1,49 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { EmptyState } from "@/components/empty-state";
 import { apiFetch } from "@/lib/api";
+
+function ClockIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="8.25" />
+      <path d="M12 7.5V12l3 2" />
+    </svg>
+  );
+}
+
+function WebhookIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M6 16.5a3.25 3.25 0 1 1 2.7-5.1L13 6.5" />
+      <circle cx="16.5" cy="5.5" r="2" />
+      <path d="M13 17.5a3.25 3.25 0 1 0 3.2-3.8h-5.4" />
+      <circle cx="7" cy="18.5" r="2" />
+      <path d="M18 11.5a3.25 3.25 0 0 1-1.6 5.9" />
+      <circle cx="18.5" cy="12" r="2" />
+    </svg>
+  );
+}
 
 // Only used to render the curl example for the webhook trigger URL below —
 // /api/v1/hooks/* is public (B1 gate excludes it, webhooks authenticate via
@@ -34,7 +73,7 @@ type Webhook = {
 type WebhookCreated = Webhook & { trigger_path: string; secret: string };
 
 const inputClass =
-  "w-full rounded-md border border-hairline bg-transparent px-3 py-2 text-sm outline-none placeholder:text-muted focus:border-accent disabled:opacity-50";
+  "w-full rounded-md border border-hairline bg-transparent px-3 py-2 text-sm outline-none transition-colors duration-200 placeholder:text-muted focus:border-accent focus-visible:ring-2 focus-visible:ring-accent/30 disabled:opacity-50";
 
 export default function AutomationsPage() {
   const [schedules, setSchedules] = useState<ScheduledRun[]>([]);
@@ -193,46 +232,15 @@ export default function AutomationsPage() {
   }
 
   return (
-    <div className="flex flex-1 flex-col">
-      <header className="flex items-center justify-between border-b border-hairline px-6 py-3">
-        <Link href="/" className="font-medium tracking-tight">
-          AgentFleet
-        </Link>
-        <nav className="flex gap-4 text-sm text-muted">
-          <Link href="/chat" className="hover:text-foreground">
-            Chat
-          </Link>
-          <Link href="/documents" className="hover:text-foreground">
-            Documents
-          </Link>
-          <Link href="/missions" className="hover:text-foreground">
-            Missions
-          </Link>
-          <Link href="/agents" className="hover:text-foreground">
-            Agents
-          </Link>
-          <Link href="/templates" className="hover:text-foreground">
-            Templates
-          </Link>
-          <Link href="/evals" className="hover:text-foreground">
-            Evals
-          </Link>
-          <Link href="/usage" className="hover:text-foreground">
-            Usage
-          </Link>
-          <span className="text-foreground">Automations</span>
-        </nav>
-      </header>
-
-      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8">
-        <div>
-          <h1 className="text-2xl font-medium tracking-tight">Automations</h1>
-          <p className="mt-1 text-sm text-muted">
-            Give the fleet a goal and a schedule — the worker plans and runs a mission
-            automatically, on repeat.
-          </p>
-        </div>
-        {note && <p className="mt-3 font-mono text-xs text-muted">{note}</p>}
+    <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8 sm:px-6">
+      <div>
+        <h1 className="text-2xl font-medium tracking-tight">Automations</h1>
+        <p className="mt-1 text-sm text-muted">
+          Give the fleet a goal and a schedule — the worker plans and runs a mission
+          automatically, on repeat.
+        </p>
+      </div>
+      {note && <p className="mt-3 font-mono text-xs text-muted">{note}</p>}
 
         <form
           onSubmit={(e) => {
@@ -278,7 +286,7 @@ export default function AutomationsPage() {
           <button
             type="submit"
             disabled={busy || !name.trim() || !goal.trim() || !cron.trim()}
-            className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity disabled:opacity-40"
+            className="cursor-pointer rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity duration-200 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {busy ? "Creating…" : "Create"}
           </button>
@@ -290,7 +298,7 @@ export default function AutomationsPage() {
 
         <ul className="mt-6 space-y-3">
           {schedules.map((s) => (
-            <li key={s.id} className="rounded-lg border border-hairline p-4">
+            <li key={s.id} className="rounded-lg border border-hairline p-4 transition-colors duration-200 hover:border-accent/30">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
@@ -314,14 +322,14 @@ export default function AutomationsPage() {
                   <button
                     onClick={() => toggleEnabled(s)}
                     disabled={toggleBusy[s.id]}
-                    className="rounded-md border border-hairline px-3 py-1.5 text-xs text-muted transition-opacity hover:text-foreground disabled:opacity-40"
+                    className="cursor-pointer rounded-md border border-hairline px-3 py-1.5 text-xs text-muted transition-colors duration-200 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     {s.enabled ? "Disable" : "Enable"}
                   </button>
                   <button
                     onClick={() => deleteSchedule(s)}
                     disabled={deleteBusy[s.id]}
-                    className="rounded-md border border-hairline px-3 py-1.5 text-xs text-muted transition-opacity hover:text-foreground disabled:opacity-40"
+                    className="cursor-pointer rounded-md border border-hairline px-3 py-1.5 text-xs text-muted transition-colors duration-200 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     Delete
                   </button>
@@ -332,7 +340,7 @@ export default function AutomationsPage() {
           {schedules.length === 0 && !note && (
             <li>
               <EmptyState
-                glyph="⏱"
+                glyph={<ClockIcon className="h-7 w-7" />}
                 title="No automations yet"
                 description="Create one above to run a goal on a schedule."
               />
@@ -384,7 +392,7 @@ export default function AutomationsPage() {
           <button
             type="submit"
             disabled={whBusy || !whName.trim() || !whGoal.trim()}
-            className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity disabled:opacity-40"
+            className="cursor-pointer rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity duration-200 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {whBusy ? "Creating…" : "Create"}
           </button>
@@ -401,7 +409,7 @@ export default function AutomationsPage() {
               </code>
               <button
                 onClick={() => copySecret(justCreated.secret)}
-                className="shrink-0 rounded-md border border-hairline px-3 py-2 text-xs text-muted transition-opacity hover:text-foreground"
+                className="shrink-0 cursor-pointer rounded-md border border-hairline px-3 py-2 text-xs text-muted transition-colors duration-200 hover:text-foreground"
               >
                 {copied ? "Copied" : "Copy"}
               </button>
@@ -417,7 +425,7 @@ export default function AutomationsPage() {
 
         <ul className="mt-6 space-y-3">
           {webhooks.map((w) => (
-            <li key={w.id} className="rounded-lg border border-hairline p-4">
+            <li key={w.id} className="rounded-lg border border-hairline p-4 transition-colors duration-200 hover:border-accent/30">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
@@ -436,7 +444,7 @@ export default function AutomationsPage() {
                   <button
                     onClick={() => deleteWebhook(w)}
                     disabled={whDeleteBusy[w.id]}
-                    className="rounded-md border border-hairline px-3 py-1.5 text-xs text-muted transition-opacity hover:text-foreground disabled:opacity-40"
+                    className="cursor-pointer rounded-md border border-hairline px-3 py-1.5 text-xs text-muted transition-colors duration-200 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     Delete
                   </button>
@@ -447,14 +455,13 @@ export default function AutomationsPage() {
           {webhooks.length === 0 && !note && (
             <li>
               <EmptyState
-                glyph="🪝"
+                glyph={<WebhookIcon className="h-7 w-7" />}
                 title="No webhooks yet"
                 description="Create one above to trigger a mission from an external system."
               />
             </li>
           )}
         </ul>
-      </main>
-    </div>
+    </main>
   );
 }

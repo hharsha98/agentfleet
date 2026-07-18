@@ -1,10 +1,30 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { EmptyState } from "@/components/empty-state";
 import { apiFetch } from "@/lib/api";
+
+function RobotIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <rect x="4.5" y="8.5" width="15" height="10.5" rx="2.5" />
+      <path d="M12 8.5V5M9.5 5h5" />
+      <circle cx="9" cy="13.5" r="1.1" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="13.5" r="1.1" fill="currentColor" stroke="none" />
+      <path d="M9 16.5h6" />
+    </svg>
+  );
+}
 
 type McpServer = {
   name: string;
@@ -77,7 +97,7 @@ const EMPTY_FORM: FormState = {
 };
 
 const inputClass =
-  "w-full rounded-md border border-hairline bg-transparent px-3 py-2 text-sm outline-none placeholder:text-muted focus:border-accent disabled:opacity-50";
+  "w-full rounded-md border border-hairline bg-transparent px-3 py-2 text-sm outline-none transition-colors duration-200 placeholder:text-muted focus:border-accent focus-visible:ring-2 focus-visible:ring-accent/30 disabled:opacity-50";
 
 export default function AgentsPage() {
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -388,54 +408,23 @@ export default function AgentsPage() {
   }
 
   return (
-    <div className="flex flex-1 flex-col">
-      <header className="flex items-center justify-between border-b border-hairline px-6 py-3">
-        <Link href="/" className="font-medium tracking-tight">
-          AgentFleet
-        </Link>
-        <nav className="flex gap-4 text-sm text-muted">
-          <Link href="/chat" className="hover:text-foreground">
-            Chat
-          </Link>
-          <Link href="/documents" className="hover:text-foreground">
-            Documents
-          </Link>
-          <Link href="/missions" className="hover:text-foreground">
-            Missions
-          </Link>
-          <span className="text-foreground">Agents</span>
-          <Link href="/templates" className="hover:text-foreground">
-            Templates
-          </Link>
-          <Link href="/evals" className="hover:text-foreground">
-            Evals
-          </Link>
-          <Link href="/usage" className="hover:text-foreground">
-            Usage
-          </Link>
-          <Link href="/automations" className="hover:text-foreground">
-            Automations
-          </Link>
-        </nav>
-      </header>
-
-      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-medium tracking-tight">Agent builder</h1>
-            <p className="mt-1 text-sm text-muted">
-              Configure the prompt, model, and tools each agent gets at runtime.
-            </p>
-          </div>
-          {!formOpen && (
-            <button
-              onClick={openCreateForm}
-              className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
-            >
-              New agent
-            </button>
-          )}
+    <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8 sm:px-6">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-medium tracking-tight">Agent builder</h1>
+          <p className="mt-1 text-sm text-muted">
+            Configure the prompt, model, and tools each agent gets at runtime.
+          </p>
         </div>
+        {!formOpen && (
+          <button
+            onClick={openCreateForm}
+            className="shrink-0 cursor-pointer rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity duration-200 hover:opacity-90"
+          >
+            New agent
+          </button>
+        )}
+      </div>
         {note && <p className="mt-3 font-mono text-xs text-muted">{note}</p>}
 
         {formOpen && (
@@ -542,7 +531,7 @@ export default function AgentsPage() {
                     <button
                       type="button"
                       onClick={() => removeMcpServer(i)}
-                      className="shrink-0 rounded-md border border-hairline px-3 py-2 text-xs text-muted hover:text-foreground"
+                      className="shrink-0 cursor-pointer rounded-md border border-hairline px-3 py-2 text-xs text-muted transition-colors duration-200 hover:text-foreground"
                     >
                       Remove
                     </button>
@@ -551,7 +540,7 @@ export default function AgentsPage() {
                 <button
                   type="button"
                   onClick={addMcpServer}
-                  className="rounded-md border border-hairline px-3 py-1.5 text-xs text-muted hover:text-foreground"
+                  className="cursor-pointer rounded-md border border-hairline px-3 py-1.5 text-xs text-muted transition-colors duration-200 hover:text-foreground"
                 >
                   Add server
                 </button>
@@ -564,14 +553,14 @@ export default function AgentsPage() {
               <button
                 type="submit"
                 disabled={busy}
-                className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity disabled:opacity-40"
+                className="cursor-pointer rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity duration-200 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {busy ? "Saving…" : editingId ? "Save changes" : "Create agent"}
               </button>
               <button
                 type="button"
                 onClick={closeForm}
-                className="rounded-md border border-hairline px-4 py-2 text-sm text-muted hover:text-foreground"
+                className="cursor-pointer rounded-md border border-hairline px-4 py-2 text-sm text-muted transition-colors duration-200 hover:text-foreground"
               >
                 Cancel
               </button>
@@ -581,7 +570,10 @@ export default function AgentsPage() {
 
         <ul className="mt-6 space-y-3">
           {agents.map((a) => (
-            <li key={a.id} className="rounded-lg border border-hairline p-4">
+            <li
+              key={a.id}
+              className="rounded-lg border border-hairline p-4 transition-colors duration-200 hover:border-accent/30"
+            >
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <div className="flex items-center gap-2">
@@ -599,14 +591,14 @@ export default function AgentsPage() {
                 <div className="flex shrink-0 gap-2">
                   <button
                     onClick={() => openEditForm(a)}
-                    className="rounded-md border border-hairline px-3 py-1.5 text-xs text-muted hover:text-foreground"
+                    className="cursor-pointer rounded-md border border-hairline px-3 py-1.5 text-xs text-muted transition-colors duration-200 hover:text-foreground"
                   >
                     Edit
                   </button>
                   {!a.is_builtin && (
                     <button
                       onClick={() => deleteAgent(a)}
-                      className="rounded-md border border-hairline px-3 py-1.5 text-xs text-muted hover:text-foreground"
+                      className="cursor-pointer rounded-md border border-hairline px-3 py-1.5 text-xs text-muted transition-colors duration-200 hover:text-foreground"
                     >
                       Delete
                     </button>
@@ -638,7 +630,7 @@ export default function AgentsPage() {
               <div className="mt-3 flex items-center gap-3">
                 <button
                   onClick={() => toggleKeys(a.id)}
-                  className="text-xs text-muted hover:text-foreground"
+                  className="cursor-pointer text-xs text-muted transition-colors duration-200 hover:text-foreground"
                 >
                   {keysOpenId === a.id ? "Hide API keys" : "API keys"}
                 </button>
@@ -651,7 +643,7 @@ export default function AgentsPage() {
                 </button>
                 <button
                   onClick={() => toggleVersions(a.id)}
-                  className="text-xs text-muted hover:text-foreground"
+                  className="cursor-pointer text-xs text-muted transition-colors duration-200 hover:text-foreground"
                 >
                   {versionsOpenId === a.id ? "Hide versions" : "Versions"}
                 </button>
@@ -673,7 +665,7 @@ export default function AgentsPage() {
                     {failedRedTeamCases(a.id).length > 0 && (
                       <button
                         onClick={() => toggleRedTeamExpanded(a.id)}
-                        className="shrink-0 text-[11px] text-muted hover:text-foreground"
+                        className="shrink-0 cursor-pointer text-[11px] text-muted transition-colors duration-200 hover:text-foreground"
                       >
                         {redTeamExpanded[a.id]
                           ? "Hide failed"
@@ -710,7 +702,7 @@ export default function AgentsPage() {
                         </div>
                         <button
                           onClick={() => revokeKey(a.id, k)}
-                          className="shrink-0 rounded-md border border-hairline px-2.5 py-1 text-[11px] text-muted hover:text-foreground"
+                          className="shrink-0 cursor-pointer rounded-md border border-hairline px-2.5 py-1 text-[11px] text-muted transition-colors duration-200 hover:text-foreground"
                         >
                           Revoke
                         </button>
@@ -727,7 +719,7 @@ export default function AgentsPage() {
                         <span className="truncate">{revealedKey[a.id]}</span>
                         <button
                           onClick={() => copyKey(a.id, revealedKey[a.id])}
-                          className="shrink-0 rounded-md border border-hairline px-2 py-1 text-[11px] text-muted hover:text-foreground"
+                          className="shrink-0 cursor-pointer rounded-md border border-hairline px-2 py-1 text-[11px] text-muted transition-colors duration-200 hover:text-foreground"
                         >
                           {copiedId === a.id ? "Copied" : "Copy"}
                         </button>
@@ -815,14 +807,13 @@ export default function AgentsPage() {
           {agents.length === 0 && !note && (
             <li>
               <EmptyState
-                glyph="🤖"
+                glyph={<RobotIcon className="h-7 w-7" />}
                 title="No agents yet"
                 description="Create one above to give it a prompt, model, and tools."
               />
             </li>
           )}
         </ul>
-      </main>
-    </div>
+    </main>
   );
 }

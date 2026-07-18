@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { apiFetch } from "@/lib/api";
@@ -52,7 +51,7 @@ type BudgetRow = {
 };
 
 const inputClass =
-  "w-24 rounded-md border border-hairline bg-transparent px-2 py-1 text-xs font-mono outline-none placeholder:text-muted focus:border-accent disabled:opacity-50";
+  "w-24 rounded-md border border-hairline bg-transparent px-2 py-1 text-xs font-mono outline-none transition-colors duration-200 placeholder:text-muted focus:border-accent focus-visible:ring-2 focus-visible:ring-accent/30 disabled:opacity-50";
 
 function fmtInt(n: number): string {
   return n.toLocaleString();
@@ -203,65 +202,34 @@ export default function UsagePage() {
   const maxTokens = Math.max(1, ...daily.map((d) => d.tokens));
 
   return (
-    <div className="flex flex-1 flex-col">
-      <header className="flex items-center justify-between border-b border-hairline px-6 py-3">
-        <Link href="/" className="font-medium tracking-tight">
-          AgentFleet
-        </Link>
-        <nav className="flex gap-4 text-sm text-muted">
-          <Link href="/chat" className="hover:text-foreground">
-            Chat
-          </Link>
-          <Link href="/documents" className="hover:text-foreground">
-            Documents
-          </Link>
-          <Link href="/missions" className="hover:text-foreground">
-            Missions
-          </Link>
-          <Link href="/agents" className="hover:text-foreground">
-            Agents
-          </Link>
-          <Link href="/templates" className="hover:text-foreground">
-            Templates
-          </Link>
-          <Link href="/evals" className="hover:text-foreground">
-            Evals
-          </Link>
-          <span className="text-foreground">Usage</span>
-          <Link href="/automations" className="hover:text-foreground">
-            Automations
-          </Link>
-        </nav>
-      </header>
+    <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-8 sm:px-6">
+      <h1 className="text-2xl font-medium tracking-tight">Usage &amp; cost</h1>
+      <p className="mt-1 text-sm text-muted">
+        Metering rolls up from Message rows — every assistant turn, across every agent.
+      </p>
+      {note && <p className="mt-3 font-mono text-xs text-muted">{note}</p>}
 
-      <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-8">
-        <h1 className="text-2xl font-medium tracking-tight">Usage &amp; cost</h1>
-        <p className="mt-1 text-sm text-muted">
-          Metering rolls up from Message rows — every assistant turn, across every agent.
-        </p>
-        {note && <p className="mt-3 font-mono text-xs text-muted">{note}</p>}
-
-        {/* Stat tiles */}
-        <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <div className="rounded-lg border border-hairline p-4">
-            <p className="text-xs text-muted">Tokens today</p>
-            <p className="mt-1 font-mono text-3xl font-medium">
-              {summary ? fmtInt(summary.today.tokens) : "—"}
-            </p>
-          </div>
-          <div className="rounded-lg border border-hairline p-4">
-            <p className="text-xs text-muted">Cost today</p>
-            <p className="mt-1 font-mono text-3xl font-medium">
-              {summary ? fmtUsd(summary.today.cost_usd) : "—"}
-            </p>
-          </div>
-          <div className="rounded-lg border border-hairline p-4">
-            <p className="text-xs text-muted">Messages today</p>
-            <p className="mt-1 font-mono text-3xl font-medium">
-              {summary ? fmtInt(summary.today.messages) : "—"}
-            </p>
-          </div>
+      {/* Stat tiles */}
+      <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="rounded-lg border border-hairline p-4 transition-colors duration-200 hover:border-accent/30">
+          <p className="text-xs text-muted">Tokens today</p>
+          <p className="mt-1 font-mono text-3xl font-medium">
+            {summary ? fmtInt(summary.today.tokens) : "—"}
+          </p>
         </div>
+        <div className="rounded-lg border border-hairline p-4 transition-colors duration-200 hover:border-accent/30">
+          <p className="text-xs text-muted">Cost today</p>
+          <p className="mt-1 font-mono text-3xl font-medium">
+            {summary ? fmtUsd(summary.today.cost_usd) : "—"}
+          </p>
+        </div>
+        <div className="rounded-lg border border-hairline p-4 transition-colors duration-200 hover:border-accent/30">
+          <p className="text-xs text-muted">Messages today</p>
+          <p className="mt-1 font-mono text-3xl font-medium">
+            {summary ? fmtInt(summary.today.messages) : "—"}
+          </p>
+        </div>
+      </div>
 
         {/* 14-day bar chart */}
         <div className="mt-8">
@@ -300,7 +268,7 @@ export default function UsagePage() {
               </thead>
               <tbody>
                 {summary?.per_agent.map((a) => (
-                  <tr key={a.agent_slug} className="border-b border-hairline last:border-0">
+                  <tr key={a.agent_slug} className="border-b border-hairline transition-colors duration-200 last:border-0 hover:bg-white/[0.02]">
                     <td className="px-3 py-2">{a.agent_name}</td>
                     <td className="px-3 py-2 font-mono">{fmtInt(a.tokens)}</td>
                     <td className="px-3 py-2 font-mono">{fmtUsd(a.cost_usd)}</td>
@@ -331,7 +299,7 @@ export default function UsagePage() {
             {rows.map((row) => (
               <div
                 key={row.key}
-                className="flex flex-wrap items-center gap-3 rounded-lg border border-hairline p-3"
+                className="flex flex-wrap items-center gap-3 rounded-lg border border-hairline p-3 transition-colors duration-200 hover:border-accent/30"
               >
                 <span className="w-32 shrink-0 text-sm">{row.label}</span>
                 <label className="flex items-center gap-1.5 text-xs text-muted">
@@ -358,14 +326,14 @@ export default function UsagePage() {
                   <button
                     onClick={() => saveBudget(row)}
                     disabled={busyKey === row.key}
-                    className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-40"
+                    className="cursor-pointer rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-white transition-opacity duration-200 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     {busyKey === row.key ? "Saving…" : "Save"}
                   </button>
                   <button
                     onClick={() => putBudget(row, null, null)}
                     disabled={busyKey === row.key}
-                    className="rounded-md border border-hairline px-3 py-1.5 text-xs text-muted hover:text-foreground disabled:opacity-40"
+                    className="cursor-pointer rounded-md border border-hairline px-3 py-1.5 text-xs text-muted transition-colors duration-200 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     Clear
                   </button>
@@ -379,7 +347,7 @@ export default function UsagePage() {
               <select
                 value={addAgentId}
                 onChange={(e) => setAddAgentId(e.target.value)}
-                className="rounded-md border border-hairline bg-transparent px-3 py-1.5 text-sm outline-none focus:border-accent"
+                className="rounded-md border border-hairline bg-transparent px-3 py-1.5 text-sm outline-none transition-colors duration-200 focus:border-accent focus-visible:ring-2 focus-visible:ring-accent/30"
               >
                 <option value="">Add a budget for…</option>
                 {availableAgents.map((a) => (
@@ -391,14 +359,13 @@ export default function UsagePage() {
               <button
                 onClick={addAgentRow}
                 disabled={!addAgentId}
-                className="rounded-md border border-hairline px-3 py-1.5 text-xs text-muted hover:text-foreground disabled:opacity-40"
+                className="cursor-pointer rounded-md border border-hairline px-3 py-1.5 text-xs text-muted transition-colors duration-200 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Add
               </button>
             </div>
           )}
         </div>
-      </main>
-    </div>
+    </main>
   );
 }

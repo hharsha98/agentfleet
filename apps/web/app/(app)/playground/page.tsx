@@ -1,13 +1,30 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { EmptyState } from "@/components/empty-state";
 import { apiFetch } from "@/lib/api";
 
 const inputClass =
-  "w-full rounded-md border border-hairline bg-transparent px-3 py-2 text-sm outline-none placeholder:text-muted focus:border-accent disabled:opacity-50";
+  "w-full rounded-md border border-hairline bg-transparent px-3 py-2 text-sm outline-none transition-colors duration-200 placeholder:text-muted focus:border-accent focus-visible:ring-2 focus-visible:ring-accent/30 disabled:opacity-50";
+
+function FlaskIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M9.5 3.5h5M10 3.5v6.2L5.6 17c-.7 1.3.2 2.9 1.7 2.9h9.4c1.5 0 2.4-1.6 1.7-2.9L14 9.7V3.5" />
+      <path d="M7.5 15h9" />
+    </svg>
+  );
+}
 
 type Usage = {
   tokens_in: number;
@@ -218,47 +235,13 @@ export default function PlaygroundPage() {
   const canSave = variantA.output && variantB.output && !variantA.loading && !variantB.loading;
 
   return (
-    <div className="flex flex-1 flex-col">
-      <header className="flex items-center justify-between border-b border-hairline px-6 py-3">
-        <Link href="/" className="font-medium tracking-tight">
-          AgentFleet
-        </Link>
-        <nav className="flex flex-wrap items-center gap-4 text-sm text-muted">
-          <Link href="/chat" className="hover:text-foreground">
-            Chat
-          </Link>
-          <Link href="/documents" className="hover:text-foreground">
-            Documents
-          </Link>
-          <Link href="/missions" className="hover:text-foreground">
-            Missions
-          </Link>
-          <Link href="/agents" className="hover:text-foreground">
-            Agents
-          </Link>
-          <Link href="/templates" className="hover:text-foreground">
-            Templates
-          </Link>
-          <Link href="/evals" className="hover:text-foreground">
-            Evals
-          </Link>
-          <Link href="/usage" className="hover:text-foreground">
-            Usage
-          </Link>
-          <Link href="/automations" className="hover:text-foreground">
-            Automations
-          </Link>
-          <span className="text-foreground">Playground</span>
-        </nav>
-      </header>
-
-      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8">
-        <h1 className="text-2xl font-medium tracking-tight">Prompt Playground</h1>
-        <p className="mt-1 text-sm text-muted">
-          Run the same prompt against two model/temperature configs side by side, compare cost
-          and latency, and save the pair as a reusable experiment.
-        </p>
-        {note && <p className="mt-3 font-mono text-xs text-muted">{note}</p>}
+    <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6">
+      <h1 className="text-2xl font-medium tracking-tight">Prompt Playground</h1>
+      <p className="mt-1 text-sm text-muted">
+        Run the same prompt against two model/temperature configs side by side, compare cost
+        and latency, and save the pair as a reusable experiment.
+      </p>
+      {note && <p className="mt-3 font-mono text-xs text-muted">{note}</p>}
 
         <datalist id="playground-models">
           {models.map((m) => (
@@ -293,14 +276,14 @@ export default function PlaygroundPage() {
           <button
             onClick={runBoth}
             disabled={!canRun || variantA.loading || variantB.loading}
-            className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity disabled:opacity-40"
+            className="cursor-pointer rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity duration-200 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {variantA.loading || variantB.loading ? "Running…" : "Run both"}
           </button>
           <button
             onClick={saveExperiment}
             disabled={!canSave}
-            className="rounded-md border border-hairline px-4 py-2 text-sm text-muted transition-colors hover:text-foreground disabled:opacity-40"
+            className="cursor-pointer rounded-md border border-hairline px-4 py-2 text-sm text-muted transition-colors duration-200 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
           >
             Save experiment
           </button>
@@ -331,7 +314,7 @@ export default function PlaygroundPage() {
             <li key={e.id}>
               <button
                 onClick={() => loadExperiment(e.id)}
-                className="flex w-full items-center justify-between rounded-lg border border-hairline px-4 py-3 text-left text-sm transition-colors hover:border-accent"
+                className="flex w-full cursor-pointer items-center justify-between rounded-lg border border-hairline px-4 py-3 text-left text-sm transition-colors duration-200 hover:border-accent"
               >
                 <span>{e.title}</span>
                 <span className="font-mono text-xs text-muted">
@@ -343,15 +326,14 @@ export default function PlaygroundPage() {
           {experiments.length === 0 && (
             <li>
               <EmptyState
-                glyph="⚗️"
+                glyph={<FlaskIcon className="h-7 w-7" />}
                 title="No experiments saved yet"
                 description="Run both variants above, then click Save experiment to keep the comparison for later."
               />
             </li>
           )}
         </ul>
-      </main>
-    </div>
+    </main>
   );
 }
 
@@ -371,7 +353,7 @@ function VariantPanel({
   onLoadAgent: (agentId: string) => void;
 }) {
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-hairline p-4">
+    <div className="flex flex-col gap-3 rounded-lg border border-hairline p-4 transition-colors duration-200 hover:border-accent/30">
       <div className="flex items-center justify-between">
         <span className="font-mono text-xs text-muted">Variant {label}</span>
         {agents.length > 0 && (
@@ -381,7 +363,7 @@ function VariantPanel({
               if (e.target.value) onLoadAgent(e.target.value);
               e.target.value = "";
             }}
-            className="rounded-md border border-hairline bg-transparent px-2 py-1 text-xs text-muted outline-none focus:border-accent"
+            className="cursor-pointer rounded-md border border-hairline bg-transparent px-2 py-1 text-xs text-muted outline-none transition-colors duration-200 focus:border-accent"
           >
             <option value="">Load from agent ▾</option>
             {agents.map((a) => (

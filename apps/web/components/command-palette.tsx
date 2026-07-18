@@ -3,26 +3,149 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
+type IconName =
+  | "chat"
+  | "document"
+  | "rocket"
+  | "robot"
+  | "blocks"
+  | "flask"
+  | "compare"
+  | "activity"
+  | "clock"
+  | "mic"
+  | "list"
+  | "home";
+
+// Hand-inlined, Lucide-style (24x24, stroke-based, rounded caps) icons — no
+// icon package dependency, matching the idiom already used on the landing
+// page and every app page's EmptyState. Plain muted stroke (not hue-tinted
+// tiles) keeps a 12-row dropdown list calm rather than busy.
+function Icon({ name }: { name: IconName }) {
+  const common = {
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.75,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    className: "h-4 w-4 shrink-0",
+    "aria-hidden": true,
+  };
+
+  switch (name) {
+    case "chat":
+      return (
+        <svg {...common}>
+          <path d="M4 5.5h16a1 1 0 0 1 1 1V16a1 1 0 0 1-1 1H9l-4.5 4V17H4a1 1 0 0 1-1-1V6.5a1 1 0 0 1 1-1Z" />
+        </svg>
+      );
+    case "document":
+      return (
+        <svg {...common}>
+          <path d="M6.5 3.5h7.5L18.5 8v12.5a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Z" />
+          <path d="M14 3.5V8h4.5" />
+        </svg>
+      );
+    case "rocket":
+      return (
+        <svg {...common}>
+          <path d="M12 3c2.8 1.6 4.5 4.6 4.5 8.5 0 2-1 4-2.3 5.3L12 19l-2.2-2.2C8.5 15.5 7.5 13.5 7.5 11.5 7.5 7.6 9.2 4.6 12 3Z" />
+          <circle cx="12" cy="10.5" r="1.6" />
+        </svg>
+      );
+    case "robot":
+      return (
+        <svg {...common}>
+          <rect x="4.5" y="8.5" width="15" height="10.5" rx="2.5" />
+          <path d="M12 8.5V5M9.5 5h5" />
+          <circle cx="9" cy="13.5" r="1" fill="currentColor" stroke="none" />
+          <circle cx="15" cy="13.5" r="1" fill="currentColor" stroke="none" />
+        </svg>
+      );
+    case "blocks":
+      return (
+        <svg {...common}>
+          <rect x="3.5" y="3.5" width="7" height="7" rx="1.25" />
+          <rect x="13.5" y="3.5" width="7" height="7" rx="1.25" />
+          <rect x="8.5" y="13.5" width="7" height="7" rx="1.25" />
+        </svg>
+      );
+    case "flask":
+      return (
+        <svg {...common}>
+          <path d="M9.5 3.5h5M10 3.5v6.2L5.6 17c-.7 1.3.2 2.9 1.7 2.9h9.4c1.5 0 2.4-1.6 1.7-2.9L14 9.7V3.5" />
+          <path d="M7.5 15h9" />
+        </svg>
+      );
+    case "compare":
+      return (
+        <svg {...common}>
+          <rect x="3.5" y="5" width="7.5" height="14" rx="1.5" />
+          <rect x="13" y="5" width="7.5" height="14" rx="1.5" />
+        </svg>
+      );
+    case "activity":
+      return (
+        <svg {...common}>
+          <path d="M3 12h4l2-6 4 12 2-8 2 2h4" />
+        </svg>
+      );
+    case "clock":
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="8.25" />
+          <path d="M12 7.5V12l3 2" />
+        </svg>
+      );
+    case "mic":
+      return (
+        <svg {...common}>
+          <rect x="9" y="3.5" width="6" height="11" rx="3" />
+          <path d="M6 11.5a6 6 0 0 0 12 0M12 17.5V21M9 21h6" />
+        </svg>
+      );
+    case "list":
+      return (
+        <svg {...common}>
+          <path d="M8 6.5h11M8 12h11M8 17.5h11" />
+          <circle cx="4" cy="6.5" r="1" fill="currentColor" stroke="none" />
+          <circle cx="4" cy="12" r="1" fill="currentColor" stroke="none" />
+          <circle cx="4" cy="17.5" r="1" fill="currentColor" stroke="none" />
+        </svg>
+      );
+    case "home":
+      return (
+        <svg {...common}>
+          <path d="M4 11.5 12 4l8 7.5" />
+          <path d="M6 10v9.5a1 1 0 0 0 1 1h3.5v-6h3v6H17a1 1 0 0 0 1-1V10" />
+        </svg>
+      );
+    default:
+      return null;
+  }
+}
+
 type Command = {
   label: string;
   hint: string; // shown as a small mono path, e.g. "/chat"
-  glyph: string;
+  icon: IconName;
   href: string;
 };
 
 const COMMANDS: Command[] = [
-  { label: "Chat", hint: "/chat", glyph: "💬", href: "/chat" },
-  { label: "Documents", hint: "/documents", glyph: "📄", href: "/documents" },
-  { label: "Missions", hint: "/missions", glyph: "🚀", href: "/missions" },
-  { label: "Agents", hint: "/agents", glyph: "🤖", href: "/agents" },
-  { label: "Templates", hint: "/templates", glyph: "🧩", href: "/templates" },
-  { label: "Evals", hint: "/evals", glyph: "🧪", href: "/evals" },
-  { label: "Playground", hint: "/playground", glyph: "⚗️", href: "/playground" },
-  { label: "Voice", hint: "/voice", glyph: "🎙", href: "/voice" },
-  { label: "Usage", hint: "/usage", glyph: "📊", href: "/usage" },
-  { label: "Automations", hint: "/automations", glyph: "⏱", href: "/automations" },
-  { label: "Changelog", hint: "/changelog", glyph: "🗒", href: "/changelog" },
-  { label: "Home", hint: "/", glyph: "⌂", href: "/" },
+  { label: "Chat", hint: "/chat", icon: "chat", href: "/chat" },
+  { label: "Documents", hint: "/documents", icon: "document", href: "/documents" },
+  { label: "Missions", hint: "/missions", icon: "rocket", href: "/missions" },
+  { label: "Agents", hint: "/agents", icon: "robot", href: "/agents" },
+  { label: "Templates", hint: "/templates", icon: "blocks", href: "/templates" },
+  { label: "Evals", hint: "/evals", icon: "flask", href: "/evals" },
+  { label: "Playground", hint: "/playground", icon: "compare", href: "/playground" },
+  { label: "Voice", hint: "/voice", icon: "mic", href: "/voice" },
+  { label: "Usage", hint: "/usage", icon: "activity", href: "/usage" },
+  { label: "Automations", hint: "/automations", icon: "clock", href: "/automations" },
+  { label: "Changelog", hint: "/changelog", icon: "list", href: "/changelog" },
+  { label: "Home", hint: "/", icon: "home", href: "/" },
 ];
 
 // Global ⌘K / Ctrl+K launcher, mounted once in the root layout. Renders
@@ -64,7 +187,9 @@ export function CommandPalette() {
   }
 
   // Global open/close shortcut. preventDefault stops the browser's own
-  // Ctrl+K (focus address bar) / Cmd+K from firing alongside ours.
+  // Ctrl+K (focus address bar) / Cmd+K from firing alongside ours. Also
+  // fires when components/app-nav.tsx's "⌘K" chip dispatches this same
+  // synthetic keydown on window.
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       const isModK = (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k";
@@ -139,11 +264,11 @@ export function CommandPalette() {
                 aria-selected={i === highlighted}
                 onMouseEnter={() => setHighlighted(i)}
                 onClick={() => run(command)}
-                className={`flex w-full items-center gap-3 px-4 py-2 text-left text-sm transition-colors ${
+                className={`flex w-full cursor-pointer items-center gap-3 px-4 py-2 text-left text-sm transition-colors duration-150 ${
                   i === highlighted ? "bg-accent/15 text-foreground" : "text-muted"
                 }`}
               >
-                <span aria-hidden="true">{command.glyph}</span>
+                <Icon name={command.icon} />
                 <span className="flex-1">{command.label}</span>
                 <span className="font-mono text-xs text-muted">{command.hint}</span>
               </button>

@@ -1,16 +1,36 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 
 import { renderMarkdownSafe, type Artifact } from "@/lib/artifacts";
 
 const MIN_WIDTH = 320;
 const DEFAULT_WIDTH = 440;
 
-const TYPE_LABEL: Record<Artifact["type"], string> = {
+function ChartGlyph() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-3.5 w-3.5"
+      aria-hidden="true"
+    >
+      <path d="M3 12h4l2-6 4 12 2-8 2 2h4" />
+    </svg>
+  );
+}
+
+// "{ }" and "M↓" are already crisp mono glyphs, not emoji — only the chart
+// type gets an SVG swap (was a 📊 emoji).
+const TYPE_LABEL: Record<Artifact["type"], ReactNode> = {
   code: "{ }",
   markdown: "M↓",
-  chart: "📊",
+  chart: <ChartGlyph />,
 };
 
 export function ArtifactPanel({ artifact, onClose }: { artifact: Artifact; onClose: () => void }) {
@@ -88,14 +108,14 @@ export function ArtifactPanel({ artifact, onClose }: { artifact: Artifact; onClo
 
       <div className="flex items-center justify-between border-b border-hairline px-4 py-3">
         <div className="flex items-center gap-2 font-mono text-xs text-muted">
-          <span>{TYPE_LABEL[artifact.type]}</span>
+          <span className="flex items-center text-foreground/80">{TYPE_LABEL[artifact.type]}</span>
           <span className="text-foreground">{artifact.lang}</span>
         </div>
         <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={handleCopy}
-            className="text-xs text-muted transition-colors hover:text-foreground"
+            className="cursor-pointer text-xs text-muted transition-colors duration-200 hover:text-foreground"
           >
             {copied ? "Copied" : "Copy"}
           </button>
@@ -103,7 +123,7 @@ export function ArtifactPanel({ artifact, onClose }: { artifact: Artifact; onClo
             type="button"
             onClick={onClose}
             aria-label="Close artifact panel"
-            className="text-muted transition-colors hover:text-foreground"
+            className="cursor-pointer text-muted transition-colors duration-200 hover:text-foreground"
           >
             ✕
           </button>

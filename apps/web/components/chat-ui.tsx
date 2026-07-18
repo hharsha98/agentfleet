@@ -1,17 +1,70 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 
 import { ArtifactPanel } from "@/components/artifact-panel";
 import { EmptyState } from "@/components/empty-state";
 import { apiFetch } from "@/lib/api";
 import { parseMessageParts, type Artifact } from "@/lib/artifacts";
 
-const ARTIFACT_ICON: Record<Artifact["type"], string> = {
+function ChartGlyph() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-3.5 w-3.5"
+      aria-hidden="true"
+    >
+      <path d="M3 12h4l2-6 4 12 2-8 2 2h4" />
+    </svg>
+  );
+}
+
+// "{ }" and "M↓" are already crisp mono glyphs — only chart swaps its old
+// 📊 emoji for an SVG, matching artifact-panel.tsx's TYPE_LABEL.
+const ARTIFACT_ICON: Record<Artifact["type"], ReactNode> = {
   code: "{ }",
   markdown: "M↓",
-  chart: "📊",
+  chart: <ChartGlyph />,
 };
+
+// Deterministic slug → hue mapping so each agent gets a stable, distinct
+// avatar tile color across sessions (same idiom as the landing page's
+// hue-tinted icon tiles) without any per-agent config.
+const HUES = ["blue", "violet", "cyan", "amber", "green", "red"] as const;
+const HUE_TILE_CLASS: Record<(typeof HUES)[number], string> = {
+  blue: "border-hue-blue/30 bg-hue-blue/10 text-hue-blue",
+  violet: "border-hue-violet/30 bg-hue-violet/10 text-hue-violet",
+  cyan: "border-hue-cyan/30 bg-hue-cyan/10 text-hue-cyan",
+  amber: "border-hue-amber/30 bg-hue-amber/10 text-hue-amber",
+  green: "border-hue-green/30 bg-hue-green/10 text-hue-green",
+  red: "border-hue-red/30 bg-hue-red/10 text-hue-red",
+};
+
+function hueForSlug(slug: string): (typeof HUES)[number] {
+  let hash = 0;
+  for (let i = 0; i < slug.length; i++) {
+    hash = (hash * 31 + slug.charCodeAt(i)) | 0;
+  }
+  return HUES[Math.abs(hash) % HUES.length];
+}
+
+function AgentAvatar({ agent }: { agent: AgentInfo }) {
+  const hue = hueForSlug(agent.slug);
+  return (
+    <span
+      aria-hidden="true"
+      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border font-mono text-[10px] font-medium ${HUE_TILE_CLASS[hue]}`}
+    >
+      {agent.name.charAt(0).toUpperCase()}
+    </span>
+  );
+}
 
 export type AgentInfo = {
   id: string;
@@ -178,18 +231,19 @@ export function ChatUI({ agents }: { agents: AgentInfo[] }) {
           activeArtifact ? "" : "mx-auto max-w-3xl"
         }`}
       >
-      <div className="flex gap-2 overflow-x-auto py-3">
+      <div className="flex gap-2 overflow-x-auto py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {agents.map((a) => (
           <button
             key={a.id}
             onClick={() => selectAgent(a)}
             title={a.description}
-            className={`whitespace-nowrap rounded-full border px-3 py-1 text-sm transition-colors ${
+            className={`flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1 text-sm transition-colors duration-200 ${
               a.id === agent?.id
                 ? "border-accent bg-accent/15 text-foreground"
                 : "border-hairline text-muted hover:text-foreground"
             }`}
           >
+            <AgentAvatar agent={a} />
             {a.name}
           </button>
         ))}
@@ -198,7 +252,7 @@ export function ChatUI({ agents }: { agents: AgentInfo[] }) {
       <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto py-4">
         {messages.length === 0 && (
           <EmptyState
-            glyph="💬"
+            glyph={<ChatGlyph />}
             title={agent ? "Ask anything" : "Pick an agent to start"}
             description={
               agent
@@ -210,20 +264,31 @@ export function ChatUI({ agents }: { agents: AgentInfo[] }) {
         {messages.map((m, i) => (
           <div key={i} className={m.role === "user" ? "flex justify-end" : "flex justify-start"}>
             <div
-              className={`max-w-[85%] whitespace-pre-wrap rounded-lg border px-3 py-2 text-sm leading-relaxed ${
-                m.role === "user" ? "border-accent/40 bg-accent/10" : "border-hairline"
+              className={`max-w-[85%] whitespace-pre-wrap rounded-lg border px-3 py-2 text-sm leading-relaxed transition-colors duration-200 ${
+                m.role === "user"
+                  ? "border-accent/40 bg-accent/10"
+                  : "border-hairline bg-white/[0.02]"
               }`}
             >
               {m.tools?.map((t, j) => (
                 <details
                   key={j}
-                  className="mb-2 rounded-md border border-hairline px-2 py-1"
+                  className="mb-2 rounded-md border border-hairline bg-black/10 px-2 py-1.5"
                 >
-                  <summary className="cursor-pointer font-mono text-xs text-muted">
-                    {t.done ? "✓" : "⏳"} {t.name}
+                  <summary className="flex cursor-pointer items-center gap-1.5 font-mono text-xs text-muted">
+                    <span
+                      className={
+                        t.done
+                          ? "text-hue-green"
+                          : "inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-accent"
+                      }
+                    >
+                      {t.done ? "✓" : ""}
+                    </span>
+                    <span>{t.name}</span>
                     {typeof t.args.query === "string" ? `: ${t.args.query}` : ""}
                   </summary>
-                  <pre className="mt-1 overflow-x-auto whitespace-pre-wrap font-mono text-[10px] text-muted">
+                  <pre className="mt-1.5 overflow-x-auto whitespace-pre-wrap rounded border border-hairline bg-black/20 p-1.5 font-mono text-[10px] leading-relaxed text-muted">
                     {t.preview ?? "running…"}
                   </pre>
                 </details>
@@ -237,9 +302,9 @@ export function ChatUI({ agents }: { agents: AgentInfo[] }) {
                         key={k}
                         type="button"
                         onClick={() => setActiveArtifact(part.artifact)}
-                        className="mx-1 inline-flex items-center gap-1 rounded-full border border-hairline px-2 py-0.5 align-middle font-mono text-[11px] text-muted transition-colors hover:border-accent hover:text-foreground"
+                        className="mx-1 inline-flex cursor-pointer items-center gap-1 rounded-full border border-hairline px-2 py-0.5 align-middle font-mono text-[11px] text-muted transition-colors duration-200 hover:border-accent hover:text-foreground"
                       >
-                        <span>{ARTIFACT_ICON[part.artifact.type]}</span>
+                        <span className="flex items-center">{ARTIFACT_ICON[part.artifact.type]}</span>
                         <span>{part.artifact.lang}</span>
                         <span className="text-accent">open</span>
                       </button>
@@ -271,13 +336,13 @@ export function ChatUI({ agents }: { agents: AgentInfo[] }) {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder={agent ? `Message ${agent.name}…` : "Pick an agent first"}
-          className="flex-1 rounded-md border border-hairline bg-transparent px-3 py-2 text-sm outline-none placeholder:text-muted focus:border-accent"
+          className="flex-1 rounded-md border border-hairline bg-transparent px-3 py-2 text-sm outline-none transition-colors duration-200 placeholder:text-muted focus:border-accent focus-visible:ring-2 focus-visible:ring-accent/30"
         />
         {streaming ? (
           <button
             type="button"
             onClick={stop}
-            className="rounded-md border border-hairline px-4 py-2 text-sm text-muted transition-colors hover:text-foreground"
+            className="cursor-pointer rounded-md border border-hairline px-4 py-2 text-sm text-muted transition-colors duration-200 hover:text-foreground"
           >
             Stop
           </button>
@@ -285,7 +350,7 @@ export function ChatUI({ agents }: { agents: AgentInfo[] }) {
           <button
             type="submit"
             disabled={!input.trim()}
-            className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity disabled:opacity-40"
+            className="cursor-pointer rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity duration-200 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
           >
             Send
           </button>
@@ -296,5 +361,22 @@ export function ChatUI({ agents }: { agents: AgentInfo[] }) {
         <ArtifactPanel artifact={activeArtifact} onClose={() => setActiveArtifact(null)} />
       )}
     </div>
+  );
+}
+
+function ChatGlyph() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-5 w-5"
+      aria-hidden="true"
+    >
+      <path d="M4 5.5h16a1 1 0 0 1 1 1V16a1 1 0 0 1-1 1H9l-4.5 4V17H4a1 1 0 0 1-1-1V6.5a1 1 0 0 1 1-1Z" />
+    </svg>
   );
 }

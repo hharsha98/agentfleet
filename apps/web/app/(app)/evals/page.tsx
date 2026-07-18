@@ -1,10 +1,27 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { EmptyState } from "@/components/empty-state";
 import { apiFetch } from "@/lib/api";
+
+function FlaskIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M9.5 3.5h5M10 3.5v6.2L5.6 17c-.7 1.3.2 2.9 1.7 2.9h9.4c1.5 0 2.4-1.6 1.7-2.9L14 9.7V3.5" />
+      <path d="M7.5 15h9" />
+    </svg>
+  );
+}
 
 type Agent = {
   id: string;
@@ -73,7 +90,7 @@ const EMPTY_CASE_FORM: CaseFormState = {
 };
 
 const inputClass =
-  "w-full rounded-md border border-hairline bg-transparent px-3 py-2 text-sm outline-none placeholder:text-muted focus:border-accent disabled:opacity-50";
+  "w-full rounded-md border border-hairline bg-transparent px-3 py-2 text-sm outline-none transition-colors duration-200 placeholder:text-muted focus:border-accent focus-visible:ring-2 focus-visible:ring-accent/30 disabled:opacity-50";
 
 function splitCsv(value: string): string[] {
   return value
@@ -234,47 +251,16 @@ export default function EvalsPage() {
   }
 
   return (
-    <div className="flex flex-1 flex-col">
-      <header className="flex items-center justify-between border-b border-hairline px-6 py-3">
-        <Link href="/" className="font-medium tracking-tight">
-          AgentFleet
-        </Link>
-        <nav className="flex gap-4 text-sm text-muted">
-          <Link href="/chat" className="hover:text-foreground">
-            Chat
-          </Link>
-          <Link href="/documents" className="hover:text-foreground">
-            Documents
-          </Link>
-          <Link href="/missions" className="hover:text-foreground">
-            Missions
-          </Link>
-          <Link href="/agents" className="hover:text-foreground">
-            Agents
-          </Link>
-          <Link href="/templates" className="hover:text-foreground">
-            Templates
-          </Link>
-          <span className="text-foreground">Evals</span>
-          <Link href="/usage" className="hover:text-foreground">
-            Usage
-          </Link>
-          <Link href="/automations" className="hover:text-foreground">
-            Automations
-          </Link>
-        </nav>
-      </header>
-
-      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-medium tracking-tight">Eval Center</h1>
-            <p className="mt-1 text-sm text-muted">
-              Golden test sets per agent — deterministic checks plus optional LLM-as-judge.
-            </p>
-          </div>
+    <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8 sm:px-6">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-medium tracking-tight">Eval Center</h1>
+          <p className="mt-1 text-sm text-muted">
+            Golden test sets per agent — deterministic checks plus optional LLM-as-judge.
+          </p>
         </div>
-        {note && <p className="mt-3 font-mono text-xs text-muted">{note}</p>}
+      </div>
+      {note && <p className="mt-3 font-mono text-xs text-muted">{note}</p>}
 
         <div className="mt-6">
           <label className="mb-1.5 block font-mono text-xs text-muted">agent</label>
@@ -300,7 +286,7 @@ export default function EvalsPage() {
                 {!formOpen && (
                   <button
                     onClick={() => setFormOpen(true)}
-                    className="rounded-md border border-hairline px-3 py-1.5 text-xs text-muted hover:text-foreground"
+                    className="cursor-pointer rounded-md border border-hairline px-3 py-1.5 text-xs text-muted transition-colors duration-200 hover:text-foreground"
                   >
                     Add case
                   </button>
@@ -308,7 +294,7 @@ export default function EvalsPage() {
                 <button
                   onClick={runEvals}
                   disabled={running || cases.length === 0}
-                  className="rounded-md bg-accent px-4 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-40"
+                  className="cursor-pointer rounded-md bg-accent px-4 py-1.5 text-xs font-medium text-white transition-opacity duration-200 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   {running ? "Running…" : "Run evals"}
                 </button>
@@ -361,7 +347,7 @@ export default function EvalsPage() {
                   <button
                     type="submit"
                     disabled={caseBusy}
-                    className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity disabled:opacity-40"
+                    className="cursor-pointer rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity duration-200 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     {caseBusy ? "Saving…" : "Add case"}
                   </button>
@@ -372,7 +358,7 @@ export default function EvalsPage() {
                       setForm(EMPTY_CASE_FORM);
                       setCaseError(null);
                     }}
-                    className="rounded-md border border-hairline px-4 py-2 text-sm text-muted hover:text-foreground"
+                    className="cursor-pointer rounded-md border border-hairline px-4 py-2 text-sm text-muted transition-colors duration-200 hover:text-foreground"
                   >
                     Cancel
                   </button>
@@ -382,7 +368,7 @@ export default function EvalsPage() {
 
             <ul className="mt-3 space-y-2">
               {cases.map((c) => (
-                <li key={c.id} className="rounded-lg border border-hairline p-3">
+                <li key={c.id} className="rounded-lg border border-hairline p-3 transition-colors duration-200 hover:border-accent/30">
                   <div className="flex items-start justify-between gap-3">
                     <p className="text-sm">
                       {c.input.length > 140 ? `${c.input.slice(0, 140)}…` : c.input}
@@ -395,7 +381,7 @@ export default function EvalsPage() {
                       )}
                       <button
                         onClick={() => deleteCase(c.id)}
-                        className="rounded-md border border-hairline px-2.5 py-1 text-[11px] text-muted hover:text-foreground"
+                        className="cursor-pointer rounded-md border border-hairline px-2.5 py-1 text-[11px] text-muted transition-colors duration-200 hover:text-foreground"
                       >
                         Delete
                       </button>
@@ -426,7 +412,7 @@ export default function EvalsPage() {
               {cases.length === 0 && (
                 <li>
                   <EmptyState
-                    glyph="🧪"
+                    glyph={<FlaskIcon className="h-7 w-7" />}
                     title="No eval cases yet"
                     description="Add one above to build this agent's regression suite."
                   />
@@ -537,7 +523,7 @@ export default function EvalsPage() {
             <button
               onClick={scanGuardrails}
               disabled={guardrailBusy || !guardrailText.trim()}
-              className="rounded-md bg-accent px-4 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-40"
+              className="cursor-pointer rounded-md bg-accent px-4 py-1.5 text-xs font-medium text-white transition-opacity duration-200 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
             >
               {guardrailBusy ? "Scanning…" : "Scan"}
             </button>
@@ -578,7 +564,6 @@ export default function EvalsPage() {
             </div>
           )}
         </div>
-      </main>
-    </div>
+    </main>
   );
 }

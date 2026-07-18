@@ -6,6 +6,25 @@ import { useEffect, useState } from "react";
 import { EmptyState } from "@/components/empty-state";
 import { apiFetch } from "@/lib/api";
 
+function BlocksIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <rect x="3.5" y="3.5" width="7" height="7" rx="1.25" />
+      <rect x="13.5" y="3.5" width="7" height="7" rx="1.25" />
+      <rect x="8.5" y="13.5" width="7" height="7" rx="1.25" />
+    </svg>
+  );
+}
+
 type Template = {
   slug: string;
   name: string;
@@ -65,50 +84,22 @@ export default function TemplatesPage() {
   }
 
   return (
-    <div className="flex flex-1 flex-col">
-      <header className="flex items-center justify-between border-b border-hairline px-6 py-3">
-        <Link href="/" className="font-medium tracking-tight">
-          AgentFleet
-        </Link>
-        <nav className="flex gap-4 text-sm text-muted">
-          <Link href="/chat" className="hover:text-foreground">
-            Chat
-          </Link>
-          <Link href="/documents" className="hover:text-foreground">
-            Documents
-          </Link>
-          <Link href="/missions" className="hover:text-foreground">
-            Missions
-          </Link>
-          <Link href="/agents" className="hover:text-foreground">
-            Agents
-          </Link>
-          <span className="text-foreground">Templates</span>
-          <Link href="/evals" className="hover:text-foreground">
-            Evals
-          </Link>
-          <Link href="/usage" className="hover:text-foreground">
-            Usage
-          </Link>
-          <Link href="/automations" className="hover:text-foreground">
-            Automations
-          </Link>
-        </nav>
-      </header>
+    <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6">
+      <h1 className="text-2xl font-medium tracking-tight">Template gallery</h1>
+      <p className="mt-1 text-sm text-muted">
+        One-click starting points — install a template and it appears as a
+        ready-to-edit agent in your fleet.
+      </p>
+      {note && <p className="mt-3 font-mono text-xs text-muted">{note}</p>}
 
-      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8">
-        <h1 className="text-2xl font-medium tracking-tight">Template gallery</h1>
-        <p className="mt-1 text-sm text-muted">
-          One-click starting points — install a template and it appears as a
-          ready-to-edit agent in your fleet.
-        </p>
-        {note && <p className="mt-3 font-mono text-xs text-muted">{note}</p>}
-
-        <div className="mt-6 grid gap-4 sm:grid-cols-2 md:grid-cols-3">
-          {templates.map((t) => {
-            const state = installed[t.slug] ?? { status: "idle" as const };
-            return (
-              <div key={t.slug} className="flex flex-col rounded-lg border border-hairline p-4">
+      <div className="mt-6 grid gap-4 sm:grid-cols-2 md:grid-cols-3">
+        {templates.map((t) => {
+          const state = installed[t.slug] ?? { status: "idle" as const };
+          return (
+            <div
+              key={t.slug}
+              className="flex flex-col rounded-lg border border-hairline p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-accent/30"
+            >
                 <div className="flex items-start justify-between gap-2">
                   <span className="text-sm font-medium">{t.name}</span>
                   <span className="shrink-0 rounded-full border border-hairline px-2 py-0.5 font-mono text-[10px] text-muted">
@@ -140,7 +131,7 @@ export default function TemplatesPage() {
                       </button>
                       <Link
                         href="/agents"
-                        className="shrink-0 rounded-md border border-hairline px-3 py-2 text-xs text-muted hover:text-foreground"
+                        className="shrink-0 cursor-pointer rounded-md border border-hairline px-3 py-2 text-xs text-muted transition-colors duration-200 hover:text-foreground"
                       >
                         View in Agents
                       </Link>
@@ -149,7 +140,7 @@ export default function TemplatesPage() {
                     <button
                       onClick={() => install(t.slug)}
                       disabled={state.status === "busy"}
-                      className="w-full rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity disabled:opacity-40"
+                      className="w-full cursor-pointer rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity duration-200 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       {state.status === "busy" ? "Adding…" : "Add to fleet"}
                     </button>
@@ -164,14 +155,13 @@ export default function TemplatesPage() {
           {templates.length === 0 && !note && (
             <div className="col-span-full">
               <EmptyState
-                glyph="🧩"
+                glyph={<BlocksIcon className="h-7 w-7" />}
                 title="No templates available"
                 description="The template gallery is empty — check back once the backend seeds starter agents."
               />
             </div>
           )}
         </div>
-      </main>
-    </div>
+    </main>
   );
 }
