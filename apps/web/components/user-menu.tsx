@@ -13,7 +13,7 @@ export async function UserMenu() {
       >
         <button
           type="submit"
-          className="rounded-md bg-accent px-4 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
+          className="cursor-pointer rounded-md bg-accent px-4 py-1.5 text-sm font-medium text-white transition-opacity duration-200 hover:opacity-90"
         >
           Continue with Google
         </button>
@@ -34,7 +34,7 @@ export async function UserMenu() {
       </span>
       <button
         type="submit"
-        className="rounded-md border border-hairline px-3 py-1.5 text-sm text-muted transition-colors hover:text-foreground"
+        className="cursor-pointer rounded-md border border-hairline px-3 py-1.5 text-sm text-muted transition-colors duration-200 hover:text-foreground"
       >
         Sign out
       </button>

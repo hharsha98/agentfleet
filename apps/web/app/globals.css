@@ -17,10 +17,79 @@
   --color-hairline: var(--hairline);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* Per-feature icon-tile hues (registered here so Tailwind generates
+     bg-hue-, text-hue-, and border-hue- utilities, opacity modifiers included). */
+  --color-hue-blue: var(--hue-blue);
+  --color-hue-violet: var(--hue-violet);
+  --color-hue-cyan: var(--hue-cyan);
+  --color-hue-amber: var(--hue-amber);
+  --color-hue-green: var(--hue-green);
+  --color-hue-red: var(--hue-red);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+/* --- Landing page premium redesign additions (UI-1) ------------------- */
+
+/* Per-feature icon-tile hues, derived to sit comfortably next to the
+   single accent without introducing a second "real" brand color. */
+:root {
+  --hue-blue: #5b8def;
+  --hue-violet: #8b7ff0;
+  --hue-cyan: #4dc9c9;
+  --hue-amber: #e2a94d;
+  --hue-green: #4dbb87;
+  --hue-red: #e2685e;
+}
+
+/* Ultra-subtle dot texture, layered under the accent glows in the hero.
+   Kept at very low opacity so it reads as grain, not decoration. */
+.bg-dot-texture {
+  background-image: radial-gradient(
+    rgba(255, 255, 255, 0.5) 1px,
+    transparent 1px
+  );
+  background-size: 24px 24px;
+}
+
+@keyframes blink-caret {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.animate-blink-caret {
+  animation: blink-caret 1s step-end infinite;
+}
+
+@keyframes pulse-soft {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 2.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-blink-caret,
+  .animate-pulse-soft {
+    animation: none;
+    opacity: 1;
+  }
 }
