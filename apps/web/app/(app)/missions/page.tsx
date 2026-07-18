@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 
 import { EmptyState } from "@/components/empty-state";
+import { HUE_CLASSES, Icon } from "@/components/landing/icons";
+import { Reveal } from "@/components/landing/reveal";
 import { apiFetch } from "@/lib/api";
 
 type Task = {
@@ -146,15 +148,35 @@ export default function MissionsPage() {
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 py-6 sm:px-6 sm:py-8">
       {/* Missions has no printed heading in the design — the goal input
-          reads as the header — but still gets a real h1 for a11y. */}
+          reads as the header — but still gets a real h1 for a11y. The icon
+          + description below is a compact strip (not the full PageHeader,
+          which would render a second visible h1) so it stays consistent
+          with this page's sr-only-heading layout. */}
       <h1 className="sr-only">Missions</h1>
+
+      <Reveal className="flex items-start gap-3">
+        <div
+          aria-hidden="true"
+          className={`relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border ${HUE_CLASSES.violet.tile}`}
+        >
+          <div
+            aria-hidden="true"
+            className={`pointer-events-none absolute -inset-2 rounded-full ${HUE_CLASSES.violet.glow} blur-lg`}
+          />
+          <Icon name="workflow" className={`relative h-5 w-5 ${HUE_CLASSES.violet.icon}`} />
+        </div>
+        <p className="max-w-2xl pt-2 text-sm text-muted">
+          Give the fleet a goal. The orchestrator splits it into tasks, assigns agents, and
+          runs them on this live board — pausing for your approval where it matters.
+        </p>
+      </Reveal>
 
       <form
         onSubmit={(e) => {
           e.preventDefault();
           createRun();
         }}
-        className="flex gap-2"
+        className="mt-4 flex gap-2"
       >
         <input
           value={goal}
@@ -215,9 +237,10 @@ export default function MissionsPage() {
                     {col.label} · {items.length}
                   </p>
                   <div className="space-y-2">
-                    {items.map((t) => (
-                      <div
+                    {items.map((t, i) => (
+                      <Reveal
                         key={t.id}
+                        delay={i * 40}
                         className="rounded-md border border-hairline bg-background p-2.5 text-sm transition-colors duration-200 hover:border-accent/30"
                       >
                         <p className="leading-snug">{t.title}</p>
@@ -255,7 +278,7 @@ export default function MissionsPage() {
                             {t.latency_ms != null && ` · ${t.latency_ms}ms`}
                           </p>
                         )}
-                      </div>
+                      </Reveal>
                     ))}
                   </div>
                 </div>

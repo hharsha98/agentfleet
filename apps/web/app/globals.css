@@ -192,6 +192,23 @@ body {
   animation: drift 6.5s ease-in-out infinite;
 }
 
+/* Subtle vertical float + micro-rotation for the 3D hero panels (UI-4a).
+   Applied to an inner wrapper so it composes independently of each panel's
+   static baked-in rotateX/rotateY/translateZ orientation. */
+@keyframes float-3d {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-8px) rotate(0.6deg);
+  }
+}
+
+.animate-float-3d {
+  animation: float-3d 8s ease-in-out infinite;
+}
+
 /* Hero agent-network graph: edges pulse-travel toward each node. */
 .network-edge {
   stroke-dasharray: 6 46;
@@ -213,6 +230,7 @@ body {
   .animate-rise-in,
   .animate-pulse-node,
   .animate-drift,
+  .animate-float-3d,
   .network-node {
     animation: none;
     opacity: 1;

@@ -3,6 +3,9 @@
 import { useEffect, useState } from "react";
 
 import { EmptyState } from "@/components/empty-state";
+import { Icon } from "@/components/landing/icons";
+import { Reveal } from "@/components/landing/reveal";
+import { PageHeader } from "@/components/page-header";
 import { apiFetch } from "@/lib/api";
 
 function RobotIcon({ className }: { className?: string }) {
@@ -409,22 +412,32 @@ export default function AgentsPage() {
 
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8 sm:px-6">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-medium tracking-tight">Agent builder</h1>
-          <p className="mt-1 text-sm text-muted">
-            Configure the prompt, model, and tools each agent gets at runtime.
-          </p>
+      <PageHeader
+        icon={<Icon name="blocks" />}
+        hue="amber"
+        title="Agent builder"
+        description="Build a new agent in minutes: prompt, model, tools. Publish versions, roll back bad ones, and red-team it before it ships."
+      >
+        <div className="flex items-center gap-3">
+          {agents.length > 0 && (
+            <span className="flex items-center gap-1.5 font-mono text-xs text-muted">
+              <span
+                aria-hidden="true"
+                className="h-1.5 w-1.5 shrink-0 animate-pulse-soft rounded-full bg-hue-amber"
+              />
+              {agents.length} agent{agents.length === 1 ? "" : "s"}
+            </span>
+          )}
+          {!formOpen && (
+            <button
+              onClick={openCreateForm}
+              className="shrink-0 cursor-pointer rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity duration-200 hover:opacity-90"
+            >
+              New agent
+            </button>
+          )}
         </div>
-        {!formOpen && (
-          <button
-            onClick={openCreateForm}
-            className="shrink-0 cursor-pointer rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity duration-200 hover:opacity-90"
-          >
-            New agent
-          </button>
-        )}
-      </div>
+      </PageHeader>
         {note && <p className="mt-3 font-mono text-xs text-muted">{note}</p>}
 
         {formOpen && (
@@ -569,11 +582,12 @@ export default function AgentsPage() {
         )}
 
         <ul className="mt-6 space-y-3">
-          {agents.map((a) => (
-            <li
-              key={a.id}
-              className="rounded-lg border border-hairline p-4 transition-colors duration-200 hover:border-accent/30"
-            >
+          {agents.map((a, i) => (
+            <li key={a.id}>
+              <Reveal
+                delay={i * 40}
+                className="rounded-lg border border-hairline p-4 transition-colors duration-200 hover:border-accent/30"
+              >
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <div className="flex items-center gap-2">
@@ -802,6 +816,7 @@ export default function AgentsPage() {
                   </ul>
                 </div>
               )}
+              </Reveal>
             </li>
           ))}
           {agents.length === 0 && !note && (

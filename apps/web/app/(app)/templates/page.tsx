@@ -4,6 +4,9 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { EmptyState } from "@/components/empty-state";
+import { Icon } from "@/components/landing/icons";
+import { Reveal } from "@/components/landing/reveal";
+import { PageHeader } from "@/components/page-header";
 import { apiFetch } from "@/lib/api";
 
 function BlocksIcon({ className }: { className?: string }) {
@@ -85,19 +88,21 @@ export default function TemplatesPage() {
 
   return (
     <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6">
-      <h1 className="text-2xl font-medium tracking-tight">Template gallery</h1>
-      <p className="mt-1 text-sm text-muted">
-        One-click starting points — install a template and it appears as a
-        ready-to-edit agent in your fleet.
-      </p>
+      <PageHeader
+        icon={<Icon name="sparkle" />}
+        hue="green"
+        title="Template gallery"
+        description="Starter agents you can install with one click, then customize into your own."
+      />
       {note && <p className="mt-3 font-mono text-xs text-muted">{note}</p>}
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2 md:grid-cols-3">
-        {templates.map((t) => {
+        {templates.map((t, i) => {
           const state = installed[t.slug] ?? { status: "idle" as const };
           return (
-            <div
+            <Reveal
               key={t.slug}
+              delay={i * 40}
               className="flex flex-col rounded-lg border border-hairline p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-accent/30"
             >
                 <div className="flex items-start justify-between gap-2">
@@ -149,7 +154,7 @@ export default function TemplatesPage() {
                     <p className="mt-2 font-mono text-xs text-muted">⚠ {state.detail}</p>
                   )}
                 </div>
-              </div>
+              </Reveal>
             );
           })}
           {templates.length === 0 && !note && (

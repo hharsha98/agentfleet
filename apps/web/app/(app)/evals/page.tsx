@@ -3,6 +3,9 @@
 import { useEffect, useState } from "react";
 
 import { EmptyState } from "@/components/empty-state";
+import { Icon } from "@/components/landing/icons";
+import { Reveal } from "@/components/landing/reveal";
+import { PageHeader } from "@/components/page-header";
 import { apiFetch } from "@/lib/api";
 
 function FlaskIcon({ className }: { className?: string }) {
@@ -252,14 +255,12 @@ export default function EvalsPage() {
 
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8 sm:px-6">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-medium tracking-tight">Eval Center</h1>
-          <p className="mt-1 text-sm text-muted">
-            Golden test sets per agent — deterministic checks plus optional LLM-as-judge.
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        icon={<Icon name="list-checks" />}
+        hue="red"
+        title="Eval Center"
+        description="Every agent has a test suite. Add golden cases, run them as a regression gate, and let CI block prompt changes that break behavior."
+      />
       {note && <p className="mt-3 font-mono text-xs text-muted">{note}</p>}
 
         <div className="mt-6">
@@ -367,8 +368,12 @@ export default function EvalsPage() {
             )}
 
             <ul className="mt-3 space-y-2">
-              {cases.map((c) => (
-                <li key={c.id} className="rounded-lg border border-hairline p-3 transition-colors duration-200 hover:border-accent/30">
+              {cases.map((c, i) => (
+                <li key={c.id}>
+                <Reveal
+                  delay={i * 40}
+                  className="rounded-lg border border-hairline p-3 transition-colors duration-200 hover:border-accent/30"
+                >
                   <div className="flex items-start justify-between gap-3">
                     <p className="text-sm">
                       {c.input.length > 140 ? `${c.input.slice(0, 140)}…` : c.input}
@@ -407,6 +412,7 @@ export default function EvalsPage() {
                       ))}
                     </div>
                   )}
+                </Reveal>
                 </li>
               ))}
               {cases.length === 0 && (

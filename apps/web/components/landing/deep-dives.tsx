@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { HeroTrace } from "./hero-trace";
@@ -13,6 +14,8 @@ type DeepDive = {
   bullets: string[];
   hue: Hue;
   icon: IconName;
+  href: string;
+  linkLabel: string;
 };
 
 function DeepDiveCopy({ dive }: { dive: DeepDive }) {
@@ -38,6 +41,12 @@ function DeepDiveCopy({ dive }: { dive: DeepDive }) {
           </li>
         ))}
       </ul>
+      <Link
+        href={dive.href}
+        className="w-fit cursor-pointer text-sm font-medium text-accent underline-offset-4 transition-colors duration-200 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      >
+        {dive.linkLabel} →
+      </Link>
     </div>
   );
 }
@@ -239,6 +248,8 @@ const CHAT: DeepDive = {
   description:
     "Talk to any agent in the fleet from one streaming chat. Tool calls show up live as they run — search queries, SQL, Slack posts — so you see what the agent actually did, not just its final answer.",
   bullets: ["Streaming responses", "Live tool-call cards", "Switch agents mid-conversation"],
+  href: "/chat",
+  linkLabel: "Open multi-agent chat",
 };
 
 const ORCHESTRATION: DeepDive = {
@@ -249,6 +260,8 @@ const ORCHESTRATION: DeepDive = {
   description:
     "Give the fleet a goal and the orchestrator turns it into a Kanban DAG — a chain of steps agents pick up, execute, and hand off. Human-in-the-loop checkpoints pause the run wherever you want a say.",
   bullets: ["Goal → step DAG", "Human-in-the-loop checkpoints", "Live mission board"],
+  href: "/missions",
+  linkLabel: "Open the mission board",
 };
 
 const OBSERVABILITY: DeepDive = {
@@ -259,6 +272,8 @@ const OBSERVABILITY: DeepDive = {
   description:
     "Every step is traced in Langfuse — latency, token usage, and cost per tool call, live as the run happens. When a run is slow or expensive, you see exactly which step, not just an aggregate number.",
   bullets: ["Per-step latency + cost", "Langfuse trace timeline", "p95 94ms under load"],
+  href: "/usage",
+  linkLabel: "See live usage",
 };
 
 const BUILDER: DeepDive = {
@@ -269,6 +284,8 @@ const BUILDER: DeepDive = {
   description:
     "Compose a new agent at runtime — pick a system prompt, a model, and wire in external MCP tools — without touching code or redeploying.",
   bullets: ["No redeploy", "MCP tool wiring", "Model per agent"],
+  href: "/agents",
+  linkLabel: "Open the agent builder",
 };
 
 const DOC_INTEL: DeepDive = {
@@ -279,6 +296,8 @@ const DOC_INTEL: DeepDive = {
   description:
     "Upload your own docs and every agent can search them through local pgvector retrieval — chunked and embedded on your machine, grounding answers in your content instead of the model's guesses.",
   bullets: ["Local pgvector search", "fastembed, on-device", "Grounded citations"],
+  href: "/documents",
+  linkLabel: "Open documents",
 };
 
 const PUBLISH: DeepDive = {
@@ -289,29 +308,94 @@ const PUBLISH: DeepDive = {
   description:
     "Ship an agent behind a versioned API key, embed it as a widget, or expose your whole fleet as an MCP server. Every publish is a version — roll back a bad one in one click.",
   bullets: ["Versioned publishing", "One-click rollback", "MCP server export"],
+  href: "/templates",
+  linkLabel: "Explore templates",
 };
+
+// Whole-panel Link wrapper shared by every deep-dive vignette below — the
+// vignette components themselves stay plain (no anchors), so wrapping here
+// keeps each one a single clickable region without nesting <a> inside <a>.
+function VignetteLink({
+  href,
+  label,
+  children,
+}: {
+  href: string;
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <Link
+      href={href}
+      aria-label={label}
+      className="block cursor-pointer rounded-xl transition-opacity duration-200 hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+    >
+      {children}
+    </Link>
+  );
+}
 
 export function DeepDives() {
   return (
     <section className="mx-auto max-w-6xl px-6">
       <div className="flex flex-col divide-y divide-hairline">
-        <BigDeepDive dive={CHAT} flip={false} vignette={<ChatDeepVignette />} />
+        <BigDeepDive
+          dive={CHAT}
+          flip={false}
+          vignette={
+            <VignetteLink href={CHAT.href} label={CHAT.linkLabel}>
+              <ChatDeepVignette />
+            </VignetteLink>
+          }
+        />
         <BigDeepDive
           dive={ORCHESTRATION}
           flip={true}
-          vignette={<OrchestrationDeepVignette />}
+          vignette={
+            <VignetteLink href={ORCHESTRATION.href} label={ORCHESTRATION.linkLabel}>
+              <OrchestrationDeepVignette />
+            </VignetteLink>
+          }
         />
         <BigDeepDive
           dive={OBSERVABILITY}
           flip={false}
-          vignette={<HeroTrace />}
+          vignette={
+            <VignetteLink href={OBSERVABILITY.href} label={OBSERVABILITY.linkLabel}>
+              <HeroTrace />
+            </VignetteLink>
+          }
         />
       </div>
 
       <div className="grid grid-cols-1 gap-4 py-14 sm:grid-cols-3">
-        <CompactDeepDive dive={BUILDER} vignette={<BuilderVignette />} delay={0} />
-        <CompactDeepDive dive={DOC_INTEL} vignette={<DocIntelVignette />} delay={80} />
-        <CompactDeepDive dive={PUBLISH} vignette={<PublishVignette />} delay={160} />
+        <CompactDeepDive
+          dive={BUILDER}
+          vignette={
+            <VignetteLink href={BUILDER.href} label={BUILDER.linkLabel}>
+              <BuilderVignette />
+            </VignetteLink>
+          }
+          delay={0}
+        />
+        <CompactDeepDive
+          dive={DOC_INTEL}
+          vignette={
+            <VignetteLink href={DOC_INTEL.href} label={DOC_INTEL.linkLabel}>
+              <DocIntelVignette />
+            </VignetteLink>
+          }
+          delay={80}
+        />
+        <CompactDeepDive
+          dive={PUBLISH}
+          vignette={
+            <VignetteLink href={PUBLISH.href} label={PUBLISH.linkLabel}>
+              <PublishVignette />
+            </VignetteLink>
+          }
+          delay={160}
+        />
       </div>
     </section>
   );

@@ -3,6 +3,9 @@
 import { useEffect, useState } from "react";
 
 import { EmptyState } from "@/components/empty-state";
+import { Icon } from "@/components/landing/icons";
+import { Reveal } from "@/components/landing/reveal";
+import { PageHeader } from "@/components/page-header";
 import { apiFetch } from "@/lib/api";
 
 function ClockIcon({ className }: { className?: string }) {
@@ -233,13 +236,22 @@ export default function AutomationsPage() {
 
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8 sm:px-6">
-      <div>
-        <h1 className="text-2xl font-medium tracking-tight">Automations</h1>
-        <p className="mt-1 text-sm text-muted">
-          Give the fleet a goal and a schedule — the worker plans and runs a mission
-          automatically, on repeat.
-        </p>
-      </div>
+      <PageHeader
+        icon={<Icon name="clock" />}
+        hue="violet"
+        title="Automations"
+        description="Agents that run without you: cron schedules fire missions on time, inbound webhooks trigger them from other systems."
+      >
+        {schedules.length > 0 && (
+          <span className="flex items-center gap-1.5 font-mono text-xs text-muted">
+            <span
+              aria-hidden="true"
+              className="h-1.5 w-1.5 shrink-0 animate-pulse-soft rounded-full bg-hue-violet"
+            />
+            {schedules.length} schedule{schedules.length === 1 ? "" : "s"}
+          </span>
+        )}
+      </PageHeader>
       {note && <p className="mt-3 font-mono text-xs text-muted">{note}</p>}
 
         <form
@@ -297,8 +309,12 @@ export default function AutomationsPage() {
         </p>
 
         <ul className="mt-6 space-y-3">
-          {schedules.map((s) => (
-            <li key={s.id} className="rounded-lg border border-hairline p-4 transition-colors duration-200 hover:border-accent/30">
+          {schedules.map((s, i) => (
+            <li key={s.id}>
+            <Reveal
+              delay={i * 40}
+              className="rounded-lg border border-hairline p-4 transition-colors duration-200 hover:border-accent/30"
+            >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
@@ -335,6 +351,7 @@ export default function AutomationsPage() {
                   </button>
                 </div>
               </div>
+              </Reveal>
             </li>
           ))}
           {schedules.length === 0 && !note && (
@@ -424,8 +441,12 @@ export default function AutomationsPage() {
         )}
 
         <ul className="mt-6 space-y-3">
-          {webhooks.map((w) => (
-            <li key={w.id} className="rounded-lg border border-hairline p-4 transition-colors duration-200 hover:border-accent/30">
+          {webhooks.map((w, i) => (
+            <li key={w.id}>
+            <Reveal
+              delay={i * 40}
+              className="rounded-lg border border-hairline p-4 transition-colors duration-200 hover:border-accent/30"
+            >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
@@ -450,6 +471,7 @@ export default function AutomationsPage() {
                   </button>
                 </div>
               </div>
+              </Reveal>
             </li>
           ))}
           {webhooks.length === 0 && !note && (

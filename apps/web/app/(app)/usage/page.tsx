@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from "react";
 
+import { Icon } from "@/components/landing/icons";
+import { Reveal } from "@/components/landing/reveal";
+import { PageHeader } from "@/components/page-header";
 import { apiFetch } from "@/lib/api";
 
 type Agent = {
@@ -203,32 +206,47 @@ export default function UsagePage() {
 
   return (
     <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-8 sm:px-6">
-      <h1 className="text-2xl font-medium tracking-tight">Usage &amp; cost</h1>
-      <p className="mt-1 text-sm text-muted">
-        Metering rolls up from Message rows — every assistant turn, across every agent.
-      </p>
+      <PageHeader
+        icon={<Icon name="gauge" />}
+        hue="blue"
+        title="Usage & cost"
+        description="Every token, call, and cent — metered per agent and per day. Set budgets so an agent can never overspend."
+      >
+        {summary && (
+          <span className="font-mono text-xs text-muted">{fmtUsd(summary.today.cost_usd)} today</span>
+        )}
+      </PageHeader>
       {note && <p className="mt-3 font-mono text-xs text-muted">{note}</p>}
 
       {/* Stat tiles */}
       <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <div className="rounded-lg border border-hairline p-4 transition-colors duration-200 hover:border-accent/30">
+        <Reveal
+          delay={0}
+          className="rounded-lg border border-hairline p-4 transition-colors duration-200 hover:border-accent/30"
+        >
           <p className="text-xs text-muted">Tokens today</p>
           <p className="mt-1 font-mono text-3xl font-medium">
             {summary ? fmtInt(summary.today.tokens) : "—"}
           </p>
-        </div>
-        <div className="rounded-lg border border-hairline p-4 transition-colors duration-200 hover:border-accent/30">
+        </Reveal>
+        <Reveal
+          delay={40}
+          className="rounded-lg border border-hairline p-4 transition-colors duration-200 hover:border-accent/30"
+        >
           <p className="text-xs text-muted">Cost today</p>
           <p className="mt-1 font-mono text-3xl font-medium">
             {summary ? fmtUsd(summary.today.cost_usd) : "—"}
           </p>
-        </div>
-        <div className="rounded-lg border border-hairline p-4 transition-colors duration-200 hover:border-accent/30">
+        </Reveal>
+        <Reveal
+          delay={80}
+          className="rounded-lg border border-hairline p-4 transition-colors duration-200 hover:border-accent/30"
+        >
           <p className="text-xs text-muted">Messages today</p>
           <p className="mt-1 font-mono text-3xl font-medium">
             {summary ? fmtInt(summary.today.messages) : "—"}
           </p>
-        </div>
+        </Reveal>
       </div>
 
         {/* 14-day bar chart */}
@@ -296,9 +314,10 @@ export default function UsagePage() {
           </p>
 
           <div className="mt-3 space-y-2">
-            {rows.map((row) => (
-              <div
+            {rows.map((row, i) => (
+              <Reveal
                 key={row.key}
+                delay={i * 40}
                 className="flex flex-wrap items-center gap-3 rounded-lg border border-hairline p-3 transition-colors duration-200 hover:border-accent/30"
               >
                 <span className="w-32 shrink-0 text-sm">{row.label}</span>
@@ -338,7 +357,7 @@ export default function UsagePage() {
                     Clear
                   </button>
                 </div>
-              </div>
+              </Reveal>
             ))}
           </div>
 

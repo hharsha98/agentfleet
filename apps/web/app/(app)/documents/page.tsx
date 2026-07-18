@@ -3,6 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 
 import { EmptyState } from "@/components/empty-state";
+import { Icon } from "@/components/landing/icons";
+import { Reveal } from "@/components/landing/reveal";
+import { PageHeader } from "@/components/page-header";
 import { apiFetch } from "@/lib/api";
 
 type Doc = {
@@ -77,11 +80,18 @@ export default function DocumentsPage() {
 
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8 sm:px-6">
-      <h1 className="text-2xl font-medium tracking-tight">Knowledge base</h1>
-      <p className="mt-1 text-sm text-muted">
-        Uploaded files are chunked and embedded locally; agents search them
-        with the <span className="font-mono">search_documents</span> tool.
-      </p>
+      <PageHeader
+        icon={<Icon name="database" />}
+        hue="cyan"
+        title="Knowledge base"
+        description="Upload .txt, .md, or .pdf files and they're chunked and embedded locally. Every agent can then search them and answer from YOUR content, with citations."
+      >
+        {docs.length > 0 && (
+          <span className="font-mono text-xs text-muted">
+            {docs.length} document{docs.length === 1 ? "" : "s"}
+          </span>
+        )}
+      </PageHeader>
 
       <div className="mt-6 flex items-center gap-3 rounded-lg border border-hairline p-4 transition-colors duration-200 focus-within:border-accent/50">
         <input
@@ -101,15 +111,17 @@ export default function DocumentsPage() {
       {note && <p className="mt-3 font-mono text-xs text-muted">{note}</p>}
 
       <ul className="mt-6 space-y-2">
-        {docs.map((d) => (
-          <li
-            key={d.id}
-            className="flex items-center justify-between rounded-lg border border-hairline px-4 py-3 text-sm transition-colors duration-200 hover:border-accent/30"
-          >
-            <span>{d.filename}</span>
-            <span className="font-mono text-xs text-muted">
-              {(d.size_bytes / 1024).toFixed(1)} kB · {d.status}
-            </span>
+        {docs.map((d, i) => (
+          <li key={d.id}>
+            <Reveal
+              delay={i * 40}
+              className="flex items-center justify-between rounded-lg border border-hairline px-4 py-3 text-sm transition-colors duration-200 hover:border-accent/30"
+            >
+              <span>{d.filename}</span>
+              <span className="font-mono text-xs text-muted">
+                {(d.size_bytes / 1024).toFixed(1)} kB · {d.status}
+              </span>
+            </Reveal>
           </li>
         ))}
         {docs.length === 0 && (

@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { Reveal } from "./reveal";
 
 // Deterministic slug -> hue mapping, same hash idiom as chat-ui.tsx's
@@ -95,29 +97,32 @@ function AgentCard({
 }) {
   const hue = hueForSlug(agent.slug);
   return (
-    <Reveal
-      delay={delay}
-      className="flex flex-col gap-3 rounded-xl border border-hairline p-5 transition-all duration-300 hover:-translate-y-0.5 hover:border-accent/40 hover:bg-white/[0.02]"
-    >
-      <div className="flex items-center gap-3">
-        <span
-          aria-hidden
-          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border font-mono text-sm font-medium ${HUE_TILE_CLASS[hue]}`}
-        >
-          {agent.name.charAt(0).toUpperCase()}
-        </span>
-        <div className="flex flex-col">
-          <span className="font-medium tracking-tight text-foreground">
-            {agent.name}
+    <Reveal delay={delay}>
+      <Link
+        href="/chat"
+        aria-label={`Chat with ${agent.name}`}
+        className="flex cursor-pointer flex-col gap-3 rounded-xl border border-hairline p-5 transition-all duration-300 hover:-translate-y-0.5 hover:border-accent/40 hover:bg-white/[0.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      >
+        <div className="flex items-center gap-3">
+          <span
+            aria-hidden
+            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border font-mono text-sm font-medium ${HUE_TILE_CLASS[hue]}`}
+          >
+            {agent.name.charAt(0).toUpperCase()}
           </span>
-          {agent.badge ? (
-            <span className="w-fit rounded-full border border-hairline px-2 py-0.5 font-mono text-[9px] text-muted">
-              {agent.badge}
+          <div className="flex flex-col">
+            <span className="font-medium tracking-tight text-foreground">
+              {agent.name}
             </span>
-          ) : null}
+            {agent.badge ? (
+              <span className="w-fit rounded-full border border-hairline px-2 py-0.5 font-mono text-[9px] text-muted">
+                {agent.badge}
+              </span>
+            ) : null}
+          </div>
         </div>
-      </div>
-      <p className="text-sm text-muted">{agent.description}</p>
+        <p className="text-sm text-muted">{agent.description}</p>
+      </Link>
     </Reveal>
   );
 }

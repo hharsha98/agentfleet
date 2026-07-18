@@ -4,6 +4,7 @@ import { AgentNetwork } from "@/components/landing/agent-network";
 import { AutomationsSecurity } from "@/components/landing/automations-security";
 import { DeepDives } from "@/components/landing/deep-dives";
 import { FeatureGrid } from "@/components/landing/feature-grid";
+import { Hero3D } from "@/components/landing/hero-3d";
 import { HowItWorks } from "@/components/landing/how-it-works";
 import { OpsLayer } from "@/components/landing/ops-layer";
 import { Roster } from "@/components/landing/roster";
@@ -86,20 +87,33 @@ export default function Home() {
       <main className="flex-1">
         {/* HERO — centered text over a full-width animated agent-network
             graph (UI-3 USER CHOICE, replaces the old split terminal hero). */}
-        <section className="relative overflow-hidden">
+        <section
+          className="relative overflow-hidden"
+          style={{ perspective: "1200px" }}
+        >
           <div
             aria-hidden
             className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,var(--hairline)_1px,transparent_1px),linear-gradient(to_bottom,var(--hairline)_1px,transparent_1px)] bg-[size:32px_32px] opacity-[0.12]"
           />
 
           {/* Decorative network graph, dimmed + center-masked so the
-              headline stays fully readable on top of it. */}
+              headline stays fully readable on top of it. Wrapped in a
+              slight translateZ/scale layer (UI-4a) so it reads as the back
+              plane of the 3D scene rather than a flat backdrop. */}
           <div
             aria-hidden
             className="pointer-events-none absolute inset-0 opacity-60 [mask-image:radial-gradient(ellipse_65%_70%_at_50%_45%,transparent_20%,black_75%)]"
+            style={{
+              transform: "translateZ(-40px) scale(1.05)",
+              transformStyle: "preserve-3d",
+            }}
           >
             <AgentNetwork />
           </div>
+
+          {/* CSS-3D floating product panels, layered between the network
+              graph and the headline (UI-4a). */}
+          <Hero3D />
 
           <div className="relative mx-auto flex max-w-3xl flex-col items-center gap-6 px-6 py-24 text-center sm:py-32 lg:py-40">
             <div className="flex flex-wrap items-center justify-center gap-2">
@@ -114,16 +128,17 @@ export default function Home() {
 
             <h1 className="text-4xl font-medium tracking-tight sm:text-5xl lg:text-6xl">
               <span className="block text-foreground">
-                The operations platform
+                Run a team of AI agents
               </span>
               <span className="block bg-gradient-to-r from-accent via-hue-violet to-hue-cyan bg-clip-text text-transparent">
-                for AI agents, orchestrated.
+                that research, build, and ship for you.
               </span>
             </h1>
 
             <p className="max-w-md text-muted">
-              Multi-agent chat, goal-to-Kanban orchestration, evals, cost
-              governance, and guardrails — self-hosted, in one fleet.
+              Nine specialist agents, a mission board that turns goals into
+              tasks, and the guardrails to trust what they do — open source,
+              self-hosted.
             </p>
 
             <div className="flex flex-wrap items-center justify-center gap-5">

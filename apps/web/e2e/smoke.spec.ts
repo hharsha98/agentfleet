@@ -33,7 +33,7 @@ test("landing page renders the hero and a sign-in affordance", async ({ browser 
   const page = await context.newPage();
   await page.goto("/");
   await expect(page.getByRole("heading", { level: 1 })).toContainText(
-    "operations platform",
+    "team of AI agents",
   );
   await expect(
     page.getByRole("button", { name: "Continue with Google" }),

@@ -3,6 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 
 import { EmptyState } from "@/components/empty-state";
+import { Icon } from "@/components/landing/icons";
+import { Reveal } from "@/components/landing/reveal";
+import { PageHeader } from "@/components/page-header";
 import { apiFetch } from "@/lib/api";
 
 function MicIcon({ className }: { className?: string }) {
@@ -103,10 +106,12 @@ export default function VoicePage() {
 
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-8 sm:px-6">
-      <h1 className="text-2xl font-medium tracking-tight">Voice Agent</h1>
-      <p className="mt-1 text-sm text-muted">
-        Talk to AgentFleet out loud — the browser handles the mic, Vapi handles the call.
-      </p>
+      <PageHeader
+        icon={<Icon name="activity" />}
+        hue="green"
+        title="Voice Agent"
+        description="Talk to the fleet out loud. The browser handles your mic; Vapi handles speech — add a key to go live."
+      />
       {note && <p className="mt-3 font-mono text-xs text-muted">{note}</p>}
 
       {config === null && !note && (
@@ -135,7 +140,10 @@ function DisabledState() {
         title="Voice is not configured"
         description={`Add VAPI_PUBLIC_KEY to .env and restart the API to enable a live voice call with an AgentFleet assistant.`}
       />
-      <div className="mx-auto mt-8 max-w-sm rounded-lg border border-hairline p-4 transition-colors duration-200 hover:border-accent/30">
+      <Reveal
+        delay={80}
+        className="mx-auto mt-8 max-w-sm rounded-lg border border-hairline p-4 transition-colors duration-200 hover:border-accent/30"
+      >
         <p className="font-mono text-xs text-muted">how it works</p>
         <ul className="mt-3 space-y-2 text-sm text-muted">
           <li className="flex gap-2">
@@ -151,7 +159,7 @@ function DisabledState() {
             <span>The assistant runs on the AgentFleet voice prompt, same platform knowledge as chat.</span>
           </li>
         </ul>
-      </div>
+      </Reveal>
     </div>
   );
 }

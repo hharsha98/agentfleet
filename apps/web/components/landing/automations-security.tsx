@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { IconTile } from "./icons";
 import { Reveal } from "./reveal";
 
@@ -38,39 +40,48 @@ export function AutomationsSecurity() {
   return (
     <section className="mx-auto max-w-6xl px-6 py-24">
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <Reveal className="flex flex-col gap-4 rounded-xl border border-hairline p-6">
-          <div className="flex items-center gap-3">
-            <IconTile icon="clock" hue="blue" />
-            <span className="font-mono text-xs text-muted">AUTOMATIONS</span>
-          </div>
-          <h3 className="font-medium tracking-tight text-foreground">
-            Runs while you sleep
-          </h3>
-          <p className="text-sm text-muted">
-            Schedule a goal on a cron and the fleet runs it unattended, or
-            trigger a run from an inbound webhook. Both live in one
-            /automations screen next to the runs they create.
-          </p>
-          <CronVignette />
+        <Reveal className="rounded-xl border border-hairline">
+          <Link
+            href="/automations"
+            aria-label="Open automations"
+            className="flex cursor-pointer flex-col gap-4 rounded-xl p-6 transition-opacity duration-200 hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            <div className="flex items-center gap-3">
+              <IconTile icon="clock" hue="blue" />
+              <span className="font-mono text-xs text-muted">AUTOMATIONS</span>
+            </div>
+            <h3 className="font-medium tracking-tight text-foreground">
+              Runs while you sleep
+            </h3>
+            <p className="text-sm text-muted">
+              Schedule a goal on a cron and the fleet runs it unattended, or
+              trigger a run from an inbound webhook. Both live in one
+              /automations screen next to the runs they create.
+            </p>
+            <CronVignette />
+          </Link>
         </Reveal>
 
-        <Reveal
-          delay={80}
-          className="flex flex-col gap-4 rounded-xl border border-hairline p-6"
-        >
-          <div className="flex items-center gap-3">
-            <IconTile icon="shield" hue="green" />
-            <span className="font-mono text-xs text-muted">SECURITY</span>
-          </div>
-          <h3 className="font-medium tracking-tight text-foreground">
-            Enterprise-grade foundation
-          </h3>
-          <p className="text-sm text-muted">
-            Google SSO for sign-in, every request scoped to its own user,
-            and rate limits on chat, uploads, and the public API. A
-            readiness probe checks the database before traffic is routed in.
-          </p>
-          <ShieldVignette />
+        <Reveal delay={80} className="rounded-xl border border-hairline">
+          <Link
+            href="/changelog"
+            aria-label="View security changelog"
+            className="flex cursor-pointer flex-col gap-4 rounded-xl p-6 transition-opacity duration-200 hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            <div className="flex items-center gap-3">
+              <IconTile icon="shield" hue="green" />
+              <span className="font-mono text-xs text-muted">SECURITY</span>
+            </div>
+            <h3 className="font-medium tracking-tight text-foreground">
+              Enterprise-grade foundation
+            </h3>
+            <p className="text-sm text-muted">
+              Google SSO for sign-in, every request scoped to its own user,
+              and rate limits on chat, uploads, and the public API. A
+              readiness probe checks the database before traffic is routed in.
+            </p>
+            <ShieldVignette />
+          </Link>
         </Reveal>
       </div>
     </section>

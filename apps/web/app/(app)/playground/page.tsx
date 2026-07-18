@@ -3,6 +3,9 @@
 import { useEffect, useState } from "react";
 
 import { EmptyState } from "@/components/empty-state";
+import { Icon } from "@/components/landing/icons";
+import { Reveal } from "@/components/landing/reveal";
+import { PageHeader } from "@/components/page-header";
 import { apiFetch } from "@/lib/api";
 
 const inputClass =
@@ -236,11 +239,12 @@ export default function PlaygroundPage() {
 
   return (
     <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6">
-      <h1 className="text-2xl font-medium tracking-tight">Prompt Playground</h1>
-      <p className="mt-1 text-sm text-muted">
-        Run the same prompt against two model/temperature configs side by side, compare cost
-        and latency, and save the pair as a reusable experiment.
-      </p>
+      <PageHeader
+        icon={<Icon name="git-branch" />}
+        hue="cyan"
+        title="Prompt Playground"
+        description="Run one prompt against two models side by side — compare answers, speed, and cost, then save the experiment."
+      />
       {note && <p className="mt-3 font-mono text-xs text-muted">{note}</p>}
 
         <datalist id="playground-models">
@@ -310,17 +314,19 @@ export default function PlaygroundPage() {
 
         <h2 className="mt-10 text-sm font-medium">Saved experiments</h2>
         <ul className="mt-3 space-y-2">
-          {experiments.map((e) => (
+          {experiments.map((e, i) => (
             <li key={e.id}>
-              <button
-                onClick={() => loadExperiment(e.id)}
-                className="flex w-full cursor-pointer items-center justify-between rounded-lg border border-hairline px-4 py-3 text-left text-sm transition-colors duration-200 hover:border-accent"
-              >
-                <span>{e.title}</span>
-                <span className="font-mono text-xs text-muted">
-                  {e.models.join(" vs ")} · {new Date(e.created_at).toLocaleString()}
-                </span>
-              </button>
+              <Reveal delay={i * 40}>
+                <button
+                  onClick={() => loadExperiment(e.id)}
+                  className="flex w-full cursor-pointer items-center justify-between rounded-lg border border-hairline px-4 py-3 text-left text-sm transition-colors duration-200 hover:border-accent"
+                >
+                  <span>{e.title}</span>
+                  <span className="font-mono text-xs text-muted">
+                    {e.models.join(" vs ")} · {new Date(e.created_at).toLocaleString()}
+                  </span>
+                </button>
+              </Reveal>
             </li>
           ))}
           {experiments.length === 0 && (

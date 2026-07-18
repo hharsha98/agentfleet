@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { IconTile, type Hue, type IconName } from "./icons";
@@ -105,6 +106,7 @@ type Feature = {
   title: string;
   description: string;
   span: string;
+  href: string;
   vignette?: ReactNode;
 };
 
@@ -117,6 +119,7 @@ const FEATURES: Feature[] = [
     description:
       "Streaming responses with live tool calls across your whole fleet.",
     span: "lg:col-span-2",
+    href: "/chat",
     vignette: <ChatVignette />,
   },
   {
@@ -127,6 +130,7 @@ const FEATURES: Feature[] = [
     description:
       "Turn a goal into a Kanban DAG with human-in-the-loop checkpoints.",
     span: "lg:col-span-1",
+    href: "/missions",
     vignette: <MissionBoardVignette />,
   },
   {
@@ -137,6 +141,7 @@ const FEATURES: Feature[] = [
     description:
       "Local pgvector search grounds every agent in your own docs.",
     span: "lg:col-span-1",
+    href: "/documents",
   },
   {
     icon: "blocks",
@@ -146,6 +151,7 @@ const FEATURES: Feature[] = [
     description:
       "Compose new agents at runtime and wire in external MCP tools.",
     span: "lg:col-span-1",
+    href: "/agents",
   },
   {
     icon: "rocket",
@@ -155,6 +161,7 @@ const FEATURES: Feature[] = [
     description:
       "Ship an agent behind an API key — or expose your fleet as an MCP server.",
     span: "lg:col-span-1",
+    href: "/templates",
   },
   {
     icon: "activity",
@@ -164,6 +171,7 @@ const FEATURES: Feature[] = [
     description:
       "Every step traced in Langfuse — latency, cost, and tool calls, live.",
     span: "lg:col-span-3",
+    href: "/usage",
     vignette: <SparklineVignette />,
   },
 ];
@@ -173,7 +181,16 @@ export function FeatureGrid() {
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {FEATURES.map((feature, i) => (
         <Reveal key={feature.title} delay={i * 80} className={feature.span}>
-          <div className="group flex h-full flex-col justify-between gap-5 rounded-xl border border-hairline p-6 transition-all duration-300 hover:-translate-y-0.5 hover:border-accent/40 hover:bg-white/[0.02]">
+          <Link
+            href={feature.href}
+            className="group relative flex h-full cursor-pointer flex-col justify-between gap-5 rounded-xl border border-hairline p-6 transition-all duration-300 hover:-translate-y-0.5 hover:border-accent/40 hover:bg-white/[0.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            <span
+              aria-hidden
+              className="absolute right-5 top-5 text-muted opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+            >
+              →
+            </span>
             <div className="flex flex-col gap-4">
               <div className="flex items-center gap-3">
                 <IconTile icon={feature.icon} hue={feature.hue} />
@@ -189,7 +206,7 @@ export function FeatureGrid() {
               </div>
             </div>
             {feature.vignette}
-          </div>
+          </Link>
         </Reveal>
       ))}
     </div>
