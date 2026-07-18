@@ -1,29 +1,44 @@
+import { IconTile, type Hue, type IconName } from "./icons";
 import { Reveal } from "./reveal";
 
-const OPS_ITEMS = [
+const OPS_ITEMS: {
+  icon: IconName;
+  hue: Hue;
+  tag: string;
+  title: string;
+  description: string;
+}[] = [
   {
+    icon: "list-checks",
+    hue: "blue",
     tag: "LLM-as-judge · CI gate",
     title: "Eval Center",
     description:
-      "Score every change against a rubric and block regressions before they ship.",
+      "Every change runs against a regression suite scored by an LLM judge before it ships. A failing eval blocks the change in CI, the same gate a real production pipeline would use.",
   },
   {
-    tag: "budgets · routing",
-    title: "Cost governance",
-    description:
-      "Per-agent budgets, hard caps, and automatic model routing to keep spend predictable.",
-  },
-  {
+    icon: "shield",
+    hue: "red",
     tag: "PII masking · red-team",
     title: "Guardrails",
     description:
-      "Prompt-injection screening, PII masking, and a red-team suite run on every agent.",
+      "Prompt-injection screening and PII masking run on every agent turn, and a red-team suite probes for jailbreaks in CI. Nothing here is a manual review step — it's automated on every run.",
   },
   {
+    icon: "gauge",
+    hue: "amber",
+    tag: "budgets · routing",
+    title: "Cost governance",
+    description:
+      "Every call is metered, with per-agent budgets and hard caps so one runaway agent can't blow the spend. Model routing picks a cheaper model when the task allows it.",
+  },
+  {
+    icon: "git-branch",
+    hue: "violet",
     tag: "one-click rollback",
     title: "Versioned publishing",
     description:
-      "Every publish is a version. Roll back a bad deploy in one click.",
+      "Publishing an agent creates a new version rather than overwriting the last one. If a change misbehaves in production, rolling back to the previous version is one click.",
   },
 ];
 
@@ -41,14 +56,19 @@ export function OpsLayer() {
         </p>
       </Reveal>
 
-      <div className="grid grid-cols-1 gap-x-8 gap-y-8 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-x-8 gap-y-10 md:grid-cols-2">
         {OPS_ITEMS.map((item, i) => (
           <Reveal
             key={item.title}
             delay={i * 80}
-            className="flex flex-col gap-2 border-t border-hairline pt-4"
+            className="flex flex-col gap-3 border-t border-hairline pt-5"
           >
-            <span className="font-mono text-xs text-accent">{item.tag}</span>
+            <div className="flex items-center gap-3">
+              <IconTile icon={item.icon} hue={item.hue} />
+              <span className="font-mono text-xs text-accent">
+                {item.tag}
+              </span>
+            </div>
             <h3 className="font-medium tracking-tight text-foreground">
               {item.title}
             </h3>

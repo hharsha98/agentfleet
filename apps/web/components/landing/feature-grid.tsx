@@ -1,130 +1,7 @@
 import type { ReactNode } from "react";
 
+import { IconTile, type Hue, type IconName } from "./icons";
 import { Reveal } from "./reveal";
-
-type Hue = "blue" | "violet" | "cyan" | "amber" | "green" | "red";
-
-const HUE_CLASSES: Record<Hue, { tile: string; icon: string; glow: string }> = {
-  blue: {
-    tile: "bg-hue-blue/10 border-hue-blue/25",
-    icon: "text-hue-blue",
-    glow: "bg-hue-blue/20",
-  },
-  violet: {
-    tile: "bg-hue-violet/10 border-hue-violet/25",
-    icon: "text-hue-violet",
-    glow: "bg-hue-violet/20",
-  },
-  cyan: {
-    tile: "bg-hue-cyan/10 border-hue-cyan/25",
-    icon: "text-hue-cyan",
-    glow: "bg-hue-cyan/20",
-  },
-  amber: {
-    tile: "bg-hue-amber/10 border-hue-amber/25",
-    icon: "text-hue-amber",
-    glow: "bg-hue-amber/20",
-  },
-  green: {
-    tile: "bg-hue-green/10 border-hue-green/25",
-    icon: "text-hue-green",
-    glow: "bg-hue-green/20",
-  },
-  red: {
-    tile: "bg-hue-red/10 border-hue-red/25",
-    icon: "text-hue-red",
-    glow: "bg-hue-red/20",
-  },
-};
-
-type IconName =
-  | "chat"
-  | "workflow"
-  | "database"
-  | "blocks"
-  | "rocket"
-  | "activity";
-
-// Hand-inlined, Lucide-style (24x24, stroke-based, rounded caps) icons — no
-// icon package dependency per the design constraints.
-function Icon({ name, className }: { name: IconName; className?: string }) {
-  const common = {
-    viewBox: "0 0 24 24",
-    fill: "none",
-    stroke: "currentColor",
-    strokeWidth: 1.75,
-    strokeLinecap: "round" as const,
-    strokeLinejoin: "round" as const,
-    className,
-    "aria-hidden": true,
-  };
-
-  switch (name) {
-    case "chat":
-      return (
-        <svg {...common}>
-          <path d="M4 5.5h16a1 1 0 0 1 1 1V16a1 1 0 0 1-1 1H9l-4.5 4V17H4a1 1 0 0 1-1-1V6.5a1 1 0 0 1 1-1Z" />
-          <path d="M7.5 9.5h9M7.5 12.5h5.5" />
-        </svg>
-      );
-    case "workflow":
-      return (
-        <svg {...common}>
-          <circle cx="5.5" cy="6" r="2.25" />
-          <circle cx="5.5" cy="18" r="2.25" />
-          <circle cx="18.5" cy="12" r="2.25" />
-          <path d="M7.6 6.9 16.5 11M7.6 17.1 16.5 13" />
-        </svg>
-      );
-    case "database":
-      return (
-        <svg {...common}>
-          <ellipse cx="12" cy="6" rx="7" ry="2.75" />
-          <path d="M5 6v6c0 1.52 3.13 2.75 7 2.75s7-1.23 7-2.75V6" />
-          <path d="M5 12v6c0 1.52 3.13 2.75 7 2.75s7-1.23 7-2.75v-6" />
-        </svg>
-      );
-    case "blocks":
-      return (
-        <svg {...common}>
-          <rect x="3.5" y="3.5" width="7" height="7" rx="1.25" />
-          <rect x="13.5" y="3.5" width="7" height="7" rx="1.25" />
-          <rect x="8.5" y="13.5" width="7" height="7" rx="1.25" />
-        </svg>
-      );
-    case "rocket":
-      return (
-        <svg {...common}>
-          <path d="M12 3c2.8 1.6 4.5 4.6 4.5 8.5 0 2-1 4-2.3 5.3L12 19l-2.2-2.2C8.5 15.5 7.5 13.5 7.5 11.5 7.5 7.6 9.2 4.6 12 3Z" />
-          <circle cx="12" cy="10.5" r="1.6" />
-          <path d="M9.3 16.5 7 19M14.7 16.5 17 19" />
-        </svg>
-      );
-    case "activity":
-      return (
-        <svg {...common}>
-          <path d="M3 12h4l2-6 4 12 2-8 2 2h4" />
-        </svg>
-      );
-    default:
-      return null;
-  }
-}
-
-function IconTile({ icon, hue }: { icon: IconName; hue: Hue }) {
-  const c = HUE_CLASSES[hue];
-  return (
-    <div
-      className={`relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border ${c.tile}`}
-    >
-      <div
-        aria-hidden
-        className={`pointer-events-none absolute -inset-2 rounded-full ${c.glow} blur-lg`}
-      />
-      <Icon name={icon} className={`relative h-5 w-5 ${c.icon}`} />
-    </div>
-  );
-}
 
 // --- Product vignettes: small, hand-built faux-UI, no screenshots -------
 
@@ -161,19 +38,25 @@ function MissionBoardVignette() {
   ];
 
   return (
-    <div className="grid grid-cols-3 gap-2 rounded-lg border border-hairline bg-black/20 p-3">
+    <div className="relative grid grid-cols-3 gap-2 rounded-lg border border-hairline bg-black/20 p-3">
       {columns.map((col) => (
         <div key={col.label} className="flex flex-col gap-1.5">
           <span className="font-mono text-[9px] uppercase tracking-wide text-muted">
             {col.label}
           </span>
-          <div className="flex flex-col gap-1 rounded-md border border-hairline bg-white/[0.03] p-1.5">
-            <span className={`h-1.5 w-1.5 rounded-full ${col.tone}`} />
+          <div className="flex h-9 flex-col justify-end gap-1 rounded-md border border-dashed border-hairline bg-white/[0.02] p-1.5">
             <span className="h-1.5 w-3/4 rounded-full bg-white/10" />
-            <span className="h-1.5 w-1/2 rounded-full bg-white/10" />
           </div>
         </div>
       ))}
+      {/* One card slowly migrates Backlog -> Doing -> Done, looping. */}
+      <div className="pointer-events-none absolute inset-3 grid grid-cols-3 gap-2">
+        <div className="animate-slide-card flex h-9 w-full flex-col gap-1 rounded-md border border-hairline bg-white/[0.03] p-1.5">
+          <span className="h-1.5 w-1.5 rounded-full bg-hue-amber/70" />
+          <span className="h-1.5 w-3/4 rounded-full bg-white/10" />
+          <span className="h-1.5 w-1/2 rounded-full bg-white/10" />
+        </div>
+      </div>
     </div>
   );
 }
@@ -203,6 +86,8 @@ function SparklineVignette() {
           strokeWidth="1.75"
           strokeLinecap="round"
           strokeLinejoin="round"
+          pathLength={100}
+          className="animate-dash-draw-once"
         />
       </svg>
       <div className="flex flex-col gap-0.5 font-mono text-xs">

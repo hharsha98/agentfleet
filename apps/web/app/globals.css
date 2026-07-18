@@ -86,10 +86,144 @@ body {
   animation: pulse-soft 2.2s ease-in-out infinite;
 }
 
+/* --- Landing page v2 additions (UI-3): subtle, calm 6-10s loops -------- */
+
+/* Draws a short dash traveling along an SVG path (network edges, the
+   how-it-works connector, the bento sparkline, the builder wiring-line).
+   pathLength={100} is set on every consumer so a single dasharray works
+   regardless of actual path geometry. */
+@keyframes dash-draw {
+  from {
+    stroke-dashoffset: 100;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.animate-dash-draw {
+  stroke-dasharray: 8 40;
+  animation: dash-draw 8s linear infinite;
+}
+
+/* One-shot variant: draws in once (fill-mode forwards) instead of looping —
+   used where the line should just "arrive" on reveal (how-it-works
+   connector) or on mount (bento sparkline) rather than travel forever. */
+.animate-dash-draw-once {
+  stroke-dasharray: 100;
+  animation: dash-draw 1.4s ease-out 1 forwards;
+}
+
+/* A kanban card slowly migrating across three columns, pausing at each. */
+@keyframes slide-card {
+  0%,
+  22% {
+    transform: translateX(0);
+  }
+  45%,
+  65% {
+    transform: translateX(100%);
+  }
+  88%,
+  100% {
+    transform: translateX(200%);
+  }
+}
+
+.animate-slide-card {
+  animation: slide-card 9s ease-in-out infinite;
+}
+
+/* Chat bubbles fading/rising into place, one after another, then holding
+   before the loop repeats. */
+@keyframes rise-in {
+  0%,
+  8% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  22%,
+  92% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+.animate-rise-in {
+  animation: rise-in 7s ease-in-out infinite;
+  animation-fill-mode: both;
+}
+
+/* A node/chip brightening as if a pulse just arrived at it. */
+@keyframes pulse-node {
+  0%,
+  100% {
+    opacity: 0.55;
+    filter: brightness(1);
+  }
+  50% {
+    opacity: 1;
+    filter: brightness(1.3);
+  }
+}
+
+.animate-pulse-node {
+  animation: pulse-node 2.6s ease-in-out infinite;
+}
+
+/* A gentle vertical float, used for the document-intelligence chunks. */
+@keyframes drift {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.85;
+  }
+  50% {
+    transform: translateY(-5px);
+    opacity: 1;
+  }
+}
+
+.animate-drift {
+  animation: drift 6.5s ease-in-out infinite;
+}
+
+/* Hero agent-network graph: edges pulse-travel toward each node. */
+.network-edge {
+  stroke-dasharray: 6 46;
+  animation: dash-draw 7s linear infinite;
+}
+
+.network-node {
+  animation: pulse-node 2.6s ease-in-out infinite;
+}
+
+/* Single disable block for every animation utility on the page — original
+   (blink-caret, pulse-soft) plus all UI-3 additions. */
 @media (prefers-reduced-motion: reduce) {
   .animate-blink-caret,
-  .animate-pulse-soft {
+  .animate-pulse-soft,
+  .animate-dash-draw,
+  .animate-dash-draw-once,
+  .animate-slide-card,
+  .animate-rise-in,
+  .animate-pulse-node,
+  .animate-drift,
+  .network-node {
     animation: none;
     opacity: 1;
+    transform: none;
+    filter: none;
+  }
+
+  /* Static "fully lit" graph: solid edges instead of traveling dashes. */
+  .network-edge {
+    animation: none;
+    stroke-dasharray: none;
+    opacity: 0.6;
   }
 }

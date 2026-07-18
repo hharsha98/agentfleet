@@ -1,8 +1,12 @@
 import Link from "next/link";
 
+import { AgentNetwork } from "@/components/landing/agent-network";
+import { AutomationsSecurity } from "@/components/landing/automations-security";
+import { DeepDives } from "@/components/landing/deep-dives";
 import { FeatureGrid } from "@/components/landing/feature-grid";
-import { HeroTrace } from "@/components/landing/hero-trace";
+import { HowItWorks } from "@/components/landing/how-it-works";
 import { OpsLayer } from "@/components/landing/ops-layer";
+import { Roster } from "@/components/landing/roster";
 import { StatsStrip } from "@/components/landing/stats-strip";
 import { UserMenu } from "@/components/user-menu";
 
@@ -80,73 +84,82 @@ export default function Home() {
       </header>
 
       <main className="flex-1">
-        {/* HERO */}
+        {/* HERO — centered text over a full-width animated agent-network
+            graph (UI-3 USER CHOICE, replaces the old split terminal hero). */}
         <section className="relative overflow-hidden">
           <div
             aria-hidden
             className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,var(--hairline)_1px,transparent_1px),linear-gradient(to_bottom,var(--hairline)_1px,transparent_1px)] bg-[size:32px_32px] opacity-[0.12]"
           />
 
-          <div className="relative mx-auto grid max-w-6xl grid-cols-1 items-center gap-16 px-6 py-20 sm:py-28 lg:grid-cols-2 lg:py-32">
-            <div className="flex flex-col items-start gap-6">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center rounded-full border border-hairline px-3 py-1 font-mono text-xs text-muted">
-                  OPEN SOURCE · SELF-HOSTABLE
-                </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-hairline px-3 py-1 font-mono text-xs text-muted">
-                  <span className="h-1.5 w-1.5 rounded-full bg-hue-green animate-pulse-soft" />
-                  9 built-in agents
-                </span>
-              </div>
+          {/* Decorative network graph, dimmed + center-masked so the
+              headline stays fully readable on top of it. */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 opacity-60 [mask-image:radial-gradient(ellipse_65%_70%_at_50%_45%,transparent_20%,black_75%)]"
+          >
+            <AgentNetwork />
+          </div>
 
-              <h1 className="text-4xl font-medium tracking-tight sm:text-5xl lg:text-6xl">
-                <span className="block text-foreground">
-                  The operations platform
-                </span>
-                <span className="block bg-gradient-to-r from-accent via-hue-violet to-hue-cyan bg-clip-text text-transparent">
-                  for AI agents, orchestrated.
-                </span>
-              </h1>
-
-              <p className="max-w-md text-muted">
-                Multi-agent chat, goal-to-Kanban orchestration, evals, cost
-                governance, and guardrails — self-hosted, in one fleet.
-              </p>
-
-              <div className="flex flex-wrap items-center gap-5">
-                <Link
-                  href="/chat"
-                  className="group inline-flex cursor-pointer items-center gap-2 rounded-full bg-accent px-5 py-2.5 text-sm font-medium text-white shadow-[0_8px_30px_-8px_rgba(94,106,210,0.6)] transition-all duration-200 hover:-translate-y-0.5 hover:opacity-90 hover:shadow-[0_12px_36px_-8px_rgba(94,106,210,0.75)]"
-                >
-                  Launch the fleet
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="h-3.5 w-3.5 transition-transform duration-200 group-hover:translate-x-0.5"
-                    aria-hidden
-                  >
-                    <path d="M5 12h14M13 6l6 6-6 6" />
-                  </svg>
-                </Link>
-                <Link
-                  href="/changelog"
-                  className="cursor-pointer text-sm font-medium text-muted underline underline-offset-4 transition-colors duration-200 hover:text-foreground"
-                >
-                  View changelog
-                </Link>
-              </div>
+          <div className="relative mx-auto flex max-w-3xl flex-col items-center gap-6 px-6 py-24 text-center sm:py-32 lg:py-40">
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <span className="inline-flex items-center rounded-full border border-hairline px-3 py-1 font-mono text-xs text-muted">
+                OPEN SOURCE · SELF-HOSTABLE
+              </span>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-hairline px-3 py-1 font-mono text-xs text-muted">
+                <span className="h-1.5 w-1.5 rounded-full bg-hue-green animate-pulse-soft" />
+                9 built-in agents
+              </span>
             </div>
 
-            <HeroTrace />
+            <h1 className="text-4xl font-medium tracking-tight sm:text-5xl lg:text-6xl">
+              <span className="block text-foreground">
+                The operations platform
+              </span>
+              <span className="block bg-gradient-to-r from-accent via-hue-violet to-hue-cyan bg-clip-text text-transparent">
+                for AI agents, orchestrated.
+              </span>
+            </h1>
+
+            <p className="max-w-md text-muted">
+              Multi-agent chat, goal-to-Kanban orchestration, evals, cost
+              governance, and guardrails — self-hosted, in one fleet.
+            </p>
+
+            <div className="flex flex-wrap items-center justify-center gap-5">
+              <Link
+                href="/chat"
+                className="group inline-flex cursor-pointer items-center gap-2 rounded-full bg-accent px-5 py-2.5 text-sm font-medium text-white shadow-[0_8px_30px_-8px_rgba(94,106,210,0.6)] transition-all duration-200 hover:-translate-y-0.5 hover:opacity-90 hover:shadow-[0_12px_36px_-8px_rgba(94,106,210,0.75)]"
+              >
+                Launch the fleet
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="h-3.5 w-3.5 transition-transform duration-200 group-hover:translate-x-0.5"
+                  aria-hidden
+                >
+                  <path d="M5 12h14M13 6l6 6-6 6" />
+                </svg>
+              </Link>
+              <Link
+                href="/changelog"
+                className="cursor-pointer text-sm font-medium text-muted underline underline-offset-4 transition-colors duration-200 hover:text-foreground"
+              >
+                View changelog
+              </Link>
+            </div>
           </div>
         </section>
 
         {/* STATS STRIP */}
         <StatsStrip />
+
+        {/* HOW IT WORKS */}
+        <HowItWorks />
 
         {/* BENTO FEATURES GRID */}
         <section id="features" className="mx-auto max-w-6xl px-6 py-24">
@@ -159,10 +172,21 @@ export default function Home() {
           <FeatureGrid />
         </section>
 
+        {/* DEEP DIVES — one per pillar: BIG alternating blocks for Chat,
+            Orchestration, Observability (HeroTrace lives here now); COMPACT
+            cards for Builder, Document Intelligence, Publish. */}
+        <DeepDives />
+
+        {/* AGENT ROSTER */}
+        <Roster />
+
         {/* OPS LAYER */}
         <section id="ops" className="mx-auto max-w-6xl px-6 py-24">
           <OpsLayer />
         </section>
+
+        {/* AUTOMATIONS + SECURITY */}
+        <AutomationsSecurity />
 
         {/* STACK ROW */}
         <section className="border-y border-hairline">
