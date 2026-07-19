@@ -360,7 +360,40 @@ export function ChatUI({ agents }: { agents: AgentInfo[] }) {
       {activeArtifact && (
         <ArtifactPanel artifact={activeArtifact} onClose={() => setActiveArtifact(null)} />
       )}
+      {/* Chunk D3 right rail — lg+ only, and only when the artifact panel
+          isn't already occupying that space. Pure read of state ChatUI
+          already tracks (agent, messages); no new fetches, no touch to the
+          streaming/SSE loop above. */}
+      {!activeArtifact && <ConversationInfoRail agent={agent} messageCount={messages.length} />}
     </div>
+  );
+}
+
+function ConversationInfoRail({
+  agent,
+  messageCount,
+}: {
+  agent: AgentInfo | null;
+  messageCount: number;
+}) {
+  return (
+    <aside className="hidden w-64 shrink-0 flex-col gap-4 border-l border-hairline px-4 py-4 lg:flex">
+      <p className="font-mono text-xs uppercase tracking-wide text-muted">Conversation</p>
+      <dl className="space-y-3 text-sm">
+        <div className="flex items-center justify-between gap-2">
+          <dt className="text-muted">Active agent</dt>
+          <dd className="truncate font-medium">{agent?.name ?? "—"}</dd>
+        </div>
+        <div className="flex items-center justify-between gap-2">
+          <dt className="text-muted">Model</dt>
+          <dd className="truncate font-mono text-xs text-muted">{agent?.model ?? "—"}</dd>
+        </div>
+        <div className="flex items-center justify-between gap-2">
+          <dt className="text-muted">Messages</dt>
+          <dd className="font-mono">{messageCount}</dd>
+        </div>
+      </dl>
+    </aside>
   );
 }
 

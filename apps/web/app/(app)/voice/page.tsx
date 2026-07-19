@@ -2,9 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { Panel } from "@/components/dash/panel";
+import { StatCard } from "@/components/dash/stat-card";
 import { EmptyState } from "@/components/empty-state";
-import { Icon } from "@/components/landing/icons";
-import { Reveal } from "@/components/landing/reveal";
+import { HUE_CLASSES, Icon, type Hue } from "@/components/landing/icons";
 import { PageHeader } from "@/components/page-header";
 import { apiFetch } from "@/lib/api";
 
@@ -31,6 +32,15 @@ type VoiceConfig =
   | { enabled: true; public_key: string; assistant: Record<string, unknown> };
 
 type CallState = "idle" | "connecting" | "in-call" | "ended";
+
+// Shared by the Chunk D3 stat row and CallPanel's status line so the two
+// never drift out of sync — same human labels, one source.
+const STATUS_LABEL: Record<CallState, string> = {
+  idle: "Ready",
+  connecting: "Connecting…",
+  "in-call": "In call",
+  ended: "Call ended",
+};
 
 // Minimal shape of the @vapi-ai/web SDK instance we rely on — the package
 // ships its own types, but the import is dynamic (see startCall below) so
@@ -114,6 +124,27 @@ export default function VoicePage() {
       />
       {note && <p className="mt-3 font-mono text-xs text-muted">{note}</p>}
 
+      {/* Stat/status row — both values come straight from state this page
+          already holds (config from GET /voice/config, callState from the
+          Vapi SDK event handlers below), no fabricated numbers. */}
+      <div className="mt-6 grid grid-cols-2 gap-3">
+        <StatCard
+          label="Voice provider"
+          value={config?.enabled ? "Configured" : "Not configured"}
+          sub={config?.enabled ? "Vapi" : "Add VAPI_PUBLIC_KEY to enable"}
+          icon={<Icon name="plug" />}
+          hue={config?.enabled ? "green" : "amber"}
+          pulse={!!config?.enabled}
+        />
+        <StatCard
+          label="Call status"
+          value={STATUS_LABEL[callState]}
+          icon={<Icon name="activity" />}
+          hue={callState === "in-call" ? "green" : "blue"}
+          delay={40}
+        />
+      </div>
+
       {config === null && !note && (
         <p className="mt-10 text-center text-sm text-muted">Loading…</p>
       )}
@@ -128,7 +159,58 @@ export default function VoicePage() {
           onEnd={endCall}
         />
       )}
+
+      <Panel title="How voice mode works" className="mt-6" delay={80}>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <NumberedCard
+            n={1}
+            hue="green"
+            title="Mic capture"
+            description="Your browser captures mic audio — nothing leaves the tab until a call starts."
+          />
+          <NumberedCard
+            n={2}
+            hue="green"
+            title="Vapi speech pipeline"
+            description="Vapi handles speech-to-text, text-to-speech, and telephony behind one web SDK."
+          />
+          <NumberedCard
+            n={3}
+            hue="green"
+            title="Same agent knowledge"
+            description="The assistant runs on the AgentFleet voice prompt, same platform knowledge as chat."
+          />
+        </div>
+      </Panel>
     </main>
+  );
+}
+
+// Numbered explainer card (Chunk D3) — same visual idiom as the landing
+// page's deep-dives NumberedExplainerCard (components/landing/deep-dives.tsx),
+// reimplemented locally since that one isn't exported and this is its only
+// consumer outside the landing page.
+function NumberedCard({
+  n,
+  hue,
+  title,
+  description,
+}: {
+  n: number;
+  hue: Hue;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="flex flex-col gap-3 rounded-xl border border-hairline p-6">
+      <span
+        className={`flex h-8 w-8 items-center justify-center rounded-lg border font-mono text-xs font-medium ${HUE_CLASSES[hue].tile} ${HUE_CLASSES[hue].icon}`}
+      >
+        {n}
+      </span>
+      <h4 className="font-medium tracking-tight text-foreground">{title}</h4>
+      <p className="text-sm text-muted">{description}</p>
+    </div>
   );
 }
 
@@ -140,26 +222,6 @@ function DisabledState() {
         title="Voice is not configured"
         description={`Add VAPI_PUBLIC_KEY to .env and restart the API to enable a live voice call with an AgentFleet assistant.`}
       />
-      <Reveal
-        delay={80}
-        className="mx-auto mt-8 max-w-sm rounded-lg border border-hairline p-4 transition-colors duration-200 hover:border-accent/30"
-      >
-        <p className="font-mono text-xs text-muted">how it works</p>
-        <ul className="mt-3 space-y-2 text-sm text-muted">
-          <li className="flex gap-2">
-            <span aria-hidden="true">1.</span>
-            <span>Your browser captures mic audio — nothing leaves the tab until a call starts.</span>
-          </li>
-          <li className="flex gap-2">
-            <span aria-hidden="true">2.</span>
-            <span>Vapi handles speech-to-text, text-to-speech, and telephony behind one web SDK.</span>
-          </li>
-          <li className="flex gap-2">
-            <span aria-hidden="true">3.</span>
-            <span>The assistant runs on the AgentFleet voice prompt, same platform knowledge as chat.</span>
-          </li>
-        </ul>
-      </Reveal>
     </div>
   );
 }
@@ -175,13 +237,6 @@ function CallPanel({
   onStart: () => void;
   onEnd: () => void;
 }) {
-  const statusLabel: Record<CallState, string> = {
-    idle: "Ready",
-    connecting: "Connecting…",
-    "in-call": "In call",
-    ended: "Call ended",
-  };
-
   return (
     <div className="mt-10 flex flex-col items-center gap-6">
       <div className="flex flex-col items-center gap-2">
@@ -195,7 +250,7 @@ function CallPanel({
           }`}
           aria-hidden="true"
         />
-        <p className="font-mono text-xs text-muted">{statusLabel[callState]}</p>
+        <p className="font-mono text-xs text-muted">{STATUS_LABEL[callState]}</p>
       </div>
 
       {callState === "idle" || callState === "ended" ? (

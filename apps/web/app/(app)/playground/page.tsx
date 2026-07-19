@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
+import { Panel } from "@/components/dash/panel";
+import { StatCard } from "@/components/dash/stat-card";
 import { EmptyState } from "@/components/empty-state";
 import { Icon } from "@/components/landing/icons";
 import { Reveal } from "@/components/landing/reveal";
@@ -237,6 +239,23 @@ export default function PlaygroundPage() {
   const canRun = userMessage.trim() && variantA.model.trim() && variantB.model.trim();
   const canSave = variantA.output && variantB.output && !variantA.loading && !variantB.loading;
 
+  // Chunk D3 stat row — derived purely from the already-fetched experiments
+  // list (plus the model comparison it records), no new endpoints. "Last
+  // experiment" is honestly a save time, not a "last run" — the API has no
+  // endpoint tracking ad-hoc unsaved runs, only saved experiments.
+  const comparedModels = useMemo(
+    () => Array.from(new Set(experiments.flatMap((e) => e.models))),
+    [experiments],
+  );
+  const lastExperimentAt = useMemo(
+    () =>
+      experiments.reduce<string | null>(
+        (latest, e) => (!latest || e.created_at > latest ? e.created_at : latest),
+        null,
+      ),
+    [experiments],
+  );
+
   return (
     <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6">
       <PageHeader
@@ -247,13 +266,45 @@ export default function PlaygroundPage() {
       />
       {note && <p className="mt-3 font-mono text-xs text-muted">{note}</p>}
 
-        <datalist id="playground-models">
-          {models.map((m) => (
-            <option key={m} value={m} />
-          ))}
-        </datalist>
+      <datalist id="playground-models">
+        {models.map((m) => (
+          <option key={m} value={m} />
+        ))}
+      </datalist>
 
-        <div className="mt-6 space-y-3">
+      {/* Stat row */}
+      <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <StatCard
+          label="Experiments saved"
+          value={experiments.length}
+          icon={<Icon name="list-checks" />}
+          hue="cyan"
+        />
+        <StatCard
+          label="Models compared"
+          value={comparedModels.length}
+          sub={comparedModels.length > 0 ? comparedModels.join(", ") : "No experiments yet"}
+          icon={<Icon name="git-branch" />}
+          hue="violet"
+          delay={40}
+        />
+        <StatCard
+          label="Last experiment"
+          value={lastExperimentAt ? new Date(lastExperimentAt).toLocaleDateString() : "—"}
+          sub={lastExperimentAt ? new Date(lastExperimentAt).toLocaleTimeString() : undefined}
+          icon={<Icon name="clock" />}
+          hue="amber"
+          delay={80}
+        />
+      </div>
+
+      <Panel
+        title="A/B comparison workbench"
+        description="Run one prompt against two models side by side — compare answers, speed, and cost."
+        className="mt-6"
+        delay={40}
+      >
+        <div className="space-y-3">
           <div>
             <label className="mb-1.5 block font-mono text-xs text-muted">system prompt</label>
             <textarea
@@ -311,19 +362,35 @@ export default function PlaygroundPage() {
             onLoadAgent={(agentId) => loadFromAgent("b", agentId)}
           />
         </div>
+      </Panel>
 
-        <h2 className="mt-10 text-sm font-medium">Saved experiments</h2>
-        <ul className="mt-3 space-y-2">
+      <Panel
+        title="Recent experiments"
+        description="Click one to reload its prompt, variants, and outputs."
+        className="mt-4"
+        delay={80}
+      >
+        <ul className="space-y-2">
           {experiments.map((e, i) => (
             <li key={e.id}>
               <Reveal delay={i * 40}>
                 <button
                   onClick={() => loadExperiment(e.id)}
-                  className="flex w-full cursor-pointer items-center justify-between rounded-lg border border-hairline px-4 py-3 text-left text-sm transition-colors duration-200 hover:border-accent"
+                  className="flex w-full cursor-pointer flex-wrap items-center justify-between gap-2 rounded-lg border border-hairline px-4 py-3 text-left text-sm transition-colors duration-200 hover:border-accent"
                 >
                   <span>{e.title}</span>
-                  <span className="font-mono text-xs text-muted">
-                    {e.models.join(" vs ")} · {new Date(e.created_at).toLocaleString()}
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    {e.models.map((m, mi) => (
+                      <span
+                        key={mi}
+                        className="rounded-full border border-hairline px-2 py-0.5 font-mono text-[10px] text-muted"
+                      >
+                        {m}
+                      </span>
+                    ))}
+                    <span className="font-mono text-xs text-muted">
+                      {new Date(e.created_at).toLocaleString()}
+                    </span>
                   </span>
                 </button>
               </Reveal>
@@ -339,6 +406,7 @@ export default function PlaygroundPage() {
             </li>
           )}
         </ul>
+      </Panel>
     </main>
   );
 }
