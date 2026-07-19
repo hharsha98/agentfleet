@@ -228,6 +228,15 @@ class PlaygroundExperimentSummaryOut(BaseModel):
     models: list[str]
 
 
+class RunTaskStatusUpdate(BaseModel):
+    """PATCH /runs/{run_id}/tasks/{task_id} body (UI-5 Chunk C — drag-and-drop
+    re-queue). `status` must be a known task status; the route's own
+    allowlist (not this schema) decides which (from, to) pairs are actually
+    permitted — an unrecognized value 422s here before the route even runs."""
+
+    status: str = Field(pattern=r"^(todo|in_progress|review|done|failed)$")
+
+
 class ScheduledRunOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

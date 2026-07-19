@@ -10,6 +10,7 @@ from app.auth import current_user
 from app.db import get_session
 from app.models import Run, RunTask, User
 from app.ownership import is_mutable, is_visible, visibility_clause
+from app.schemas import RunTaskStatusUpdate
 from app.services.queue import dispatch_execute, dispatch_plan
 
 router = APIRouter()
@@ -17,6 +18,19 @@ router = APIRouter()
 
 class RunCreate(BaseModel):
     goal: str = Field(min_length=1, max_length=2000)
+
+
+# UI-5 Chunk C — drag-and-drop re-queue allowlist. Every entry re-queues the
+# task by moving it back to "todo" and re-dispatching the run; anything not
+# listed here (including no-op same-status "transitions") is a 409. Kept as
+# a plain (from, to) set rather than a bigger state machine because every
+# allowed transition happens to land on the same target status today.
+ALLOWED_TASK_TRANSITIONS: set[tuple[str, str]] = {
+    ("failed", "todo"),  # re-queue after a failure; clears the error
+    ("review", "todo"),  # approve-equivalent (same effect as /approve)
+    ("done", "todo"),  # re-run; result/usage from the prior run are kept
+    # as history and get overwritten once the task finishes again.
+}
 
 
 def _task_dict(t: RunTask) -> dict:
@@ -129,6 +143,45 @@ async def approve_task(
         raise HTTPException(status_code=409, detail=f"Task is {task.status}, not review")
     task.status = "todo"
     task.needs_approval = False
+    run.status = "running"
+    await session.commit()
+    await dispatch_execute(run_id)
+    return {"ok": True}
+
+
+@router.patch("/{run_id}/tasks/{task_id}")
+async def update_task_status(
+    run_id: uuid.UUID,
+    task_id: uuid.UUID,
+    payload: RunTaskStatusUpdate,
+    session: AsyncSession = Depends(get_session),
+    user: User = Depends(current_user),
+) -> dict:
+    """Drag-and-drop re-queue (UI-5 Chunk C). Same ownership pattern as
+    approve_task: not found/visible -> 404, visible-but-not-mutable -> 403.
+    The target status is schema-validated (422 for anything not a real task
+    status); whether THIS (from, to) pair is actually allowed is a 409,
+    checked against ALLOWED_TASK_TRANSITIONS above."""
+    run = await session.get(Run, run_id)
+    if run is None or not is_visible(run, user):
+        raise HTTPException(status_code=404, detail="Run not found")
+    if not is_mutable(run, user):
+        raise HTTPException(status_code=403, detail="Not permitted to modify this run")
+    task = await session.get(RunTask, task_id)
+    if task is None or task.run_id != run_id:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    from_status = task.status
+    to_status = payload.status
+    if (from_status, to_status) not in ALLOWED_TASK_TRANSITIONS:
+        raise HTTPException(
+            status_code=409, detail=f"{from_status}→{to_status} not allowed"
+        )
+
+    task.status = "todo"
+    task.needs_approval = False
+    if from_status == "failed":
+        task.error = None
     run.status = "running"
     await session.commit()
     await dispatch_execute(run_id)

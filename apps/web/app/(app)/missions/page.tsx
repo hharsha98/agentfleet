@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type DragEvent } from "react";
 
 import { EmptyState } from "@/components/empty-state";
-import { HUE_CLASSES, Icon } from "@/components/landing/icons";
+import { HUE_CLASSES, Icon, type Hue } from "@/components/landing/icons";
 import { Reveal } from "@/components/landing/reveal";
 import { apiFetch } from "@/lib/api";
 
@@ -31,13 +31,54 @@ type Run = {
   tasks?: Task[];
 };
 
-const COLUMNS: { key: Task["status"]; label: string }[] = [
-  { key: "todo", label: "To do" },
-  { key: "in_progress", label: "In progress" },
-  { key: "review", label: "Needs approval" },
-  { key: "done", label: "Done" },
-  { key: "failed", label: "Failed" },
+const COLUMNS: { key: Task["status"]; label: string; hue: Hue }[] = [
+  { key: "todo", label: "To do", hue: "blue" },
+  { key: "in_progress", label: "In progress", hue: "violet" },
+  { key: "review", label: "Needs approval", hue: "amber" },
+  { key: "done", label: "Done", hue: "green" },
+  { key: "failed", label: "Failed", hue: "red" },
 ];
+
+// Mirrors the backend's ALLOWED_TASK_TRANSITIONS (apps/api/app/routes/runs.py)
+// — client-side legality check for drag targets. Every currently-allowed
+// re-queue move lands on "todo", so a card is only ever draggable if its
+// status is a key here, and the only column that ever highlights as a
+// legal drop target is "todo". Kept as an explicit map (not hardcoded to
+// "todo" everywhere) so a future backend transition just needs one entry
+// added here too.
+const RETRY_TARGET: Partial<Record<Task["status"], Task["status"]>> = {
+  failed: "todo",
+  review: "todo",
+  done: "todo",
+};
+
+const HUE_DOT: Record<Hue, string> = {
+  blue: "bg-hue-blue",
+  violet: "bg-hue-violet",
+  cyan: "bg-hue-cyan",
+  amber: "bg-hue-amber",
+  green: "bg-hue-green",
+  red: "bg-hue-red",
+};
+
+// Same slug -> hue hash idiom as chat-ui.tsx / landing/roster.tsx, so an
+// agent's chip color is consistent everywhere it appears.
+const HUES: Hue[] = ["blue", "violet", "cyan", "amber", "green", "red"];
+
+function hueForSlug(slug: string): Hue {
+  let hash = 0;
+  for (let i = 0; i < slug.length; i++) {
+    hash = (hash * 31 + slug.charCodeAt(i)) | 0;
+  }
+  return HUES[Math.abs(hash) % HUES.length];
+}
+
+function agentDisplayName(slug: string): string {
+  return slug
+    .split("-")
+    .map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w))
+    .join(" ");
+}
 
 const RUN_BADGE: Record<string, string> = {
   planning: "border-accent/40 text-accent",
@@ -66,12 +107,130 @@ function RocketIcon({ className }: { className?: string }) {
   );
 }
 
+// One task card. Cards can only ever be dragged FROM a status that has a
+// legal re-queue target (failed/review/done — see RETRY_TARGET) TO the "To
+// do" column; todo/in_progress cards render non-draggable (no legal move
+// exists for them today).
+//
+// Accessibility note: this is native HTML5 drag-and-drop, which has no
+// built-in keyboard path. `aria-grabbed` is set for assistive tech that
+// understands the drag protocol, but full keyboard re-ordering (e.g.
+// space-to-pick-up, arrow-to-move, space-to-drop) is out of scope for this
+// pass — the "Approve & run" button remains a fully keyboard/screen-reader
+// accessible equivalent for review→todo, and this is the one status where
+// no drag-only action exists.
+function TaskCard({
+  task,
+  tasks,
+  delay,
+  isDragging,
+  onApprove,
+  onDragStart,
+  onDragEnd,
+}: {
+  task: Task;
+  tasks: Task[];
+  delay: number;
+  isDragging: boolean;
+  onApprove: (taskId: string) => void;
+  onDragStart: (e: DragEvent<HTMLDivElement>, task: Task) => void;
+  onDragEnd: () => void;
+}) {
+  const draggable = RETRY_TARGET[task.status] != null;
+  const hue = hueForSlug(task.agent_slug);
+  const doneOrdinals = new Set(tasks.filter((t) => t.status === "done").map((t) => t.ordinal));
+  const waitingOn = task.depends_on.filter((d) => !doneOrdinals.has(d)).length;
+
+  return (
+    <Reveal delay={delay}>
+      <div
+        draggable={draggable}
+        onDragStart={draggable ? (e) => onDragStart(e, task) : undefined}
+        onDragEnd={draggable ? onDragEnd : undefined}
+        aria-grabbed={draggable ? isDragging : undefined}
+        className={`rounded-md border border-hairline bg-background p-2.5 text-sm transition-colors duration-200 hover:border-accent/30 ${
+          draggable ? "cursor-grab active:cursor-grabbing" : ""
+        } ${isDragging ? "opacity-40" : ""}`}
+      >
+        <p className="leading-snug">{task.title}</p>
+
+        <span className="mt-1.5 flex w-fit items-center gap-1 rounded-full border border-hairline bg-white/[0.03] px-1.5 py-0.5 font-mono text-[10px] text-muted">
+          <span className={`h-1.5 w-1.5 rounded-full ${HUE_DOT[hue]}`} />
+          {agentDisplayName(task.agent_slug)}
+        </span>
+
+        {waitingOn > 0 && (
+          <p className="mt-1.5 font-mono text-[10px] text-muted">
+            Waiting on {waitingOn} task{waitingOn === 1 ? "" : "s"}
+          </p>
+        )}
+
+        {task.status === "review" && task.needs_approval && (
+          <span
+            className={`mt-1.5 inline-block rounded-full border px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wide ${HUE_CLASSES.amber.tile} ${HUE_CLASSES.amber.icon}`}
+          >
+            Needs approval
+          </span>
+        )}
+
+        {task.status === "in_progress" && (
+          <span className="mt-2 flex items-center gap-1 font-mono text-[10px] text-accent">
+            <span className="h-2 w-2 animate-spin-slow rounded-full border border-accent/40 border-t-accent" />
+            Agent working…
+          </span>
+        )}
+
+        {task.status === "review" && (
+          <button
+            onClick={() => onApprove(task.id)}
+            className="mt-2 w-full cursor-pointer rounded-md bg-accent px-2 py-1.5 text-xs font-medium text-white transition-opacity duration-200 hover:opacity-90"
+          >
+            Approve & run
+          </button>
+        )}
+
+        {task.result && (
+          <details className="mt-2">
+            <summary className="cursor-pointer font-mono text-[10px] text-muted">
+              result
+            </summary>
+            <pre className="mt-1 max-h-48 overflow-y-auto whitespace-pre-wrap text-[11px] leading-relaxed text-muted">
+              {task.result}
+            </pre>
+          </details>
+        )}
+
+        {task.error && (
+          <>
+            <p className="mt-2 font-mono text-[10px] text-red-400">⚠ {task.error}</p>
+            <p className="mt-0.5 font-mono text-[9px] text-muted">Drag to To do to retry</p>
+          </>
+        )}
+
+        {(task.tokens_in > 0 || task.tokens_out > 0) && (
+          <p className="mt-2 border-t border-hairline pt-1.5 font-mono text-[10px] text-muted">
+            ↑{task.tokens_in} ↓{task.tokens_out} tok
+            {task.latency_ms != null && ` · ${task.latency_ms}ms`}
+          </p>
+        )}
+      </div>
+    </Reveal>
+  );
+}
+
 export default function MissionsPage() {
   const [runs, setRuns] = useState<Run[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [detail, setDetail] = useState<Run | null>(null);
   const [goal, setGoal] = useState("");
   const [busy, setBusy] = useState(false);
+
+  // Drag-and-drop state (UI-5 Chunk C).
+  const [draggingTask, setDraggingTask] = useState<{ id: string; status: Task["status"] } | null>(
+    null,
+  );
+  const [dragOverColumn, setDragOverColumn] = useState<Task["status"] | null>(null);
+  const [dndError, setDndError] = useState<string | null>(null);
 
   async function refreshRuns() {
     try {
@@ -141,6 +300,74 @@ export default function MissionsPage() {
     });
     const res = await apiFetch(`/api/v1/runs/${selected}`);
     if (res.ok) setDetail(await res.json());
+  }
+
+  function handleDragStart(e: DragEvent<HTMLDivElement>, task: Task) {
+    e.dataTransfer.setData("text/plain", task.id);
+    e.dataTransfer.effectAllowed = "move";
+    setDndError(null);
+    setDraggingTask({ id: task.id, status: task.status });
+  }
+
+  function handleDragEnd() {
+    setDraggingTask(null);
+    setDragOverColumn(null);
+  }
+
+  async function handleDrop(e: DragEvent<HTMLDivElement>, targetStatus: Task["status"]) {
+    e.preventDefault();
+    setDragOverColumn(null);
+    const taskId = e.dataTransfer.getData("text/plain");
+    setDraggingTask(null);
+    const task = tasks.find((t) => t.id === taskId);
+    if (!selected || !task || RETRY_TARGET[task.status] !== targetStatus) return;
+
+    const prev = { status: task.status, error: task.error, needs_approval: task.needs_approval };
+
+    // Optimistic move — the 3s poll (or the fresh re-fetch below on
+    // success) reconciles with the server either way.
+    setDetail((d) =>
+      d
+        ? {
+            ...d,
+            tasks: (d.tasks ?? []).map((t) =>
+              t.id === taskId
+                ? { ...t, status: targetStatus, error: null, needs_approval: false }
+                : t,
+            ),
+          }
+        : d,
+    );
+
+    const res = await apiFetch(`/api/v1/runs/${selected}/tasks/${taskId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: targetStatus }),
+    });
+
+    if (!res.ok) {
+      let message = "That move isn't allowed.";
+      try {
+        const body = await res.json();
+        if (body?.detail) message = body.detail;
+      } catch {
+        /* non-JSON error body — keep the generic message */
+      }
+      setDndError(message);
+      // Revert the optimistic move.
+      setDetail((d) =>
+        d
+          ? {
+              ...d,
+              tasks: (d.tasks ?? []).map((t) => (t.id === taskId ? { ...t, ...prev } : t)),
+            }
+          : d,
+      );
+      return;
+    }
+
+    const fresh = await apiFetch(`/api/v1/runs/${selected}`);
+    if (fresh.ok) setDetail(await fresh.json());
   }
 
   const tasks = detail?.tasks ?? [];
@@ -228,58 +455,74 @@ export default function MissionsPage() {
             <p className="truncate text-sm text-muted">{detail.goal}</p>
           </div>
 
+          {dndError && (
+            <p
+              role="alert"
+              className="mt-3 rounded-md border border-red-400/30 bg-red-400/5 px-3 py-2 font-mono text-xs text-red-300"
+            >
+              ⚠ {dndError}
+            </p>
+          )}
+
           <div className="mt-4 grid flex-1 grid-cols-2 gap-3 md:grid-cols-5">
             {COLUMNS.map((col) => {
               const items = tasks.filter((t) => t.status === col.key);
+              const isLegalTarget =
+                draggingTask != null && RETRY_TARGET[draggingTask.status] === col.key;
+              const isDragOver = isLegalTarget && dragOverColumn === col.key;
+
               return (
-                <div key={col.key} className="rounded-lg border border-hairline p-2">
-                  <p className="px-1 pb-2 font-mono text-[11px] uppercase tracking-wide text-muted">
-                    {col.label} · {items.length}
-                  </p>
+                <div
+                  key={col.key}
+                  onDragOver={
+                    isLegalTarget
+                      ? (e) => {
+                          e.preventDefault();
+                          setDragOverColumn(col.key);
+                        }
+                      : undefined
+                  }
+                  onDragLeave={
+                    isLegalTarget
+                      ? () => setDragOverColumn((c) => (c === col.key ? null : c))
+                      : undefined
+                  }
+                  onDrop={isLegalTarget ? (e) => handleDrop(e, col.key) : undefined}
+                  className={`rounded-lg border p-2 transition-colors duration-150 ${
+                    isDragOver
+                      ? "border-accent bg-accent/[0.06] ring-2 ring-accent/40"
+                      : "border-hairline"
+                  }`}
+                >
+                  <div className="flex items-center justify-between px-1 pb-2">
+                    <span className="flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wide text-muted">
+                      <span className={`h-1.5 w-1.5 rounded-full ${HUE_DOT[col.hue]}`} />
+                      {col.label}
+                    </span>
+                    <span className="rounded-full border border-hairline px-1.5 py-0.5 font-mono text-[10px] text-muted">
+                      {items.length}
+                    </span>
+                  </div>
                   <div className="space-y-2">
-                    {items.map((t, i) => (
-                      <Reveal
-                        key={t.id}
-                        delay={i * 40}
-                        className="rounded-md border border-hairline bg-background p-2.5 text-sm transition-colors duration-200 hover:border-accent/30"
-                      >
-                        <p className="leading-snug">{t.title}</p>
-                        <p className="mt-1.5 font-mono text-[10px] text-muted">
-                          {t.agent_slug}
-                          {t.depends_on.length > 0 && ` · after #${t.depends_on.join(", #")}`}
-                        </p>
-                        {t.status === "in_progress" && (
-                          <span className="mt-2 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
-                        )}
-                        {t.status === "review" && (
-                          <button
-                            onClick={() => approve(t.id)}
-                            className="mt-2 w-full cursor-pointer rounded-md bg-accent px-2 py-1.5 text-xs font-medium text-white transition-opacity duration-200 hover:opacity-90"
-                          >
-                            Approve & run
-                          </button>
-                        )}
-                        {t.result && (
-                          <details className="mt-2">
-                            <summary className="cursor-pointer font-mono text-[10px] text-muted">
-                              result
-                            </summary>
-                            <pre className="mt-1 max-h-48 overflow-y-auto whitespace-pre-wrap text-[11px] leading-relaxed text-muted">
-                              {t.result}
-                            </pre>
-                          </details>
-                        )}
-                        {t.error && (
-                          <p className="mt-2 font-mono text-[10px] text-red-400">⚠ {t.error}</p>
-                        )}
-                        {(t.tokens_in > 0 || t.tokens_out > 0) && (
-                          <p className="mt-2 border-t border-hairline pt-1.5 font-mono text-[10px] text-muted">
-                            ↑{t.tokens_in} ↓{t.tokens_out} tok
-                            {t.latency_ms != null && ` · ${t.latency_ms}ms`}
-                          </p>
-                        )}
-                      </Reveal>
-                    ))}
+                    {items.length === 0 ? (
+                      <div className="flex h-20 flex-col items-center justify-center gap-1 rounded-md border border-dashed border-hairline text-muted">
+                        <Icon name="list-checks" className="h-3.5 w-3.5" />
+                        <span className="font-mono text-[10px]">All clear</span>
+                      </div>
+                    ) : (
+                      items.map((t, i) => (
+                        <TaskCard
+                          key={t.id}
+                          task={t}
+                          tasks={tasks}
+                          delay={i * 40}
+                          isDragging={draggingTask?.id === t.id}
+                          onApprove={approve}
+                          onDragStart={handleDragStart}
+                          onDragEnd={handleDragEnd}
+                        />
+                      ))
+                    )}
                   </div>
                 </div>
               );
