@@ -1,10 +1,9 @@
 import Link from "next/link";
 
-import { AgentNetwork } from "@/components/landing/agent-network";
 import { AutomationsSecurity } from "@/components/landing/automations-security";
 import { DeepDives } from "@/components/landing/deep-dives";
 import { FeatureGrid } from "@/components/landing/feature-grid";
-import { Hero3D } from "@/components/landing/hero-3d";
+import { HeroOrbital } from "@/components/landing/hero-orbital";
 import { HowItWorks } from "@/components/landing/how-it-works";
 import { OpsLayer } from "@/components/landing/ops-layer";
 import { Reveal } from "@/components/landing/reveal";
@@ -88,11 +87,10 @@ export default function Home() {
       </header>
 
       <main className="flex-1">
-        {/* HERO — split layout (UI-5 Chunk B USER CHOICE, replacing the
-            UI-3 centered hero): copy left, 3D panel cluster right. The
-            agent-network graph stays as a full-bleed low-opacity backdrop
-            behind both columns rather than a center-masked overlay, since
-            the headline is no longer centered over it. */}
+        {/* HERO — split layout (UI-5 Chunk B, later revised in Chunk C):
+            copy left, orbital "fleet" visual right. HeroOrbital carries
+            its own rings/starfield, so no separate backdrop layer — one
+            orbit story, nothing competing behind it. */}
         <section
           className="relative overflow-hidden"
           style={{ perspective: "1200px" }}
@@ -101,13 +99,6 @@ export default function Home() {
             aria-hidden
             className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,var(--hairline)_1px,transparent_1px),linear-gradient(to_bottom,var(--hairline)_1px,transparent_1px)] bg-[size:32px_32px] opacity-[0.12]"
           />
-
-          {/* Decorative network graph, full-bleed at low opacity so it
-              reads as ambient texture behind the split layout instead of
-              competing with either column. */}
-          <div aria-hidden className="pointer-events-none absolute inset-0 opacity-25">
-            <AgentNetwork />
-          </div>
 
           <div className="relative mx-auto grid max-w-6xl grid-cols-1 items-center gap-10 px-6 py-20 sm:py-28 lg:grid-cols-2 lg:gap-14 lg:py-32">
             {/* LEFT — heading, pills, subcopy, CTAs (left-aligned). */}
@@ -165,10 +156,11 @@ export default function Home() {
               </div>
             </div>
 
-            {/* RIGHT — 3D panel cluster (trace/kanban/sparkline), pointer
-                tilt kept. Collapses to a single panel below the text on
-                mobile since the grid is single-column there. */}
-            <Hero3D />
+            {/* RIGHT — orbital "fleet" visual: a dispatching core with
+                nine flagship agents riding three spinning orbit rings,
+                pointer tilt kept. Collapses below the text on mobile
+                since the grid is single-column there. */}
+            <HeroOrbital />
           </div>
         </section>
 

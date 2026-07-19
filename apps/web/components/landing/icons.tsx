@@ -59,7 +59,22 @@ export type IconName =
   | "search"
   | "file-text"
   | "plug"
-  | "sparkle";
+  | "sparkle"
+  // Chunk D3 additions — per-agent glyphs (see components/agent-visual.tsx)
+  | "network"
+  | "palette"
+  | "server"
+  | "radar"
+  | "clipboard-list"
+  | "mail"
+  | "chart-column"
+  | "trending-up"
+  | "scroll-text"
+  | "code"
+  | "briefcase"
+  | "play"
+  | "stethoscope"
+  | "globe";
 
 export function Icon({
   name,
@@ -206,6 +221,132 @@ export function Icon({
         <svg {...common}>
           <path d="M12 3.5c.5 3 2 4.5 5 5-3 .5-4.5 2-5 5-.5-3-2-4.5-5-5 3-.5 4.5-2 5-5Z" />
           <path d="M19 15c.25 1.4.9 2.1 2.3 2.4-1.4.25-2.05.9-2.3 2.3-.25-1.4-.9-2.05-2.3-2.3 1.4-.3 2.05-1 2.3-2.4Z" />
+        </svg>
+      );
+    // Chunk D3 additions — one glyph per builtin agent (agent-visual.tsx).
+    case "network":
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="2.25" />
+          <circle cx="5" cy="5.5" r="1.75" />
+          <circle cx="19" cy="5.5" r="1.75" />
+          <circle cx="12" cy="19.5" r="1.75" />
+          <path d="M10.5 10.3 6.3 6.8M13.5 10.3 17.7 6.8M12 14.25V17.5" />
+        </svg>
+      );
+    case "palette":
+      return (
+        <svg {...common}>
+          <path d="M12 3.5c-4.7 0-8.5 3.6-8.5 8 0 3 2.1 4.3 4 4.3.9 0 1.3-.5 1.3-1.1 0-.5-.3-.8-.3-1.6 0-1.1 1-2 2.3-2H15c2.9 0 5.5-1.9 5.5-5.1 0-4.3-3.8-6.5-8.5-6.5Z" />
+          <circle cx="7.5" cy="10.5" r="1" fill="currentColor" stroke="none" />
+          <circle cx="10.5" cy="7.5" r="1" fill="currentColor" stroke="none" />
+          <circle cx="14.5" cy="7.5" r="1" fill="currentColor" stroke="none" />
+          <circle cx="17" cy="10.5" r="1" fill="currentColor" stroke="none" />
+        </svg>
+      );
+    case "server":
+      return (
+        <svg {...common}>
+          <rect x="3.5" y="4" width="17" height="6.5" rx="1.5" />
+          <rect x="3.5" y="13.5" width="17" height="6.5" rx="1.5" />
+          <circle cx="7" cy="7.25" r="0.9" fill="currentColor" stroke="none" />
+          <circle cx="7" cy="16.75" r="0.9" fill="currentColor" stroke="none" />
+          <path d="M11 7.25h6M11 16.75h6" />
+        </svg>
+      );
+    case "radar":
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="8.25" />
+          <circle cx="12" cy="12" r="5" />
+          <circle cx="12" cy="12" r="1.75" />
+          <path d="M12 12 17.5 6.5" />
+          <circle cx="16" cy="8" r="1" fill="currentColor" stroke="none" />
+        </svg>
+      );
+    case "clipboard-list":
+      return (
+        <svg {...common}>
+          <rect x="5.5" y="5" width="13" height="16" rx="1.5" />
+          <path d="M9 5V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1" />
+          <path d="M8.3 10.5 9.2 11.4 10.6 9.8" />
+          <path d="M12.5 10.5h5" />
+          <path d="M8.3 14.5 9.2 15.4 10.6 13.8" />
+          <path d="M12.5 14.5h5" />
+          <path d="M8.3 18 9.2 18.9 10.6 17.3" />
+          <path d="M12.5 18h3.5" />
+        </svg>
+      );
+    case "mail":
+      return (
+        <svg {...common}>
+          <rect x="3.5" y="5.5" width="17" height="13" rx="1.75" />
+          <path d="M4.5 7 12 13 19.5 7" />
+        </svg>
+      );
+    case "chart-column":
+      return (
+        <svg {...common}>
+          <rect x="5" y="12" width="3" height="8" rx="1" />
+          <rect x="10.5" y="7" width="3" height="13" rx="1" />
+          <rect x="16" y="10" width="3" height="10" rx="1" />
+        </svg>
+      );
+    case "trending-up":
+      return (
+        <svg {...common}>
+          <path d="M3.5 16.5 9.5 10.5 13.5 14.5 20.5 6.5" />
+          <path d="M15 6.5h5.5V12" />
+        </svg>
+      );
+    case "scroll-text":
+      return (
+        <svg {...common}>
+          <path d="M7 3.5h7l4 4V15" />
+          <path d="M14 3.5V8h4" />
+          <path d="M8.5 12h6M8.5 15.5h3.5" />
+          <circle cx="16.5" cy="17.5" r="3" />
+          <path d="M15.3 17.5 16.2 18.4 17.7 16.5" />
+        </svg>
+      );
+    case "code":
+      return (
+        <svg {...common}>
+          <path d="M9 8 4.5 12 9 16" />
+          <path d="M15 8 19.5 12 15 16" />
+        </svg>
+      );
+    case "briefcase":
+      return (
+        <svg {...common}>
+          <rect x="3.5" y="8" width="17" height="11" rx="1.75" />
+          <path d="M8.5 8V6a1.5 1.5 0 0 1 1.5-1.5h4A1.5 1.5 0 0 1 15.5 6v2" />
+          <path d="M3.5 13h17" />
+          <rect x="10.5" y="12" width="3" height="2.5" rx="0.5" fill="currentColor" stroke="none" />
+        </svg>
+      );
+    case "play":
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="8.25" />
+          <path d="M10 8.5 16 12 10 15.5Z" fill="currentColor" stroke="none" />
+        </svg>
+      );
+    case "stethoscope":
+      return (
+        <svg {...common}>
+          <path d="M6.5 3.5v4a2.5 2.5 0 0 0 5 0v-4" />
+          <path d="M9 9.5v2.5a4.5 4.5 0 0 0 4.5 4.5h.5" />
+          <circle cx="17.5" cy="16.5" r="2.25" />
+          <circle cx="17.5" cy="16.5" r="0.4" fill="currentColor" stroke="none" />
+        </svg>
+      );
+    case "globe":
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="8.25" />
+          <path d="M3.75 12h16.5" />
+          <path d="M12 3.75c2.5 2.3 3.9 5.2 3.9 8.25s-1.4 5.95-3.9 8.25c-2.5-2.3-3.9-5.2-3.9-8.25S9.5 6.05 12 3.75Z" />
         </svg>
       );
     default:

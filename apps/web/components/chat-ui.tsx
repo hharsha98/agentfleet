@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
+import { AgentGlyph } from "@/components/agent-visual";
 import { ArtifactPanel } from "@/components/artifact-panel";
 import { EmptyState } from "@/components/empty-state";
 import { apiFetch } from "@/lib/api";
@@ -32,39 +33,6 @@ const ARTIFACT_ICON: Record<Artifact["type"], ReactNode> = {
   markdown: "M↓",
   chart: <ChartGlyph />,
 };
-
-// Deterministic slug → hue mapping so each agent gets a stable, distinct
-// avatar tile color across sessions (same idiom as the landing page's
-// hue-tinted icon tiles) without any per-agent config.
-const HUES = ["blue", "violet", "cyan", "amber", "green", "red"] as const;
-const HUE_TILE_CLASS: Record<(typeof HUES)[number], string> = {
-  blue: "border-hue-blue/30 bg-hue-blue/10 text-hue-blue",
-  violet: "border-hue-violet/30 bg-hue-violet/10 text-hue-violet",
-  cyan: "border-hue-cyan/30 bg-hue-cyan/10 text-hue-cyan",
-  amber: "border-hue-amber/30 bg-hue-amber/10 text-hue-amber",
-  green: "border-hue-green/30 bg-hue-green/10 text-hue-green",
-  red: "border-hue-red/30 bg-hue-red/10 text-hue-red",
-};
-
-function hueForSlug(slug: string): (typeof HUES)[number] {
-  let hash = 0;
-  for (let i = 0; i < slug.length; i++) {
-    hash = (hash * 31 + slug.charCodeAt(i)) | 0;
-  }
-  return HUES[Math.abs(hash) % HUES.length];
-}
-
-function AgentAvatar({ agent }: { agent: AgentInfo }) {
-  const hue = hueForSlug(agent.slug);
-  return (
-    <span
-      aria-hidden="true"
-      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border font-mono text-[10px] font-medium ${HUE_TILE_CLASS[hue]}`}
-    >
-      {agent.name.charAt(0).toUpperCase()}
-    </span>
-  );
-}
 
 export type AgentInfo = {
   id: string;
@@ -243,7 +211,7 @@ export function ChatUI({ agents }: { agents: AgentInfo[] }) {
                 : "border-hairline text-muted hover:text-foreground"
             }`}
           >
-            <AgentAvatar agent={a} />
+            <AgentGlyph slug={a.slug} name={a.name} size="sm" />
             {a.name}
           </button>
         ))}

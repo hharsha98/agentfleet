@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { AgentGlyph } from "@/components/agent-visual";
 import { Panel } from "@/components/dash/panel";
 import { StatCard } from "@/components/dash/stat-card";
 import { EmptyState } from "@/components/empty-state";
@@ -646,16 +647,19 @@ export default function AgentsPage() {
                 className="rounded-lg border border-hairline p-4 transition-colors duration-200 hover:border-accent/30"
               >
               <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium">{a.name}</span>
-                    {a.is_builtin && (
-                      <span className="rounded-full border border-hairline px-2 py-0.5 font-mono text-[10px] text-muted">
-                        builtin
-                      </span>
-                    )}
+                <div className="flex items-start gap-3">
+                  <AgentGlyph slug={a.slug} name={a.name} size="sm" className="mt-0.5" />
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium">{a.name}</span>
+                      {a.is_builtin && (
+                        <span className="rounded-full border border-hairline px-2 py-0.5 font-mono text-[10px] text-muted">
+                          builtin
+                        </span>
+                      )}
+                    </div>
+                    <p className="font-mono text-xs text-muted">{a.slug}</p>
                   </div>
-                  <p className="font-mono text-xs text-muted">{a.slug}</p>
                 </div>
                 <div className="flex shrink-0 gap-2">
                   <button

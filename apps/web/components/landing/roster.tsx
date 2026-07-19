@@ -1,30 +1,9 @@
 import Link from "next/link";
 
+import { AgentGlyph } from "@/components/agent-visual";
+
 import { Reveal } from "./reveal";
 import { SectionHeader } from "./section-header";
-
-// Deterministic slug -> hue mapping, same hash idiom as chat-ui.tsx's
-// hueForSlug so the roster's tile colors match what a user later sees in
-// the actual agent picker.
-const HUES = ["blue", "violet", "cyan", "amber", "green", "red"] as const;
-type Hue = (typeof HUES)[number];
-
-const HUE_TILE_CLASS: Record<Hue, string> = {
-  blue: "border-hue-blue/30 bg-hue-blue/10 text-hue-blue",
-  violet: "border-hue-violet/30 bg-hue-violet/10 text-hue-violet",
-  cyan: "border-hue-cyan/30 bg-hue-cyan/10 text-hue-cyan",
-  amber: "border-hue-amber/30 bg-hue-amber/10 text-hue-amber",
-  green: "border-hue-green/30 bg-hue-green/10 text-hue-green",
-  red: "border-hue-red/30 bg-hue-red/10 text-hue-red",
-};
-
-function hueForSlug(slug: string): Hue {
-  let hash = 0;
-  for (let i = 0; i < slug.length; i++) {
-    hash = (hash * 31 + slug.charCodeAt(i)) | 0;
-  }
-  return HUES[Math.abs(hash) % HUES.length];
-}
 
 // Transcribed verbatim (slug/name/description) from the BUILTIN roster in
 // apps/api/scripts/seed_agents.py — the real 17 agents the app ships with.
@@ -136,21 +115,20 @@ function AgentCard({
   agent: (typeof AGENTS)[number];
   delay: number;
 }) {
-  const hue = hueForSlug(agent.slug);
   return (
     <Reveal delay={delay}>
       <Link
         href="/chat"
         aria-label={`Chat with ${agent.name}`}
-        className="flex cursor-pointer flex-col gap-3 rounded-xl border border-hairline p-5 transition-all duration-300 hover:-translate-y-0.5 hover:border-accent/40 hover:bg-white/[0.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="group flex cursor-pointer flex-col gap-3 rounded-xl border border-hairline p-5 transition-all duration-300 hover:-translate-y-0.5 hover:border-accent/40 hover:bg-white/[0.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         <div className="flex items-center gap-3">
-          <span
-            aria-hidden
-            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border font-mono text-sm font-medium ${HUE_TILE_CLASS[hue]}`}
-          >
-            {agent.name.charAt(0).toUpperCase()}
-          </span>
+          <AgentGlyph
+            slug={agent.slug}
+            name={agent.name}
+            size="md"
+            className="transition-transform duration-300 group-hover:scale-110 group-hover:-rotate-6"
+          />
           <div className="flex flex-col">
             <span className="font-medium tracking-tight text-foreground">
               {agent.name}

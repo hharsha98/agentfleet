@@ -192,23 +192,6 @@ body {
   animation: drift 6.5s ease-in-out infinite;
 }
 
-/* Subtle vertical float + micro-rotation for the 3D hero panels (UI-4a).
-   Applied to an inner wrapper so it composes independently of each panel's
-   static baked-in rotateX/rotateY/translateZ orientation. */
-@keyframes float-3d {
-  0%,
-  100% {
-    transform: translateY(0) rotate(0deg);
-  }
-  50% {
-    transform: translateY(-8px) rotate(0.6deg);
-  }
-}
-
-.animate-float-3d {
-  animation: float-3d 8s ease-in-out infinite;
-}
-
 /* A small ring spinner for "Agent working…" states (UI-5 Chunk B rich
    Kanban vignette's In Progress card). */
 @keyframes spin-slow {
@@ -231,8 +214,54 @@ body {
   animation: pulse-node 2.6s ease-in-out infinite;
 }
 
+/* Orbital hero (UI-5 Chunk C, replacing the deleted 3D panel cluster):
+   one shared rotation keyframe reused for both the ring itself and each
+   node's counter-rotation. Direction and duration are set per-consumer via
+   the -reverse variant + inline animationDuration, since the three rings
+   spin at different speeds (and the middle one the opposite way) while
+   every node needs to spin at the *same* rate as its parent ring, just
+   inverted, so the icon stays upright as it orbits. */
+@keyframes orbit-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-orbit-spin {
+  animation-name: orbit-spin;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+.animate-orbit-spin-reverse {
+  animation-name: orbit-spin;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  animation-direction: reverse;
+}
+
+/* Expanding/fading ring conveying the orbital hero's core "dispatching"
+   agents outward. Two instances run staggered (see hero-orbital.tsx). */
+@keyframes core-ping {
+  0% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(1.8);
+    opacity: 0;
+  }
+}
+
+.animate-core-ping {
+  animation: core-ping 4s ease-out infinite;
+}
+
 /* Single disable block for every animation utility on the page — original
-   (blink-caret, pulse-soft) plus all UI-3 additions. */
+   (blink-caret, pulse-soft) plus all UI-3 additions and the orbital hero. */
 @media (prefers-reduced-motion: reduce) {
   .animate-blink-caret,
   .animate-pulse-soft,
@@ -242,8 +271,9 @@ body {
   .animate-rise-in,
   .animate-pulse-node,
   .animate-drift,
-  .animate-float-3d,
   .animate-spin-slow,
+  .animate-orbit-spin,
+  .animate-orbit-spin-reverse,
   .network-node {
     animation: none;
     opacity: 1;
@@ -256,5 +286,14 @@ body {
     animation: none;
     stroke-dasharray: none;
     opacity: 0.6;
+  }
+
+  /* The ping rings have no meaningful "settled" state (they only exist
+     mid-expansion) — hide rather than freeze them so reduced motion still
+     reads as a clean, composed scene, not two static rings glued to the
+     core. */
+  .animate-core-ping {
+    animation: none;
+    opacity: 0;
   }
 }

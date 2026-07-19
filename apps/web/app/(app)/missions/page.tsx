@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type DragEvent } from "react";
 
+import { AgentGlyph } from "@/components/agent-visual";
 import { Panel } from "@/components/dash/panel";
 import { StatCard } from "@/components/dash/stat-card";
 import { EmptyState } from "@/components/empty-state";
@@ -62,18 +63,6 @@ const HUE_DOT: Record<Hue, string> = {
   green: "bg-hue-green",
   red: "bg-hue-red",
 };
-
-// Same slug -> hue hash idiom as chat-ui.tsx / landing/roster.tsx, so an
-// agent's chip color is consistent everywhere it appears.
-const HUES: Hue[] = ["blue", "violet", "cyan", "amber", "green", "red"];
-
-function hueForSlug(slug: string): Hue {
-  let hash = 0;
-  for (let i = 0; i < slug.length; i++) {
-    hash = (hash * 31 + slug.charCodeAt(i)) | 0;
-  }
-  return HUES[Math.abs(hash) % HUES.length];
-}
 
 function agentDisplayName(slug: string): string {
   return slug
@@ -149,7 +138,6 @@ function TaskCard({
   onDragEnd: () => void;
 }) {
   const draggable = RETRY_TARGET[task.status] != null;
-  const hue = hueForSlug(task.agent_slug);
   const doneOrdinals = new Set(tasks.filter((t) => t.status === "done").map((t) => t.ordinal));
   const waitingOn = task.depends_on.filter((d) => !doneOrdinals.has(d)).length;
 
@@ -167,7 +155,11 @@ function TaskCard({
         <p className="leading-snug">{task.title}</p>
 
         <span className="mt-1.5 flex w-fit items-center gap-1 rounded-full border border-hairline bg-white/[0.03] px-1.5 py-0.5 font-mono text-[10px] text-muted">
-          <span className={`h-1.5 w-1.5 rounded-full ${HUE_DOT[hue]}`} />
+          <AgentGlyph
+            slug={task.agent_slug}
+            name={agentDisplayName(task.agent_slug)}
+            size="xs"
+          />
           {agentDisplayName(task.agent_slug)}
         </span>
 
