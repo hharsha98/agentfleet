@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 
+import { Panel } from "@/components/dash/panel";
+import { StatCard } from "@/components/dash/stat-card";
 import { EmptyState } from "@/components/empty-state";
 import { Icon } from "@/components/landing/icons";
 import { Reveal } from "@/components/landing/reveal";
@@ -45,6 +47,10 @@ type Agent = {
   tools: string[];
   mcp_servers: McpServer[];
   is_builtin: boolean;
+  // "langgraph" (default) or "pydantic-ai" — already returned by AgentOut
+  // (apps/api/app/schemas.py); the frontend type just hadn't picked it up
+  // until the Chunk D2 runtime chip needed it.
+  runtime: string;
 };
 
 type ApiKeyItem = {
@@ -102,8 +108,16 @@ const EMPTY_FORM: FormState = {
 const inputClass =
   "w-full rounded-md border border-hairline bg-transparent px-3 py-2 text-sm outline-none transition-colors duration-200 placeholder:text-muted focus:border-accent focus-visible:ring-2 focus-visible:ring-accent/30 disabled:opacity-50";
 
+// Small pill chip shared by the per-agent chip row (Chunk D2) — same visual
+// language as the existing tools/mcp chips further down this file.
+const chipClass =
+  "rounded-full border border-hairline px-2.5 py-0.5 font-mono text-[10px] text-muted";
+
 export default function AgentsPage() {
   const [agents, setAgents] = useState<Agent[]>([]);
+  // X-Total-Count from GET /agents (Chunk D2 stat row) — agents is
+  // page-limited (default 50), this is the real total.
+  const [totalAgents, setTotalAgents] = useState<number | null>(null);
   const [toolNames, setToolNames] = useState<string[]>([]);
   const [note, setNote] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
@@ -144,7 +158,11 @@ export default function AgentsPage() {
         apiFetch("/api/v1/agents"),
         apiFetch("/api/v1/agents/tools"),
       ]);
-      if (agentsRes.ok) setAgents(await agentsRes.json());
+      if (agentsRes.ok) {
+        setAgents(await agentsRes.json());
+        const total = agentsRes.headers.get("X-Total-Count");
+        setTotalAgents(total ? Number(total) : null);
+      }
       if (toolsRes.ok) setToolNames(await toolsRes.json());
       if (!agentsRes.ok || !toolsRes.ok) {
         setNote("API offline — start the backend and reload.");
@@ -410,43 +428,73 @@ export default function AgentsPage() {
     }
   }
 
+  // Chunk D2 stat row — derived purely from the already-fetched agents
+  // array (plus the X-Total-Count header above), no new endpoints.
+  const builtinCount = agents.filter((a) => a.is_builtin).length;
+  const customCount = agents.length - builtinCount;
+  const runtimes = Array.from(new Set(agents.map((a) => a.runtime || "langgraph"))).sort();
+
   return (
-    <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8 sm:px-6">
+    <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6">
       <PageHeader
         icon={<Icon name="blocks" />}
         hue="amber"
         title="Agent builder"
         description="Build a new agent in minutes: prompt, model, tools. Publish versions, roll back bad ones, and red-team it before it ships."
-      >
-        <div className="flex items-center gap-3">
-          {agents.length > 0 && (
-            <span className="flex items-center gap-1.5 font-mono text-xs text-muted">
-              <span
-                aria-hidden="true"
-                className="h-1.5 w-1.5 shrink-0 animate-pulse-soft rounded-full bg-hue-amber"
-              />
-              {agents.length} agent{agents.length === 1 ? "" : "s"}
-            </span>
-          )}
-          {!formOpen && (
-            <button
-              onClick={openCreateForm}
-              className="shrink-0 cursor-pointer rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity duration-200 hover:opacity-90"
-            >
-              New agent
-            </button>
-          )}
-        </div>
-      </PageHeader>
-        {note && <p className="mt-3 font-mono text-xs text-muted">{note}</p>}
+      />
+      {note && <p className="mt-3 font-mono text-xs text-muted">{note}</p>}
 
-        {formOpen && (
+      <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <StatCard
+          label="Total agents"
+          value={totalAgents ?? agents.length}
+          sub={
+            totalAgents != null && totalAgents > agents.length
+              ? `${agents.length} shown`
+              : undefined
+          }
+          icon={<Icon name="blocks" />}
+          hue="amber"
+        />
+        <StatCard
+          label="Built-in / custom"
+          value={`${builtinCount} / ${customCount}`}
+          sub="builtin / custom"
+          icon={<Icon name="shield" />}
+          hue="blue"
+          delay={40}
+        />
+        <StatCard
+          label="Runtimes"
+          value={runtimes.length}
+          sub={runtimes.length > 0 ? runtimes.join(", ") : "No agents yet"}
+          icon={<Icon name="git-branch" />}
+          hue="violet"
+          delay={80}
+        />
+      </div>
+
+      <Panel
+        title="Agent builder"
+        description="Prompt, model, and tools — publish a version when it's ready to ship."
+        action={
+          <button
+            onClick={formOpen ? closeForm : openCreateForm}
+            className="shrink-0 cursor-pointer rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity duration-200 hover:opacity-90"
+          >
+            {formOpen ? "Cancel" : "New agent"}
+          </button>
+        }
+        className="mt-6"
+        delay={40}
+      >
+        {formOpen ? (
           <form
             onSubmit={(e) => {
               e.preventDefault();
               submitForm();
             }}
-            className="mt-6 space-y-3 rounded-lg border border-hairline p-4"
+            className="space-y-3"
           >
             <h2 className="text-sm font-medium">
               {editingId ? "Edit agent" : "New agent"}
@@ -579,9 +627,18 @@ export default function AgentsPage() {
               </button>
             </div>
           </form>
+        ) : (
+          <p className="text-sm text-muted">Click &quot;New agent&quot; to start building one.</p>
         )}
+      </Panel>
 
-        <ul className="mt-6 space-y-3">
+      <Panel
+        title="Agents"
+        description="Built-in and custom agents in your fleet."
+        className="mt-6"
+        delay={80}
+      >
+        <ul className="grid gap-3 lg:grid-cols-2">
           {agents.map((a, i) => (
             <li key={a.id}>
               <Reveal
@@ -598,9 +655,7 @@ export default function AgentsPage() {
                       </span>
                     )}
                   </div>
-                  <p className="font-mono text-xs text-muted">
-                    {a.slug} · {a.model}
-                  </p>
+                  <p className="font-mono text-xs text-muted">{a.slug}</p>
                 </div>
                 <div className="flex shrink-0 gap-2">
                   <button
@@ -619,6 +674,22 @@ export default function AgentsPage() {
                   )}
                 </div>
               </div>
+
+              {/* Per-agent chip row (Chunk D2): model, tool count, and a
+                  runtime badge only for the pydantic-ai runtime (langgraph
+                  is the default and not worth calling out on every card). */}
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                <span className={chipClass}>{a.model}</span>
+                <span className={chipClass}>
+                  {a.tools.length} tool{a.tools.length === 1 ? "" : "s"}
+                </span>
+                {a.runtime === "pydantic-ai" && (
+                  <span className="rounded-full border border-hue-cyan/30 bg-hue-cyan/10 px-2.5 py-0.5 font-mono text-[10px] text-hue-cyan">
+                    Pydantic AI
+                  </span>
+                )}
+              </div>
+
               {a.description && <p className="mt-2 text-sm text-muted">{a.description}</p>}
               {(a.tools.length > 0 || a.mcp_servers.length > 0) && (
                 <div className="mt-3 flex flex-wrap gap-1.5">
@@ -820,7 +891,7 @@ export default function AgentsPage() {
             </li>
           ))}
           {agents.length === 0 && !note && (
-            <li>
+            <li className="lg:col-span-2">
               <EmptyState
                 glyph={<RobotIcon className="h-7 w-7" />}
                 title="No agents yet"
@@ -829,6 +900,7 @@ export default function AgentsPage() {
             </li>
           )}
         </ul>
+      </Panel>
     </main>
   );
 }

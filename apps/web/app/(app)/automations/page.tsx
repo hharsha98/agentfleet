@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from "react";
 
+import { Panel } from "@/components/dash/panel";
+import { StatCard } from "@/components/dash/stat-card";
 import { EmptyState } from "@/components/empty-state";
-import { Icon } from "@/components/landing/icons";
+import { Icon, IconTile } from "@/components/landing/icons";
 import { Reveal } from "@/components/landing/reveal";
 import { PageHeader } from "@/components/page-header";
 import { apiFetch } from "@/lib/api";
@@ -80,6 +82,10 @@ const inputClass =
 
 export default function AutomationsPage() {
   const [schedules, setSchedules] = useState<ScheduledRun[]>([]);
+  // X-Total-Count from GET /schedules and /webhooks (Chunk D2 stat row) —
+  // both lists are page-limited (default 50), these are the real totals.
+  const [totalSchedules, setTotalSchedules] = useState<number | null>(null);
+  const [totalWebhooks, setTotalWebhooks] = useState<number | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [goal, setGoal] = useState("");
@@ -103,6 +109,8 @@ export default function AutomationsPage() {
       const res = await apiFetch("/api/v1/schedules");
       if (res.ok) {
         setSchedules(await res.json());
+        const total = res.headers.get("X-Total-Count");
+        setTotalSchedules(total ? Number(total) : null);
         setNote(null);
       } else {
         setNote("API offline — start the backend and reload.");
@@ -115,7 +123,11 @@ export default function AutomationsPage() {
   async function refreshWebhooks() {
     try {
       const res = await apiFetch("/api/v1/webhooks");
-      if (res.ok) setWebhooks(await res.json());
+      if (res.ok) {
+        setWebhooks(await res.json());
+        const total = res.headers.get("X-Total-Count");
+        setTotalWebhooks(total ? Number(total) : null);
+      }
     } catch {
       // note already covers API-offline state via refresh()
     }
@@ -234,256 +246,321 @@ export default function AutomationsPage() {
     }
   }
 
+  // Chunk D2 stat row. "Next trigger" is deliberately honest: ScheduledRunOut
+  // (apps/api/app/schemas.py) has no next-fire field, and croniter (which
+  // computes that) only runs backend-side — so rather than fake a
+  // client-computed time, this shows the next *enabled* schedule's raw cron
+  // expression, labeled as a pattern, not a resolved time.
+  const enabledSchedules = schedules.filter((s) => s.enabled);
+  const nextCron = enabledSchedules[0]?.cron ?? null;
+
+  // "Last created" — newest created_at across both schedules and webhooks.
+  // ISO 8601 timestamps sort correctly as plain strings, so no Date parsing
+  // is needed to find the max.
+  const lastCreatedAt = [...schedules, ...webhooks].reduce<string | null>(
+    (latest, x) => (!latest || x.created_at > latest ? x.created_at : latest),
+    null,
+  );
+
   return (
-    <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8 sm:px-6">
+    <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6">
       <PageHeader
         icon={<Icon name="clock" />}
         hue="violet"
         title="Automations"
         description="Agents that run without you: cron schedules fire missions on time, inbound webhooks trigger them from other systems."
-      >
-        {schedules.length > 0 && (
-          <span className="flex items-center gap-1.5 font-mono text-xs text-muted">
-            <span
-              aria-hidden="true"
-              className="h-1.5 w-1.5 shrink-0 animate-pulse-soft rounded-full bg-hue-violet"
-            />
-            {schedules.length} schedule{schedules.length === 1 ? "" : "s"}
-          </span>
-        )}
-      </PageHeader>
+      />
       {note && <p className="mt-3 font-mono text-xs text-muted">{note}</p>}
 
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            createSchedule();
-          }}
-          className="mt-6 space-y-3 rounded-lg border border-hairline p-4"
-        >
-          <h2 className="text-sm font-medium">New automation</h2>
+      <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <StatCard
+          label="Schedules"
+          value={totalSchedules ?? schedules.length}
+          icon={<Icon name="clock" />}
+          hue="violet"
+        />
+        <StatCard
+          label="Webhooks"
+          value={totalWebhooks ?? webhooks.length}
+          icon={<Icon name="plug" />}
+          hue="cyan"
+          delay={40}
+        />
+        <StatCard
+          label="Next trigger"
+          value={nextCron ?? "—"}
+          sub={
+            nextCron
+              ? "cron pattern — exact next run isn't computed client-side"
+              : "No active schedules"
+          }
+          icon={<Icon name="activity" />}
+          hue="amber"
+          delay={80}
+        />
+        <StatCard
+          label="Last created"
+          value={lastCreatedAt ? new Date(lastCreatedAt).toLocaleDateString() : "—"}
+          sub={lastCreatedAt ? new Date(lastCreatedAt).toLocaleTimeString() : undefined}
+          icon={<Icon name="list-checks" />}
+          hue="green"
+          delay={120}
+        />
+      </div>
 
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Name (e.g. Daily competitor scan)"
-            required
-            className={inputClass}
-          />
-
-          <textarea
-            value={goal}
-            onChange={(e) => setGoal(e.target.value)}
-            placeholder="Goal — the same kind of thing you'd type on the Missions page"
-            rows={3}
-            required
-            className={inputClass}
-          />
-
-          <div>
-            <input
-              value={cron}
-              onChange={(e) => setCron(e.target.value)}
-              placeholder="0 9 * * *"
-              required
-              className={`${inputClass} font-mono`}
-            />
-            <p className="mt-1.5 font-mono text-[11px] text-muted">
-              cron: min hour day month weekday — e.g. <code>0 9 * * *</code> = daily 09:00 UTC
-            </p>
+      <Panel title="How triggers work" className="mt-6" delay={160}>
+        <div className="flex flex-col gap-4 sm:flex-row">
+          <div className="flex items-start gap-3 sm:flex-1">
+            <IconTile icon="clock" hue="violet" />
+            <div>
+              <p className="text-sm font-medium">Schedules</p>
+              <p className="mt-0.5 text-xs text-muted">
+                A cron expression fires a goal automatically on a recurring interval — no
+                external system needed.
+              </p>
+            </div>
           </div>
-
-          {formError && <p className="font-mono text-xs text-muted">⚠ {formError}</p>}
-
-          <button
-            type="submit"
-            disabled={busy || !name.trim() || !goal.trim() || !cron.trim()}
-            className="cursor-pointer rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity duration-200 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            {busy ? "Creating…" : "Create"}
-          </button>
-        </form>
-
-        <p className="mt-4 font-mono text-[11px] text-muted">
-          Schedules run on the worker (docker compose full stack / ORCHESTRATOR_MODE=arq).
-        </p>
-
-        <ul className="mt-6 space-y-3">
-          {schedules.map((s, i) => (
-            <li key={s.id}>
-            <Reveal
-              delay={i * 40}
-              className="rounded-lg border border-hairline p-4 transition-colors duration-200 hover:border-accent/30"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium">{s.name}</span>
-                    <span
-                      className={`rounded-full border px-2 py-0.5 font-mono text-[10px] ${
-                        s.enabled
-                          ? "border-emerald-400/40 text-emerald-300"
-                          : "border-hairline text-muted"
-                      }`}
-                    >
-                      {s.enabled ? "enabled" : "disabled"}
-                    </span>
-                  </div>
-                  <p className="mt-1 truncate text-sm text-muted">{s.goal}</p>
-                  <p className="mt-1.5 font-mono text-[11px] text-muted">
-                    {s.cron} · last run: {s.last_run_at ? new Date(s.last_run_at).toLocaleString() : "never"}
-                  </p>
-                </div>
-                <div className="flex shrink-0 gap-2">
-                  <button
-                    onClick={() => toggleEnabled(s)}
-                    disabled={toggleBusy[s.id]}
-                    className="cursor-pointer rounded-md border border-hairline px-3 py-1.5 text-xs text-muted transition-colors duration-200 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    {s.enabled ? "Disable" : "Enable"}
-                  </button>
-                  <button
-                    onClick={() => deleteSchedule(s)}
-                    disabled={deleteBusy[s.id]}
-                    className="cursor-pointer rounded-md border border-hairline px-3 py-1.5 text-xs text-muted transition-colors duration-200 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-              </Reveal>
-            </li>
-          ))}
-          {schedules.length === 0 && !note && (
-            <li>
-              <EmptyState
-                glyph={<ClockIcon className="h-7 w-7" />}
-                title="No automations yet"
-                description="Create one above to run a goal on a schedule."
-              />
-            </li>
-          )}
-        </ul>
-
-        <div className="mt-12">
-          <h2 className="text-2xl font-medium tracking-tight">Webhooks</h2>
-          <p className="mt-1 text-sm text-muted">
-            Give the fleet a goal template — an external system POSTs to the trigger URL to run
-            it on demand.
-          </p>
+          <div className="flex items-start gap-3 sm:flex-1">
+            <IconTile icon="plug" hue="cyan" />
+            <div>
+              <p className="text-sm font-medium">Webhooks</p>
+              <p className="mt-0.5 text-xs text-muted">
+                An external system POSTs to a per-webhook URL with its secret to trigger a goal
+                on demand.
+              </p>
+            </div>
+          </div>
         </div>
+      </Panel>
 
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            createWebhook();
-          }}
-          className="mt-6 space-y-3 rounded-lg border border-hairline p-4"
-        >
-          <h2 className="text-sm font-medium">New webhook</h2>
+      <div className="mt-6 grid gap-4 lg:grid-cols-2">
+        <Panel title="Schedules" description="Run a goal on a cron schedule." delay={200}>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              createSchedule();
+            }}
+            className="space-y-3 rounded-lg border border-hairline p-4"
+          >
+            <h2 className="text-sm font-medium">New automation</h2>
 
-          <input
-            value={whName}
-            onChange={(e) => setWhName(e.target.value)}
-            placeholder="Name (e.g. Zendesk ticket triage)"
-            required
-            className={inputClass}
-          />
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Name (e.g. Daily competitor scan)"
+              required
+              className={inputClass}
+            />
 
-          <div>
             <textarea
-              value={whGoal}
-              onChange={(e) => setWhGoal(e.target.value)}
-              placeholder="Goal template — e.g. Triage this ticket: {payload}"
+              value={goal}
+              onChange={(e) => setGoal(e.target.value)}
+              placeholder="Goal — the same kind of thing you'd type on the Missions page"
               rows={3}
               required
               className={inputClass}
             />
-            <p className="mt-1.5 font-mono text-[11px] text-muted">
-              use <code>{"{payload}"}</code> to inject the request body
-            </p>
-          </div>
 
-          {whFormError && <p className="font-mono text-xs text-muted">⚠ {whFormError}</p>}
-
-          <button
-            type="submit"
-            disabled={whBusy || !whName.trim() || !whGoal.trim()}
-            className="cursor-pointer rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity duration-200 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            {whBusy ? "Creating…" : "Create"}
-          </button>
-        </form>
-
-        {justCreated && (
-          <div className="mt-4 space-y-2 rounded-lg border border-emerald-400/40 p-4">
-            <p className="text-sm font-medium">
-              Webhook created — copy the secret now, it won&apos;t be shown again.
-            </p>
-            <div className="flex items-center gap-2">
-              <code className="flex-1 truncate rounded-md border border-hairline bg-transparent px-3 py-2 font-mono text-xs">
-                {justCreated.secret}
-              </code>
-              <button
-                onClick={() => copySecret(justCreated.secret)}
-                className="shrink-0 cursor-pointer rounded-md border border-hairline px-3 py-2 text-xs text-muted transition-colors duration-200 hover:text-foreground"
-              >
-                {copied ? "Copied" : "Copy"}
-              </button>
-            </div>
-            <p className="font-mono text-[11px] text-muted">
-              Trigger URL: <code>{justCreated.trigger_path}</code>
-            </p>
-            <pre className="overflow-x-auto rounded-md border border-hairline bg-transparent px-3 py-2 font-mono text-[11px] text-muted">
-              {curlExample(justCreated)}
-            </pre>
-          </div>
-        )}
-
-        <ul className="mt-6 space-y-3">
-          {webhooks.map((w, i) => (
-            <li key={w.id}>
-            <Reveal
-              delay={i * 40}
-              className="rounded-lg border border-hairline p-4 transition-colors duration-200 hover:border-accent/30"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium">{w.name}</span>
-                  </div>
-                  <p className="mt-1 truncate text-sm text-muted">{w.goal_template}</p>
-                  <p className="mt-1.5 font-mono text-[11px] text-muted">
-                    /api/v1/hooks/{w.id}
-                  </p>
-                  <p className="mt-1 font-mono text-[11px] text-muted">
-                    {w.secret_prefix}… · last triggered:{" "}
-                    {w.last_triggered_at ? new Date(w.last_triggered_at).toLocaleString() : "never"}
-                  </p>
-                </div>
-                <div className="flex shrink-0 gap-2">
-                  <button
-                    onClick={() => deleteWebhook(w)}
-                    disabled={whDeleteBusy[w.id]}
-                    className="cursor-pointer rounded-md border border-hairline px-3 py-1.5 text-xs text-muted transition-colors duration-200 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-              </Reveal>
-            </li>
-          ))}
-          {webhooks.length === 0 && !note && (
-            <li>
-              <EmptyState
-                glyph={<WebhookIcon className="h-7 w-7" />}
-                title="No webhooks yet"
-                description="Create one above to trigger a mission from an external system."
+            <div>
+              <input
+                value={cron}
+                onChange={(e) => setCron(e.target.value)}
+                placeholder="0 9 * * *"
+                required
+                className={`${inputClass} font-mono`}
               />
-            </li>
+              <p className="mt-1.5 font-mono text-[11px] text-muted">
+                cron: min hour day month weekday — e.g. <code>0 9 * * *</code> = daily 09:00 UTC
+              </p>
+            </div>
+
+            {formError && <p className="font-mono text-xs text-muted">⚠ {formError}</p>}
+
+            <button
+              type="submit"
+              disabled={busy || !name.trim() || !goal.trim() || !cron.trim()}
+              className="cursor-pointer rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity duration-200 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {busy ? "Creating…" : "Create"}
+            </button>
+          </form>
+
+          <p className="mt-4 font-mono text-[11px] text-muted">
+            Schedules run on the worker (docker compose full stack / ORCHESTRATOR_MODE=arq).
+          </p>
+
+          <ul className="mt-6 space-y-3">
+            {schedules.map((s, i) => (
+              <li key={s.id}>
+              <Reveal
+                delay={i * 40}
+                className="rounded-lg border border-hairline p-4 transition-colors duration-200 hover:border-accent/30"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium">{s.name}</span>
+                      <span
+                        className={`rounded-full border px-2 py-0.5 font-mono text-[10px] ${
+                          s.enabled
+                            ? "border-emerald-400/40 text-emerald-300"
+                            : "border-hairline text-muted"
+                        }`}
+                      >
+                        {s.enabled ? "enabled" : "disabled"}
+                      </span>
+                    </div>
+                    <p className="mt-1 truncate text-sm text-muted">{s.goal}</p>
+                    <p className="mt-1.5 font-mono text-[11px] text-muted">
+                      {s.cron} · last run: {s.last_run_at ? new Date(s.last_run_at).toLocaleString() : "never"}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 gap-2">
+                    <button
+                      onClick={() => toggleEnabled(s)}
+                      disabled={toggleBusy[s.id]}
+                      className="cursor-pointer rounded-md border border-hairline px-3 py-1.5 text-xs text-muted transition-colors duration-200 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {s.enabled ? "Disable" : "Enable"}
+                    </button>
+                    <button
+                      onClick={() => deleteSchedule(s)}
+                      disabled={deleteBusy[s.id]}
+                      className="cursor-pointer rounded-md border border-hairline px-3 py-1.5 text-xs text-muted transition-colors duration-200 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+                </Reveal>
+              </li>
+            ))}
+            {schedules.length === 0 && !note && (
+              <li>
+                <EmptyState
+                  glyph={<ClockIcon className="h-7 w-7" />}
+                  title="No automations yet"
+                  description="Create one above to run a goal on a schedule."
+                />
+              </li>
+            )}
+          </ul>
+        </Panel>
+
+        <Panel title="Webhooks" description="Trigger a goal from an external system." delay={240}>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              createWebhook();
+            }}
+            className="space-y-3 rounded-lg border border-hairline p-4"
+          >
+            <h2 className="text-sm font-medium">New webhook</h2>
+
+            <input
+              value={whName}
+              onChange={(e) => setWhName(e.target.value)}
+              placeholder="Name (e.g. Zendesk ticket triage)"
+              required
+              className={inputClass}
+            />
+
+            <div>
+              <textarea
+                value={whGoal}
+                onChange={(e) => setWhGoal(e.target.value)}
+                placeholder="Goal template — e.g. Triage this ticket: {payload}"
+                rows={3}
+                required
+                className={inputClass}
+              />
+              <p className="mt-1.5 font-mono text-[11px] text-muted">
+                use <code>{"{payload}"}</code> to inject the request body
+              </p>
+            </div>
+
+            {whFormError && <p className="font-mono text-xs text-muted">⚠ {whFormError}</p>}
+
+            <button
+              type="submit"
+              disabled={whBusy || !whName.trim() || !whGoal.trim()}
+              className="cursor-pointer rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity duration-200 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {whBusy ? "Creating…" : "Create"}
+            </button>
+          </form>
+
+          {justCreated && (
+            <div className="mt-4 space-y-2 rounded-lg border border-emerald-400/40 p-4">
+              <p className="text-sm font-medium">
+                Webhook created — copy the secret now, it won&apos;t be shown again.
+              </p>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 truncate rounded-md border border-hairline bg-transparent px-3 py-2 font-mono text-xs">
+                  {justCreated.secret}
+                </code>
+                <button
+                  onClick={() => copySecret(justCreated.secret)}
+                  className="shrink-0 cursor-pointer rounded-md border border-hairline px-3 py-2 text-xs text-muted transition-colors duration-200 hover:text-foreground"
+                >
+                  {copied ? "Copied" : "Copy"}
+                </button>
+              </div>
+              <p className="font-mono text-[11px] text-muted">
+                Trigger URL: <code>{justCreated.trigger_path}</code>
+              </p>
+              <pre className="overflow-x-auto rounded-md border border-hairline bg-transparent px-3 py-2 font-mono text-[11px] text-muted">
+                {curlExample(justCreated)}
+              </pre>
+            </div>
           )}
-        </ul>
+
+          <ul className="mt-6 space-y-3">
+            {webhooks.map((w, i) => (
+              <li key={w.id}>
+              <Reveal
+                delay={i * 40}
+                className="rounded-lg border border-hairline p-4 transition-colors duration-200 hover:border-accent/30"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium">{w.name}</span>
+                    </div>
+                    <p className="mt-1 truncate text-sm text-muted">{w.goal_template}</p>
+                    <p className="mt-1.5 font-mono text-[11px] text-muted">
+                      /api/v1/hooks/{w.id}
+                    </p>
+                    <p className="mt-1 font-mono text-[11px] text-muted">
+                      {w.secret_prefix}… · last triggered:{" "}
+                      {w.last_triggered_at ? new Date(w.last_triggered_at).toLocaleString() : "never"}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 gap-2">
+                    <button
+                      onClick={() => deleteWebhook(w)}
+                      disabled={whDeleteBusy[w.id]}
+                      className="cursor-pointer rounded-md border border-hairline px-3 py-1.5 text-xs text-muted transition-colors duration-200 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+                </Reveal>
+              </li>
+            ))}
+            {webhooks.length === 0 && !note && (
+              <li>
+                <EmptyState
+                  glyph={<WebhookIcon className="h-7 w-7" />}
+                  title="No webhooks yet"
+                  description="Create one above to trigger a mission from an external system."
+                />
+              </li>
+            )}
+          </ul>
+        </Panel>
+      </div>
     </main>
   );
 }

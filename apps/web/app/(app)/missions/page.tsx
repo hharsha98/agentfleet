@@ -2,6 +2,8 @@
 
 import { useEffect, useState, type DragEvent } from "react";
 
+import { Panel } from "@/components/dash/panel";
+import { StatCard } from "@/components/dash/stat-card";
 import { EmptyState } from "@/components/empty-state";
 import { HUE_CLASSES, Icon, type Hue } from "@/components/landing/icons";
 import { Reveal } from "@/components/landing/reveal";
@@ -86,6 +88,16 @@ const RUN_BADGE: Record<string, string> = {
   awaiting_approval: "border-amber-400/40 text-amber-300",
   done: "border-emerald-400/40 text-emerald-300",
   failed: "border-red-400/40 text-red-300",
+};
+
+// Stat-row hue per run status (Chunk D2) — same status vocabulary as
+// RUN_BADGE above, remapped onto the shared Hue palette for StatCard's dot.
+const STATUS_HUE: Record<string, Hue> = {
+  planning: "blue",
+  running: "blue",
+  awaiting_approval: "amber",
+  done: "green",
+  failed: "red",
 };
 
 function RocketIcon({ className }: { className?: string }) {
@@ -220,6 +232,10 @@ function TaskCard({
 
 export default function MissionsPage() {
   const [runs, setRuns] = useState<Run[]>([]);
+  // X-Total-Count from GET /runs (Chunk D2 stat row) — the runs array itself
+  // is page-limited (default 20), so this is the only source of the real
+  // total. null until the first successful fetch resolves.
+  const [totalRuns, setTotalRuns] = useState<number | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [detail, setDetail] = useState<Run | null>(null);
   const [goal, setGoal] = useState("");
@@ -235,7 +251,11 @@ export default function MissionsPage() {
   async function refreshRuns() {
     try {
       const res = await apiFetch("/api/v1/runs");
-      if (res.ok) setRuns(await res.json());
+      if (res.ok) {
+        setRuns(await res.json());
+        const total = res.headers.get("X-Total-Count");
+        setTotalRuns(total ? Number(total) : null);
+      }
     } catch {
       /* API offline — page shows empty state */
     }
@@ -372,6 +392,21 @@ export default function MissionsPage() {
 
   const tasks = detail?.tasks ?? [];
 
+  // Chunk D2 stat row — derived from the already-fetched runs/detail state,
+  // no new endpoints. Task-status breakdown and token totals only mean
+  // anything once a run is selected, so they read "—"/"No tasks yet" until
+  // then rather than showing misleading zeros.
+  const taskStatusSummary = COLUMNS.map((c) => ({
+    label: c.label,
+    count: tasks.filter((t) => t.status === c.key).length,
+  }))
+    .filter((c) => c.count > 0)
+    .map((c) => `${c.count} ${c.label.toLowerCase()}`)
+    .join(" · ");
+  const tokensIn = tasks.reduce((sum, t) => sum + t.tokens_in, 0);
+  const tokensOut = tasks.reduce((sum, t) => sum + t.tokens_out, 0);
+  const tokensTotal = tokensIn + tokensOut;
+
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 py-6 sm:px-6 sm:py-8">
       {/* Missions has no printed heading in the design — the goal input
@@ -420,124 +455,167 @@ export default function MissionsPage() {
         </button>
       </form>
 
-      {runs.length > 0 && (
-        <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
-          {runs.map((r) => (
-            <button
-              key={r.id}
-              onClick={() => {
-                setSelected(r.id);
-                setDetail(null);
-              }}
-              className={`cursor-pointer whitespace-nowrap rounded-full border px-3 py-1 text-xs transition-colors duration-200 ${
-                r.id === selected
-                  ? "border-accent bg-accent/15 text-foreground"
-                  : "border-hairline text-muted hover:text-foreground"
-              }`}
-            >
-              {r.goal.slice(0, 48)}
-              {r.goal.length > 48 ? "…" : ""}
-            </button>
-          ))}
-        </div>
-      )}
+      <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <StatCard
+          label="Runs"
+          value={totalRuns ?? runs.length}
+          sub={totalRuns != null && totalRuns > runs.length ? `${runs.length} shown` : undefined}
+          icon={<Icon name="workflow" />}
+          hue="blue"
+        />
+        <StatCard
+          label="Run status"
+          value={detail ? detail.status.replace("_", " ") : "—"}
+          pulse={!!detail}
+          hue={detail ? (STATUS_HUE[detail.status] ?? "blue") : "blue"}
+          delay={40}
+        />
+        <StatCard
+          label="Tasks"
+          value={detail ? tasks.length : "—"}
+          sub={detail ? taskStatusSummary || "No tasks yet" : "Select a run"}
+          icon={<Icon name="list-checks" />}
+          hue="violet"
+          delay={80}
+        />
+        <StatCard
+          label="Tokens spent"
+          value={detail ? tokensTotal.toLocaleString() : "—"}
+          sub={detail && tokensTotal > 0 ? `↑${tokensIn} ↓${tokensOut}` : undefined}
+          icon={<Icon name="activity" />}
+          hue="cyan"
+          delay={120}
+        />
+      </div>
 
-      {detail ? (
-        <>
-          <div className="mt-5 flex items-center gap-3">
-            <span
-              className={`rounded-full border px-2.5 py-0.5 font-mono text-xs ${
-                RUN_BADGE[detail.status] ?? "border-hairline text-muted"
-              }`}
-            >
-              {detail.status.replace("_", " ")}
-            </span>
-            <p className="truncate text-sm text-muted">{detail.goal}</p>
+      <div className="mt-6 grid gap-4 lg:grid-cols-[280px_1fr]">
+        <Panel title="Runs" description="Pick a mission to view its board" delay={40}>
+          <div className="flex gap-2 overflow-x-auto pb-1 lg:flex-col lg:gap-1.5 lg:overflow-visible lg:pb-0">
+            {runs.map((r) => (
+              <button
+                key={r.id}
+                onClick={() => {
+                  setSelected(r.id);
+                  setDetail(null);
+                }}
+                title={r.goal}
+                className={`flex max-w-[240px] min-w-0 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1 text-xs transition-colors duration-200 lg:w-full lg:max-w-none lg:shrink lg:justify-start lg:whitespace-normal lg:rounded-md lg:px-3 lg:py-2 ${
+                  r.id === selected
+                    ? "border-accent bg-accent/15 text-foreground"
+                    : "border-hairline text-muted hover:text-foreground"
+                }`}
+              >
+                <span
+                  className={`h-1.5 w-1.5 shrink-0 rounded-full ${HUE_DOT[STATUS_HUE[r.status] ?? "blue"]}`}
+                />
+                <span className="truncate">{r.goal}</span>
+              </button>
+            ))}
+            {runs.length === 0 && (
+              <p className="text-xs text-muted">No missions yet — launch one above.</p>
+            )}
           </div>
+        </Panel>
 
-          {dndError && (
-            <p
-              role="alert"
-              className="mt-3 rounded-md border border-red-400/30 bg-red-400/5 px-3 py-2 font-mono text-xs text-red-300"
-            >
-              ⚠ {dndError}
-            </p>
-          )}
-
-          <div className="mt-4 grid flex-1 grid-cols-2 gap-3 md:grid-cols-5">
-            {COLUMNS.map((col) => {
-              const items = tasks.filter((t) => t.status === col.key);
-              const isLegalTarget =
-                draggingTask != null && RETRY_TARGET[draggingTask.status] === col.key;
-              const isDragOver = isLegalTarget && dragOverColumn === col.key;
-
-              return (
-                <div
-                  key={col.key}
-                  onDragOver={
-                    isLegalTarget
-                      ? (e) => {
-                          e.preventDefault();
-                          setDragOverColumn(col.key);
-                        }
-                      : undefined
-                  }
-                  onDragLeave={
-                    isLegalTarget
-                      ? () => setDragOverColumn((c) => (c === col.key ? null : c))
-                      : undefined
-                  }
-                  onDrop={isLegalTarget ? (e) => handleDrop(e, col.key) : undefined}
-                  className={`rounded-lg border p-2 transition-colors duration-150 ${
-                    isDragOver
-                      ? "border-accent bg-accent/[0.06] ring-2 ring-accent/40"
-                      : "border-hairline"
+        <Panel title="Board" delay={80} className="lg:min-h-[420px]">
+          {detail ? (
+            <>
+              <div className="flex items-center gap-3">
+                <span
+                  className={`rounded-full border px-2.5 py-0.5 font-mono text-xs ${
+                    RUN_BADGE[detail.status] ?? "border-hairline text-muted"
                   }`}
                 >
-                  <div className="flex items-center justify-between px-1 pb-2">
-                    <span className="flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wide text-muted">
-                      <span className={`h-1.5 w-1.5 rounded-full ${HUE_DOT[col.hue]}`} />
-                      {col.label}
-                    </span>
-                    <span className="rounded-full border border-hairline px-1.5 py-0.5 font-mono text-[10px] text-muted">
-                      {items.length}
-                    </span>
-                  </div>
-                  <div className="space-y-2">
-                    {items.length === 0 ? (
-                      <div className="flex h-20 flex-col items-center justify-center gap-1 rounded-md border border-dashed border-hairline text-muted">
-                        <Icon name="list-checks" className="h-3.5 w-3.5" />
-                        <span className="font-mono text-[10px]">All clear</span>
+                  {detail.status.replace("_", " ")}
+                </span>
+                <p className="truncate text-sm text-muted">{detail.goal}</p>
+              </div>
+
+              {dndError && (
+                <p
+                  role="alert"
+                  className="mt-3 rounded-md border border-red-400/30 bg-red-400/5 px-3 py-2 font-mono text-xs text-red-300"
+                >
+                  ⚠ {dndError}
+                </p>
+              )}
+
+              <div className="mt-4 grid flex-1 grid-cols-2 gap-3 md:grid-cols-5">
+                {COLUMNS.map((col) => {
+                  const items = tasks.filter((t) => t.status === col.key);
+                  const isLegalTarget =
+                    draggingTask != null && RETRY_TARGET[draggingTask.status] === col.key;
+                  const isDragOver = isLegalTarget && dragOverColumn === col.key;
+
+                  return (
+                    <div
+                      key={col.key}
+                      onDragOver={
+                        isLegalTarget
+                          ? (e) => {
+                              e.preventDefault();
+                              setDragOverColumn(col.key);
+                            }
+                          : undefined
+                      }
+                      onDragLeave={
+                        isLegalTarget
+                          ? () => setDragOverColumn((c) => (c === col.key ? null : c))
+                          : undefined
+                      }
+                      onDrop={isLegalTarget ? (e) => handleDrop(e, col.key) : undefined}
+                      className={`rounded-lg border p-2 transition-colors duration-150 ${
+                        isDragOver
+                          ? "border-accent bg-accent/[0.06] ring-2 ring-accent/40"
+                          : "border-hairline"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between px-1 pb-2">
+                        <span className="flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wide text-muted">
+                          <span className={`h-1.5 w-1.5 rounded-full ${HUE_DOT[col.hue]}`} />
+                          {col.label}
+                        </span>
+                        <span className="rounded-full border border-hairline px-1.5 py-0.5 font-mono text-[10px] text-muted">
+                          {items.length}
+                        </span>
                       </div>
-                    ) : (
-                      items.map((t, i) => (
-                        <TaskCard
-                          key={t.id}
-                          task={t}
-                          tasks={tasks}
-                          delay={i * 40}
-                          isDragging={draggingTask?.id === t.id}
-                          onApprove={approve}
-                          onDragStart={handleDragStart}
-                          onDragEnd={handleDragEnd}
-                        />
-                      ))
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </>
-      ) : selected ? (
-        <p className="pt-24 text-center text-sm text-muted">Loading run…</p>
-      ) : (
-        <EmptyState
-          glyph={<RocketIcon className="h-7 w-7" />}
-          title="No mission running"
-          description="Launch a goal above — tasks appear here as a live board, agent by agent."
-        />
-      )}
+                      <div className="space-y-2">
+                        {items.length === 0 ? (
+                          <div className="flex h-20 flex-col items-center justify-center gap-1 rounded-md border border-dashed border-hairline text-muted">
+                            <Icon name="list-checks" className="h-3.5 w-3.5" />
+                            <span className="font-mono text-[10px]">All clear</span>
+                          </div>
+                        ) : (
+                          items.map((t, i) => (
+                            <TaskCard
+                              key={t.id}
+                              task={t}
+                              tasks={tasks}
+                              delay={i * 40}
+                              isDragging={draggingTask?.id === t.id}
+                              onApprove={approve}
+                              onDragStart={handleDragStart}
+                              onDragEnd={handleDragEnd}
+                            />
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          ) : selected ? (
+            <p className="pt-24 text-center text-sm text-muted">Loading run…</p>
+          ) : (
+            <EmptyState
+              glyph={<RocketIcon className="h-7 w-7" />}
+              title="No mission running"
+              description="Launch a goal above — tasks appear here as a live board, agent by agent."
+            />
+          )}
+        </Panel>
+      </div>
     </main>
   );
 }
