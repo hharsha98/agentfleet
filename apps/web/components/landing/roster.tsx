@@ -26,7 +26,7 @@ function hueForSlug(slug: string): Hue {
 }
 
 // Transcribed verbatim (slug/name/description) from the BUILTIN roster in
-// apps/api/scripts/seed_agents.py — the real 9 agents the app ships with.
+// apps/api/scripts/seed_agents.py — the real 17 agents the app ships with.
 const AGENTS: {
   slug: string;
   name: string;
@@ -86,6 +86,46 @@ const AGENTS: {
     description: "Verifies a claim against live sources and cites what it found.",
     badge: "Pydantic AI runtime",
   },
+  {
+    slug: "data-analyst",
+    name: "Data Analyst",
+    description: "Queries real data and charts trends with vega-lite artifacts.",
+  },
+  {
+    slug: "market-intelligence",
+    name: "Market Intelligence",
+    description: "Researches stocks, markets, and companies with cited sources.",
+  },
+  {
+    slug: "patent-scout",
+    name: "Patent Scout",
+    description: "Searches the patent landscape with cited patent numbers and links.",
+  },
+  {
+    slug: "code-reviewer",
+    name: "Code Reviewer",
+    description: "Reviews public GitHub PRs and diffs fetched by URL.",
+  },
+  {
+    slug: "resume-builder",
+    name: "Resume Builder",
+    description: "Tailors your uploaded resume to a target company or role.",
+  },
+  {
+    slug: "youtube-research",
+    name: "YouTube Research",
+    description: "Researches YouTube videos, channels, and trends via web search.",
+  },
+  {
+    slug: "clinical-research",
+    name: "Clinical Research",
+    description: "Literature research over PubMed, clinicaltrials.gov, and journals.",
+  },
+  {
+    slug: "web-navigator",
+    name: "Web Navigator",
+    description: "Reads and compares content across live web pages by URL.",
+  },
 ];
 
 function AgentCard({
@@ -133,11 +173,11 @@ export function Roster() {
       <div className="mb-12 flex flex-col gap-3">
         <span className="font-mono text-xs text-muted">THE ROSTER</span>
         <h2 className="text-2xl font-medium tracking-tight sm:text-3xl">
-          9 built-in agents, 2 runtimes.
+          17 built-in agents, 2 runtimes.
         </h2>
         <p className="max-w-xl text-muted">
           Every agent below ships with the app — real system prompts, real
-          tools, no stubs. Eight run on LangGraph; Fact Checker runs on
+          tools, no stubs. Sixteen run on LangGraph; Fact Checker runs on
           Pydantic AI, to prove the platform isn&apos;t locked to one
           framework.
         </p>

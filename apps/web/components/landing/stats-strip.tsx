@@ -3,7 +3,7 @@ import { Reveal } from "./reveal";
 // Honest, verifiable numbers — no invented metrics. Kept in one place so
 // they're easy to audit against the actual test suites/agent registry.
 const STATS: { value: string; label: string }[] = [
-  { value: "9", label: "built-in agents" },
+  { value: "17", label: "built-in agents" },
   { value: "2", label: "agent runtimes (LangGraph + Pydantic AI)" },
   { value: "106", label: "backend tests" },
   { value: "21", label: "E2E tests" },

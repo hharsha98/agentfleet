@@ -122,7 +122,7 @@ export default function Home() {
               </span>
               <span className="inline-flex items-center gap-1.5 rounded-full border border-hairline px-3 py-1 font-mono text-xs text-muted">
                 <span className="h-1.5 w-1.5 rounded-full bg-hue-green animate-pulse-soft" />
-                9 built-in agents
+                17 built-in agents
               </span>
             </div>
 
@@ -136,9 +136,9 @@ export default function Home() {
             </h1>
 
             <p className="max-w-md text-muted">
-              Nine specialist agents, a mission board that turns goals into
-              tasks, and the guardrails to trust what they do — open source,
-              self-hosted.
+              Seventeen specialist agents, a mission board that turns goals
+              into tasks, and the guardrails to trust what they do — open
+              source, self-hosted.
             </p>
 
             <div className="flex flex-wrap items-center justify-center gap-5">

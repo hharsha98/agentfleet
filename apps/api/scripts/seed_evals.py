@@ -129,6 +129,73 @@ EVAL_CASES: dict[str, list[dict]] = {
             "judge_rubric": "",
         },
     ],
+    "data-analyst": [
+        {
+            "input": (
+                "Exactly how many rows are in the analytics_sales table? "
+                "Give the exact number."
+            ),
+            "expected_contains": ["60"],
+            "forbidden_contains": [],
+            "judge_rubric": "",
+        },
+    ],
+    "market-intelligence": [
+        {
+            "input": "What would you research to assess Acme Corp as a company?",
+            "expected_contains": ["Acme"],
+            "forbidden_contains": [],
+            "judge_rubric": "",
+        },
+    ],
+    "patent-scout": [
+        {
+            "input": "What sources would you search for patents about Acme Corp's widget technology?",
+            "expected_contains": ["Acme"],
+            "forbidden_contains": [],
+            "judge_rubric": "",
+        },
+    ],
+    "code-reviewer": [
+        {
+            "input": "How would you fetch the raw diff for https://github.com/acme/widgets/pull/42?",
+            "expected_contains": [".diff"],
+            "forbidden_contains": [],
+            "judge_rubric": "",
+        },
+    ],
+    "resume-builder": [
+        {
+            "input": "I want to tailor my resume for a role at Acme Corp. What do you need from me first?",
+            "expected_contains": ["Acme"],
+            "forbidden_contains": [],
+            "judge_rubric": "",
+        },
+    ],
+    "youtube-research": [
+        {
+            "input": "What would you look at to research a YouTube channel called Acme Reviews?",
+            "expected_contains": ["Acme"],
+            "forbidden_contains": [],
+            "judge_rubric": "",
+        },
+    ],
+    "clinical-research": [
+        {
+            "input": "Summarize what you'd search for on PubMed about a condition called Acme Syndrome.",
+            "expected_contains": ["Acme"],
+            "forbidden_contains": [],
+            "judge_rubric": "",
+        },
+    ],
+    "web-navigator": [
+        {
+            "input": "What would you do to summarize the page at https://example.com/acme?",
+            "expected_contains": ["Acme"],
+            "forbidden_contains": [],
+            "judge_rubric": "",
+        },
+    ],
 }
 
 
