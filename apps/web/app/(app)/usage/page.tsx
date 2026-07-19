@@ -1,7 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
+import { BarChart } from "@/components/dash/bar-chart";
+import { Panel } from "@/components/dash/panel";
+import { StatCard } from "@/components/dash/stat-card";
 import { Icon } from "@/components/landing/icons";
 import { Reveal } from "@/components/landing/reveal";
 import { PageHeader } from "@/components/page-header";
@@ -71,6 +74,7 @@ export default function UsagePage() {
   const [daily, setDaily] = useState<UsageDaily[]>([]);
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [chartMetric, setChartMetric] = useState<"tokens" | "cost">("tokens");
 
   const [pendingAgentIds, setPendingAgentIds] = useState<string[]>([]);
   const [edits, setEdits] = useState<Record<string, { token: string; usd: string }>>({});
@@ -202,10 +206,34 @@ export default function UsagePage() {
     setAddAgentId("");
   }
 
-  const maxTokens = Math.max(1, ...daily.map((d) => d.tokens));
+  // Stat row figures — all derived straight from /usage/summary, no
+  // fabricated aggregates. per_agent is scoped to the last 7 days by the
+  // backend (see routes/usage.py), so the 7-day cost/tokens/active-agents
+  // stats reuse that same window honestly rather than inventing a separate
+  // aggregate.
+  const sevenDayCost = useMemo(
+    () => (summary ? summary.per_agent.reduce((sum, a) => sum + a.cost_usd, 0) : 0),
+    [summary],
+  );
+  const sevenDayTokens = useMemo(
+    () => (summary ? summary.per_agent.reduce((sum, a) => sum + a.tokens, 0) : 0),
+    [summary],
+  );
+  const activeAgents = summary?.per_agent.length ?? 0;
+
+  const chartData = daily.map((d) => ({
+    label: d.date.slice(5),
+    value: chartMetric === "tokens" ? d.tokens : d.cost_usd,
+    tooltip:
+      chartMetric === "tokens"
+        ? `${d.date}: ${fmtInt(d.tokens)} tokens`
+        : `${d.date}: ${fmtUsd(d.cost_usd)}`,
+  }));
+
+  const maxAgentCost = Math.max(1e-9, ...(summary?.per_agent.map((a) => a.cost_usd) ?? [0]));
 
   return (
-    <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-8 sm:px-6">
+    <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6">
       <PageHeader
         icon={<Icon name="gauge" />}
         hue="blue"
@@ -218,63 +246,77 @@ export default function UsagePage() {
       </PageHeader>
       {note && <p className="mt-3 font-mono text-xs text-muted">{note}</p>}
 
-      {/* Stat tiles */}
-      <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <Reveal
+      {/* Stat row */}
+      <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <StatCard
+          label="Cost today"
+          value={summary ? fmtUsd(summary.today.cost_usd) : "—"}
+          sub={summary ? `${fmtInt(summary.today.messages)} messages` : undefined}
+          icon={<Icon name="gauge" />}
+          hue="blue"
+          pulse
           delay={0}
-          className="rounded-lg border border-hairline p-4 transition-colors duration-200 hover:border-accent/30"
-        >
-          <p className="text-xs text-muted">Tokens today</p>
-          <p className="mt-1 font-mono text-3xl font-medium">
-            {summary ? fmtInt(summary.today.tokens) : "—"}
-          </p>
-        </Reveal>
-        <Reveal
+        />
+        <StatCard
+          label="Cost (7d)"
+          value={summary ? fmtUsd(sevenDayCost) : "—"}
+          icon={<Icon name="activity" />}
+          hue="violet"
           delay={40}
-          className="rounded-lg border border-hairline p-4 transition-colors duration-200 hover:border-accent/30"
-        >
-          <p className="text-xs text-muted">Cost today</p>
-          <p className="mt-1 font-mono text-3xl font-medium">
-            {summary ? fmtUsd(summary.today.cost_usd) : "—"}
-          </p>
-        </Reveal>
-        <Reveal
+        />
+        <StatCard
+          label="Tokens (7d)"
+          value={summary ? fmtInt(sevenDayTokens) : "—"}
+          icon={<Icon name="sparkle" />}
+          hue="cyan"
           delay={80}
-          className="rounded-lg border border-hairline p-4 transition-colors duration-200 hover:border-accent/30"
-        >
-          <p className="text-xs text-muted">Messages today</p>
-          <p className="mt-1 font-mono text-3xl font-medium">
-            {summary ? fmtInt(summary.today.messages) : "—"}
-          </p>
-        </Reveal>
+        />
+        <StatCard
+          label="Active agents (7d)"
+          value={summary ? activeAgents : "—"}
+          icon={<Icon name="workflow" />}
+          hue="green"
+          delay={120}
+        />
       </div>
 
-        {/* 14-day bar chart */}
-        <div className="mt-8">
-          <h2 className="text-sm font-medium">Last 14 days (tokens)</h2>
-          <div className="mt-3 flex h-32 items-end gap-1 rounded-lg border border-hairline p-3">
-            {daily.map((d) => (
-              <div
-                key={d.date}
-                className="flex h-full flex-1 flex-col items-center justify-end"
-                title={`${d.date}: ${fmtInt(d.tokens)} tokens`}
-              >
-                <div
-                  className="w-full rounded-sm bg-accent"
-                  style={{ height: `${Math.max(2, (d.tokens / maxTokens) * 100)}%` }}
-                />
-              </div>
-            ))}
-            {daily.length === 0 && (
-              <p className="w-full text-center text-xs text-muted">No usage yet.</p>
-            )}
-          </div>
-        </div>
+      {/* Daily chart */}
+      <div className="mt-4">
+        <Panel
+          title="Last 14 days"
+          action={
+            <div className="flex gap-1 rounded-md border border-hairline p-0.5 text-xs">
+              {(["tokens", "cost"] as const).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => setChartMetric(m)}
+                  className={`cursor-pointer rounded px-2.5 py-1 capitalize transition-colors duration-200 ${
+                    chartMetric === m ? "bg-accent text-white" : "text-muted hover:text-foreground"
+                  }`}
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
+          }
+          delay={0}
+        >
+          <BarChart
+            data={chartData}
+            hue={chartMetric === "tokens" ? "blue" : "violet"}
+            title={`Daily ${chartMetric} over the last 14 days`}
+            desc="One bar per day; hover a bar for its exact value."
+            height={160}
+            valueFormatter={(v) => (chartMetric === "tokens" ? fmtInt(v) : fmtUsd(v))}
+            emptyLabel="No usage yet."
+          />
+        </Panel>
+      </div>
 
-        {/* Per-agent table */}
-        <div className="mt-8">
-          <h2 className="text-sm font-medium">Per agent (last 7 days)</h2>
-          <div className="mt-3 overflow-x-auto rounded-lg border border-hairline">
+      {/* Per-agent table */}
+      <div className="mt-4">
+        <Panel title="Per agent (last 7 days)" delay={40}>
+          <div className="overflow-x-auto rounded-lg border border-hairline">
             <table className="w-full text-left text-sm">
               <thead>
                 <tr className="border-b border-hairline text-xs text-muted">
@@ -285,14 +327,23 @@ export default function UsagePage() {
                 </tr>
               </thead>
               <tbody>
-                {summary?.per_agent.map((a) => (
-                  <tr key={a.agent_slug} className="border-b border-hairline transition-colors duration-200 last:border-0 hover:bg-white/[0.02]">
-                    <td className="px-3 py-2">{a.agent_name}</td>
-                    <td className="px-3 py-2 font-mono">{fmtInt(a.tokens)}</td>
-                    <td className="px-3 py-2 font-mono">{fmtUsd(a.cost_usd)}</td>
-                    <td className="px-3 py-2 font-mono">{fmtInt(a.messages)}</td>
-                  </tr>
-                ))}
+                {summary?.per_agent.map((a) => {
+                  const pct = Math.min(100, (a.cost_usd / maxAgentCost) * 100);
+                  return (
+                    <tr
+                      key={a.agent_slug}
+                      className="border-b border-hairline transition-colors duration-200 last:border-0 hover:bg-white/[0.02]"
+                      style={{
+                        backgroundImage: `linear-gradient(to right, color-mix(in srgb, var(--hue-blue) 16%, transparent) ${pct}%, transparent ${pct}%)`,
+                      }}
+                    >
+                      <td className="px-3 py-2">{a.agent_name}</td>
+                      <td className="px-3 py-2 font-mono">{fmtInt(a.tokens)}</td>
+                      <td className="px-3 py-2 font-mono">{fmtUsd(a.cost_usd)}</td>
+                      <td className="px-3 py-2 font-mono">{fmtInt(a.messages)}</td>
+                    </tr>
+                  );
+                })}
                 {(!summary || summary.per_agent.length === 0) && (
                   <tr>
                     <td colSpan={4} className="px-3 py-6 text-center text-sm text-muted">
@@ -303,17 +354,17 @@ export default function UsagePage() {
               </tbody>
             </table>
           </div>
-        </div>
+        </Panel>
+      </div>
 
-        {/* Budgets */}
-        <div className="mt-8">
-          <h2 className="text-sm font-medium">Budgets</h2>
-          <p className="mt-1 text-xs text-muted">
-            Daily caps checked before each reply — a violation on either the agent or the global
-            budget stops the turn.
-          </p>
-
-          <div className="mt-3 space-y-2">
+      {/* Budgets */}
+      <div className="mt-4">
+        <Panel
+          title="Budgets"
+          description="Daily caps checked before each reply — a violation on either the agent or the global budget stops the turn."
+          delay={80}
+        >
+          <div className="space-y-2">
             {rows.map((row, i) => (
               <Reveal
                 key={row.key}
@@ -384,7 +435,8 @@ export default function UsagePage() {
               </button>
             </div>
           )}
-        </div>
+        </Panel>
+      </div>
     </main>
   );
 }
