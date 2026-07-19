@@ -209,6 +209,18 @@ body {
   animation: float-3d 8s ease-in-out infinite;
 }
 
+/* A small ring spinner for "Agent working…" states (UI-5 Chunk B rich
+   Kanban vignette's In Progress card). */
+@keyframes spin-slow {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin-slow {
+  animation: spin-slow 1.1s linear infinite;
+}
+
 /* Hero agent-network graph: edges pulse-travel toward each node. */
 .network-edge {
   stroke-dasharray: 6 46;
@@ -231,6 +243,7 @@ body {
   .animate-pulse-node,
   .animate-drift,
   .animate-float-3d,
+  .animate-spin-slow,
   .network-node {
     animation: none;
     opacity: 1;

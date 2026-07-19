@@ -1,12 +1,12 @@
-// Full-width, pure-SVG agent-constellation background for the hero (UI-3).
-// Purely decorative (aria-hidden) — sits behind the centered headline via
-// absolute positioning + a mask applied by the caller in page.tsx.
+// Pure-SVG agent-constellation background for the hero (UI-3; UI-5 Chunk B
+// moved it to a full-bleed low-opacity backdrop behind the split hero
+// rather than the centered headline it originally sat behind). Purely
+// decorative (aria-hidden) — a denser cluster than any single agent count,
+// intentionally not 1:1 with the real roster (17 agents as of Chunk A;
+// the Built-in Agents section below names each one for real).
 
 import type { Hue } from "./icons";
 
-// 9 nodes = the real built-in-agent count (see stats-strip.tsx), orbiting a
-// central orchestrator node — decorative, not meant to name each agent
-// (the roster section below does that with real names).
 const NODES: { label: string; hue: Hue }[] = [
   { label: "R", hue: "blue" },
   { label: "W", hue: "violet" },
@@ -17,6 +17,9 @@ const NODES: { label: string; hue: Hue }[] = [
   { label: "O", hue: "blue" },
   { label: "F", hue: "violet" },
   { label: "D", hue: "cyan" },
+  { label: "K", hue: "amber" },
+  { label: "P", hue: "green" },
+  { label: "Y", hue: "red" },
 ];
 
 const HUE_STROKE: Record<Hue, string> = {

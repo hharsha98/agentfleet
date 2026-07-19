@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { IconTile, type Hue, type IconName } from "./icons";
 import { Reveal } from "./reveal";
+import { SectionHeader } from "./section-header";
 
 const OPS_ITEMS: {
   icon: IconName;
@@ -52,15 +53,13 @@ const OPS_ITEMS: {
 export function OpsLayer() {
   return (
     <div className="flex flex-col gap-10">
-      <Reveal className="flex flex-col gap-3">
-        <span className="font-mono text-xs text-muted">THE OPS LAYER</span>
-        <h2 className="text-2xl font-medium tracking-tight sm:text-3xl">
-          Production controls, not a demo.
-        </h2>
-        <p className="max-w-xl text-muted">
-          Most agent demos stop at a chat window. AgentFleet ships with the
-          governance layer that makes agents safe to run in production.
-        </p>
+      <Reveal>
+        <SectionHeader
+          eyebrow="Production Controls"
+          hue="red"
+          title="The governance layer that makes agents safe to ship"
+          tagline="Most agent demos stop at a chat window. Evals, guardrails, cost caps, and versioned rollouts are what separate a production system from a toy."
+        />
       </Reveal>
 
       <div className="grid grid-cols-1 gap-x-8 gap-y-10 md:grid-cols-2">

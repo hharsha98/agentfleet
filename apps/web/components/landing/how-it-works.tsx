@@ -3,6 +3,8 @@
 import Link from "next/link";
 
 import { IconTile, type Hue, type IconName } from "./icons";
+import { Reveal } from "./reveal";
+import { SectionHeader } from "./section-header";
 import { useReveal } from "./use-reveal";
 
 type Step = {
@@ -70,12 +72,14 @@ function Connector() {
 export function HowItWorks() {
   return (
     <section className="mx-auto max-w-6xl px-6 py-24">
-      <div className="mb-12 flex flex-col gap-3">
-        <span className="font-mono text-xs text-muted">HOW IT WORKS</span>
-        <h2 className="text-2xl font-medium tracking-tight sm:text-3xl">
-          From goal to shipped agent, in three steps.
-        </h2>
-      </div>
+      <Reveal className="mb-12">
+        <SectionHeader
+          eyebrow="Autonomous Execution"
+          hue="violet"
+          title="From goal to finished work, hands-free"
+          tagline="The orchestrator decomposes your goal into a task DAG, routes each step to the right agent, and pauses for your approval wherever you want a checkpoint."
+        />
+      </Reveal>
 
       <div className="flex flex-col gap-8 md:flex-row md:items-start md:gap-6">
         {STEPS.map((step, i) => (

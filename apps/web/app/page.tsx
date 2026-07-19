@@ -7,8 +7,11 @@ import { FeatureGrid } from "@/components/landing/feature-grid";
 import { Hero3D } from "@/components/landing/hero-3d";
 import { HowItWorks } from "@/components/landing/how-it-works";
 import { OpsLayer } from "@/components/landing/ops-layer";
+import { Reveal } from "@/components/landing/reveal";
 import { Roster } from "@/components/landing/roster";
+import { SectionHeader } from "@/components/landing/section-header";
 import { StatsStrip } from "@/components/landing/stats-strip";
+import { Workflows } from "@/components/landing/workflows";
 import { UserMenu } from "@/components/user-menu";
 
 const GITHUB_URL = "https://github.com/hharsha98/agentfleet";
@@ -85,8 +88,11 @@ export default function Home() {
       </header>
 
       <main className="flex-1">
-        {/* HERO — centered text over a full-width animated agent-network
-            graph (UI-3 USER CHOICE, replaces the old split terminal hero). */}
+        {/* HERO — split layout (UI-5 Chunk B USER CHOICE, replacing the
+            UI-3 centered hero): copy left, 3D panel cluster right. The
+            agent-network graph stays as a full-bleed low-opacity backdrop
+            behind both columns rather than a center-masked overlay, since
+            the headline is no longer centered over it. */}
         <section
           className="relative overflow-hidden"
           style={{ perspective: "1200px" }}
@@ -96,77 +102,73 @@ export default function Home() {
             className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,var(--hairline)_1px,transparent_1px),linear-gradient(to_bottom,var(--hairline)_1px,transparent_1px)] bg-[size:32px_32px] opacity-[0.12]"
           />
 
-          {/* Decorative network graph, dimmed + center-masked so the
-              headline stays fully readable on top of it. Wrapped in a
-              slight translateZ/scale layer (UI-4a) so it reads as the back
-              plane of the 3D scene rather than a flat backdrop. */}
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-0 opacity-60 [mask-image:radial-gradient(ellipse_65%_70%_at_50%_45%,transparent_20%,black_75%)]"
-            style={{
-              transform: "translateZ(-40px) scale(1.05)",
-              transformStyle: "preserve-3d",
-            }}
-          >
+          {/* Decorative network graph, full-bleed at low opacity so it
+              reads as ambient texture behind the split layout instead of
+              competing with either column. */}
+          <div aria-hidden className="pointer-events-none absolute inset-0 opacity-25">
             <AgentNetwork />
           </div>
 
-          {/* CSS-3D floating product panels, layered between the network
-              graph and the headline (UI-4a). */}
-          <Hero3D />
+          <div className="relative mx-auto grid max-w-6xl grid-cols-1 items-center gap-10 px-6 py-20 sm:py-28 lg:grid-cols-2 lg:gap-14 lg:py-32">
+            {/* LEFT — heading, pills, subcopy, CTAs (left-aligned). */}
+            <div className="flex flex-col items-start gap-6 text-left">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center rounded-full border border-hairline px-3 py-1 font-mono text-xs text-muted">
+                  OPEN SOURCE · SELF-HOSTABLE
+                </span>
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-hairline px-3 py-1 font-mono text-xs text-muted">
+                  <span className="h-1.5 w-1.5 rounded-full bg-hue-green animate-pulse-soft" />
+                  17 built-in agents
+                </span>
+              </div>
 
-          <div className="relative mx-auto flex max-w-3xl flex-col items-center gap-6 px-6 py-24 text-center sm:py-32 lg:py-40">
-            <div className="flex flex-wrap items-center justify-center gap-2">
-              <span className="inline-flex items-center rounded-full border border-hairline px-3 py-1 font-mono text-xs text-muted">
-                OPEN SOURCE · SELF-HOSTABLE
-              </span>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-hairline px-3 py-1 font-mono text-xs text-muted">
-                <span className="h-1.5 w-1.5 rounded-full bg-hue-green animate-pulse-soft" />
-                17 built-in agents
-              </span>
-            </div>
+              <h1 className="text-4xl font-medium tracking-tight sm:text-5xl lg:text-6xl">
+                <span className="block text-foreground">
+                  Run a team of AI agents
+                </span>
+                <span className="block bg-gradient-to-r from-accent via-hue-violet to-hue-cyan bg-clip-text text-transparent">
+                  that research, build, and ship for you.
+                </span>
+              </h1>
 
-            <h1 className="text-4xl font-medium tracking-tight sm:text-5xl lg:text-6xl">
-              <span className="block text-foreground">
-                Run a team of AI agents
-              </span>
-              <span className="block bg-gradient-to-r from-accent via-hue-violet to-hue-cyan bg-clip-text text-transparent">
-                that research, build, and ship for you.
-              </span>
-            </h1>
+              <p className="max-w-md text-muted">
+                Seventeen specialist agents, a mission board that turns goals
+                into tasks, and the guardrails to trust what they do — open
+                source, self-hosted.
+              </p>
 
-            <p className="max-w-md text-muted">
-              Seventeen specialist agents, a mission board that turns goals
-              into tasks, and the guardrails to trust what they do — open
-              source, self-hosted.
-            </p>
-
-            <div className="flex flex-wrap items-center justify-center gap-5">
-              <Link
-                href="/chat"
-                className="group inline-flex cursor-pointer items-center gap-2 rounded-full bg-accent px-5 py-2.5 text-sm font-medium text-white shadow-[0_8px_30px_-8px_rgba(94,106,210,0.6)] transition-all duration-200 hover:-translate-y-0.5 hover:opacity-90 hover:shadow-[0_12px_36px_-8px_rgba(94,106,210,0.75)]"
-              >
-                Launch the fleet
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="h-3.5 w-3.5 transition-transform duration-200 group-hover:translate-x-0.5"
-                  aria-hidden
+              <div className="flex flex-wrap items-center gap-5">
+                <Link
+                  href="/chat"
+                  className="group inline-flex cursor-pointer items-center gap-2 rounded-full bg-accent px-5 py-2.5 text-sm font-medium text-white shadow-[0_8px_30px_-8px_rgba(94,106,210,0.6)] transition-all duration-200 hover:-translate-y-0.5 hover:opacity-90 hover:shadow-[0_12px_36px_-8px_rgba(94,106,210,0.75)]"
                 >
-                  <path d="M5 12h14M13 6l6 6-6 6" />
-                </svg>
-              </Link>
-              <Link
-                href="/changelog"
-                className="cursor-pointer text-sm font-medium text-muted underline underline-offset-4 transition-colors duration-200 hover:text-foreground"
-              >
-                View changelog
-              </Link>
+                  Launch the fleet
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="h-3.5 w-3.5 transition-transform duration-200 group-hover:translate-x-0.5"
+                    aria-hidden
+                  >
+                    <path d="M5 12h14M13 6l6 6-6 6" />
+                  </svg>
+                </Link>
+                <Link
+                  href="/changelog"
+                  className="cursor-pointer text-sm font-medium text-muted underline underline-offset-4 transition-colors duration-200 hover:text-foreground"
+                >
+                  View changelog
+                </Link>
+              </div>
             </div>
+
+            {/* RIGHT — 3D panel cluster (trace/kanban/sparkline), pointer
+                tilt kept. Collapses to a single panel below the text on
+                mobile since the grid is single-column there. */}
+            <Hero3D />
           </div>
         </section>
 
@@ -178,21 +180,29 @@ export default function Home() {
 
         {/* BENTO FEATURES GRID */}
         <section id="features" className="mx-auto max-w-6xl px-6 py-24">
-          <div className="mb-12 flex flex-col gap-3">
-            <span className="font-mono text-xs text-muted">FEATURES</span>
-            <h2 className="text-2xl font-medium tracking-tight sm:text-3xl">
-              Six pillars, one fleet.
-            </h2>
-          </div>
+          <Reveal className="mb-12">
+            <SectionHeader
+              eyebrow="Core Features"
+              hue="blue"
+              title="Everything you need to run AI agents in production"
+              tagline="A full production stack — streaming chat to Kubernetes deployment. Real tools, real guardrails, no toy demos."
+            />
+          </Reveal>
           <FeatureGrid />
         </section>
 
-        {/* DEEP DIVES — one per pillar: BIG alternating blocks for Chat,
-            Orchestration, Observability (HeroTrace lives here now); COMPACT
-            cards for Builder, Document Intelligence, Publish. */}
+        {/* DEEP DIVES — BIG alternating blocks for Chat, Orchestration
+            (rich Kanban vignette + explainer cards), Observability
+            (HeroTrace lives here now); COMPACT cards for Builder, Document
+            Intelligence, Publish. */}
         <DeepDives />
 
-        {/* AGENT ROSTER */}
+        {/* WORKFLOWS — NEW (UI-5 Chunk B): 4-step pipeline diagram chaining
+            agents into an automated run, extending the orchestration idea
+            above. Links to /missions. */}
+        <Workflows />
+
+        {/* BUILT-IN AGENTS (renamed from "roster") */}
         <Roster />
 
         {/* OPS LAYER */}
@@ -226,7 +236,7 @@ export default function Home() {
             />
             <div className="relative flex flex-col items-center gap-6">
               <h2 className="text-2xl font-medium tracking-tight sm:text-3xl">
-                Ready to run your own fleet?
+                Ready to put agents to work?
               </h2>
               <p className="max-w-md text-muted">
                 Self-host it in an afternoon. MIT licensed, docker-composed,

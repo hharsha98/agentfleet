@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { Reveal } from "./reveal";
+import { SectionHeader } from "./section-header";
 
 // Deterministic slug -> hue mapping, same hash idiom as chat-ui.tsx's
 // hueForSlug so the roster's tile colors match what a user later sees in
@@ -170,18 +171,19 @@ function AgentCard({
 export function Roster() {
   return (
     <section className="mx-auto max-w-6xl px-6 py-24">
-      <div className="mb-12 flex flex-col gap-3">
-        <span className="font-mono text-xs text-muted">THE ROSTER</span>
-        <h2 className="text-2xl font-medium tracking-tight sm:text-3xl">
-          17 built-in agents, 2 runtimes.
-        </h2>
-        <p className="max-w-xl text-muted">
-          Every agent below ships with the app — real system prompts, real
-          tools, no stubs. Sixteen run on LangGraph; Fact Checker runs on
-          Pydantic AI, to prove the platform isn&apos;t locked to one
-          framework.
+      <Reveal className="mb-12 flex flex-col gap-4">
+        <SectionHeader
+          eyebrow="Built-in Agents"
+          hue="cyan"
+          title="Specialized agents, ready to deploy"
+          tagline="Each agent ships preconfigured with the right tools and prompts. Use the built-in lineup or create your own."
+        />
+        <p className="max-w-xl text-sm text-muted">
+          17 agents total — real system prompts, real tools, no stubs.
+          Sixteen run on LangGraph; Fact Checker runs on Pydantic AI, to
+          prove the platform isn&apos;t locked to one framework.
         </p>
-      </div>
+      </Reveal>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {AGENTS.map((agent, i) => (

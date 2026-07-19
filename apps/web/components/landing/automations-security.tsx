@@ -48,15 +48,17 @@ export function AutomationsSecurity() {
           >
             <div className="flex items-center gap-3">
               <IconTile icon="clock" hue="blue" />
-              <span className="font-mono text-xs text-muted">AUTOMATIONS</span>
+              <span className="font-mono text-xs font-medium uppercase tracking-[0.14em] text-hue-blue">
+                Automations
+              </span>
             </div>
             <h3 className="font-medium tracking-tight text-foreground">
               Runs while you sleep
             </h3>
             <p className="text-sm text-muted">
-              Schedule a goal on a cron and the fleet runs it unattended, or
-              trigger a run from an inbound webhook. Both live in one
-              /automations screen next to the runs they create.
+              Schedule a goal on a cron and it runs unattended, or trigger a
+              run from an inbound webhook. Both live in one /automations
+              screen next to the runs they create.
             </p>
             <CronVignette />
           </Link>
@@ -70,7 +72,9 @@ export function AutomationsSecurity() {
           >
             <div className="flex items-center gap-3">
               <IconTile icon="shield" hue="green" />
-              <span className="font-mono text-xs text-muted">SECURITY</span>
+              <span className="font-mono text-xs font-medium uppercase tracking-[0.14em] text-hue-green">
+                Security
+              </span>
             </div>
             <h3 className="font-medium tracking-tight text-foreground">
               Enterprise-grade foundation

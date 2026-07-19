@@ -28,7 +28,7 @@ export default async function ChatPage() {
             <Icon name="chat" className="h-3.5 w-3.5 text-hue-blue" />
           </span>
           <p className="truncate text-sm text-muted">
-            Talk to any agent in the fleet. Tool calls appear live as cards, big outputs
+            Talk to any agent. Tool calls appear live as cards, big outputs
             open as artifacts, and every reply shows its token cost.
           </p>
         </div>

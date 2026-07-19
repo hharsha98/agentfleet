@@ -147,7 +147,7 @@ export default function TemplatesPage() {
                       disabled={state.status === "busy"}
                       className="w-full cursor-pointer rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity duration-200 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
                     >
-                      {state.status === "busy" ? "Adding…" : "Add to fleet"}
+                      {state.status === "busy" ? "Adding…" : "Install agent"}
                     </button>
                   )}
                   {state.status === "error" && (

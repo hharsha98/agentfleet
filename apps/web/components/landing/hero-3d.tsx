@@ -1,10 +1,14 @@
 "use client";
 
-// CSS-only 3D hero treatment (UI-4a) — no three.js, no new deps. A
-// perspective scene of small floating product-vignette panels, layered
-// between AgentNetwork and the headline in page.tsx. Purely decorative
-// (aria-hidden), positioned at the edges so the centered headline column
-// stays unobstructed.
+// CSS-only 3D hero treatment — no three.js, no new deps. A perspective
+// scene of small floating product-vignette panels (trace / kanban /
+// sparkline). UI-4a shipped this as a full-bleed backdrop behind a
+// centered headline; UI-5 Chunk B recomposes it as the hero's RIGHT
+// column in a split layout — this component now renders inside a sized,
+// in-flow box (not an absolute full-bleed overlay), so it sits next to
+// the left-column copy instead of behind it. On mobile the grid column
+// collapses to one, so this renders as a single panel below the text
+// (only the "kanban" panel is mobileVisible).
 //
 // Mouse-move parallax tilts the whole scene a few degrees toward the
 // pointer, damped via requestAnimationFrame + lerp and applied through a
@@ -207,7 +211,7 @@ export function Hero3D() {
     <div
       ref={containerRef}
       aria-hidden
-      className="pointer-events-none absolute inset-0 opacity-70 [mask-image:radial-gradient(ellipse_62%_65%_at_50%_45%,transparent_25%,black_82%)]"
+      className="pointer-events-none relative h-56 w-full sm:h-72 lg:h-[480px]"
       style={{ perspective: "1200px" }}
     >
       <div

@@ -110,7 +110,7 @@ export default function VoicePage() {
         icon={<Icon name="activity" />}
         hue="green"
         title="Voice Agent"
-        description="Talk to the fleet out loud. The browser handles your mic; Vapi handles speech — add a key to go live."
+        description="Talk to your agents out loud. The browser handles your mic; Vapi handles speech — add a key to go live."
       />
       {note && <p className="mt-3 font-mono text-xs text-muted">{note}</p>}
 

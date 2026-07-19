@@ -112,8 +112,8 @@ export default function AgentsPage() {
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  // API keys (Publish pillar): which agent's keys panel is expanded, the
-  // keys loaded for it, the "create key" mini-form input, and the
+  // API keys (Publish & Integrate): which agent's keys panel is expanded,
+  // the keys loaded for it, the "create key" mini-form input, and the
   // full key shown exactly once right after creation.
   const [keysOpenId, setKeysOpenId] = useState<string | null>(null);
   const [keysByAgent, setKeysByAgent] = useState<Record<string, ApiKeyItem[]>>({});
@@ -128,9 +128,9 @@ export default function AgentsPage() {
   const [redTeamByAgent, setRedTeamByAgent] = useState<Record<string, RedTeamRun | null>>({});
   const [redTeamExpanded, setRedTeamExpanded] = useState<Record<string, boolean>>({});
 
-  // Versioning (Ops pillar): which agent's version history panel is
-  // expanded, the versions loaded for it, the "publish" note input, busy
-  // flags for publish/rollback, and a brief "restored" confirmation.
+  // Versioning (Production Controls): which agent's version history panel
+  // is expanded, the versions loaded for it, the "publish" note input,
+  // busy flags for publish/rollback, and a brief "restored" confirmation.
   const [versionsOpenId, setVersionsOpenId] = useState<string | null>(null);
   const [versionsByAgent, setVersionsByAgent] = useState<Record<string, AgentVersion[]>>({});
   const [publishNote, setPublishNote] = useState<Record<string, string>>({});
