@@ -3,9 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
+import { AgentBoard, AgentBoardOverlay } from "@/components/agent-board";
 import { AgentGlyph } from "@/components/agent-visual";
 import { ArtifactPanel } from "@/components/artifact-panel";
-import { EmptyState } from "@/components/empty-state";
+import { MicButton } from "@/components/mic-button";
 import { apiFetch } from "@/lib/api";
 import { parseMessageParts, type Artifact } from "@/lib/artifacts";
 
@@ -70,8 +71,10 @@ export function ChatUI({ agents }: { agents: AgentInfo[] }) {
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [activeArtifact, setActiveArtifact] = useState<Artifact | null>(null);
+  const [boardOpen, setBoardOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     // Follow the stream only while the reader is already near the bottom —
@@ -199,35 +202,49 @@ export function ChatUI({ agents }: { agents: AgentInfo[] }) {
           activeArtifact ? "" : "mx-auto max-w-3xl"
         }`}
       >
-      <div className="flex gap-2 overflow-x-auto py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {agents.map((a) => (
+      {messages.length > 0 && (
+        <div className="flex gap-2 overflow-x-auto py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {agents.map((a) => (
+            <button
+              key={a.id}
+              onClick={() => selectAgent(a)}
+              title={a.description}
+              className={`flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1 text-sm transition-colors duration-200 ${
+                a.id === agent?.id
+                  ? "border-accent bg-accent/15 text-foreground"
+                  : "border-hairline text-muted hover:text-foreground"
+              }`}
+            >
+              <AgentGlyph slug={a.slug} name={a.name} size="sm" />
+              {a.name}
+            </button>
+          ))}
           <button
-            key={a.id}
-            onClick={() => selectAgent(a)}
-            title={a.description}
-            className={`flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1 text-sm transition-colors duration-200 ${
-              a.id === agent?.id
-                ? "border-accent bg-accent/15 text-foreground"
-                : "border-hairline text-muted hover:text-foreground"
-            }`}
+            type="button"
+            disabled={streaming}
+            onClick={() => setBoardOpen(true)}
+            className="flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border border-hairline px-3 py-1 text-sm text-muted transition-colors duration-200 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
           >
-            <AgentGlyph slug={a.slug} name={a.name} size="sm" />
-            {a.name}
+            All agents
           </button>
-        ))}
-      </div>
+        </div>
+      )}
 
       <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto py-4">
         {messages.length === 0 && (
-          <EmptyState
-            glyph={<ChatGlyph />}
-            title={agent ? "Ask anything" : "Pick an agent to start"}
-            description={
-              agent
-                ? `Chat with ${agent.name} — tool calls, artifacts, and usage show up right here.`
-                : "Choose an agent above, then send your first message."
-            }
-          />
+          <div>
+            <p className="mb-4 text-sm text-muted">
+              {agent ? "Ask anything" : "Pick an agent to start"}
+            </p>
+            <AgentBoard
+              agents={agents}
+              selectedId={agent?.id}
+              onSelect={(a) => {
+                selectAgent(a);
+                inputRef.current?.focus();
+              }}
+            />
+          </div>
         )}
         {messages.map((m, i) => (
           <div key={i} className={m.role === "user" ? "flex justify-end" : "flex justify-start"}>
@@ -301,11 +318,13 @@ export function ChatUI({ agents }: { agents: AgentInfo[] }) {
         className="sticky bottom-0 flex gap-2 border-t border-hairline bg-background py-3"
       >
         <input
+          ref={inputRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder={agent ? `Message ${agent.name}…` : "Pick an agent first"}
           className="flex-1 rounded-md border border-hairline bg-transparent px-3 py-2 text-sm outline-none transition-colors duration-200 placeholder:text-muted focus:border-accent focus-visible:ring-2 focus-visible:ring-accent/30"
         />
+        <MicButton onTranscript={(t) => setInput((v) => (v ? v + " " + t : t))} />
         {streaming ? (
           <button
             type="button"
@@ -325,6 +344,18 @@ export function ChatUI({ agents }: { agents: AgentInfo[] }) {
         )}
       </form>
       </div>
+      {boardOpen && (
+        <AgentBoardOverlay
+          agents={agents}
+          selectedId={agent?.id}
+          onSelect={(a) => {
+            selectAgent(a);
+            setBoardOpen(false);
+            inputRef.current?.focus();
+          }}
+          onClose={() => setBoardOpen(false)}
+        />
+      )}
       {activeArtifact && (
         <ArtifactPanel artifact={activeArtifact} onClose={() => setActiveArtifact(null)} />
       )}
@@ -362,22 +393,5 @@ function ConversationInfoRail({
         </div>
       </dl>
     </aside>
-  );
-}
-
-function ChatGlyph() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.75}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="h-5 w-5"
-      aria-hidden="true"
-    >
-      <path d="M4 5.5h16a1 1 0 0 1 1 1V16a1 1 0 0 1-1 1H9l-4.5 4V17H4a1 1 0 0 1-1-1V6.5a1 1 0 0 1 1-1Z" />
-    </svg>
   );
 }

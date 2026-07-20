@@ -8,6 +8,7 @@ import { StatCard } from "@/components/dash/stat-card";
 import { EmptyState } from "@/components/empty-state";
 import { HUE_CLASSES, Icon, type Hue } from "@/components/landing/icons";
 import { Reveal } from "@/components/landing/reveal";
+import { MicButton } from "@/components/mic-button";
 import { apiFetch } from "@/lib/api";
 
 type Task = {
@@ -438,6 +439,7 @@ export default function MissionsPage() {
           placeholder="Give the fleet a goal — the Orchestrator plans it, agents execute it…"
           className="flex-1 rounded-md border border-hairline bg-transparent px-3 py-2 text-sm outline-none transition-colors duration-200 placeholder:text-muted focus:border-accent"
         />
+        <MicButton onTranscript={(t) => setGoal((v) => (v ? v + " " + t : t))} />
         <button
           type="submit"
           disabled={busy || !goal.trim()}

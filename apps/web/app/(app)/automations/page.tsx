@@ -7,6 +7,7 @@ import { StatCard } from "@/components/dash/stat-card";
 import { EmptyState } from "@/components/empty-state";
 import { Icon, IconTile } from "@/components/landing/icons";
 import { Reveal } from "@/components/landing/reveal";
+import { MicButton } from "@/components/mic-button";
 import { PageHeader } from "@/components/page-header";
 import { apiFetch } from "@/lib/api";
 
@@ -352,14 +353,20 @@ export default function AutomationsPage() {
               className={inputClass}
             />
 
-            <textarea
-              value={goal}
-              onChange={(e) => setGoal(e.target.value)}
-              placeholder="Goal — the same kind of thing you'd type on the Missions page"
-              rows={3}
-              required
-              className={inputClass}
-            />
+            <div className="relative">
+              <textarea
+                value={goal}
+                onChange={(e) => setGoal(e.target.value)}
+                placeholder="Goal — the same kind of thing you'd type on the Missions page"
+                rows={3}
+                required
+                className={inputClass}
+              />
+              <MicButton
+                className="absolute bottom-2 right-2 py-1"
+                onTranscript={(t) => setGoal((v) => (v ? v + " " + t : t))}
+              />
+            </div>
 
             <div>
               <input
@@ -466,14 +473,20 @@ export default function AutomationsPage() {
             />
 
             <div>
-              <textarea
-                value={whGoal}
-                onChange={(e) => setWhGoal(e.target.value)}
-                placeholder="Goal template — e.g. Triage this ticket: {payload}"
-                rows={3}
-                required
-                className={inputClass}
-              />
+              <div className="relative">
+                <textarea
+                  value={whGoal}
+                  onChange={(e) => setWhGoal(e.target.value)}
+                  placeholder="Goal template — e.g. Triage this ticket: {payload}"
+                  rows={3}
+                  required
+                  className={inputClass}
+                />
+                <MicButton
+                  className="absolute bottom-2 right-2 py-1"
+                  onTranscript={(t) => setWhGoal((v) => (v ? v + " " + t : t))}
+                />
+              </div>
               <p className="mt-1.5 font-mono text-[11px] text-muted">
                 use <code>{"{payload}"}</code> to inject the request body
               </p>

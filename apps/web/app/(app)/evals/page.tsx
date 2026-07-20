@@ -7,6 +7,7 @@ import { StatCard } from "@/components/dash/stat-card";
 import { EmptyState } from "@/components/empty-state";
 import { Icon } from "@/components/landing/icons";
 import { Reveal } from "@/components/landing/reveal";
+import { MicButton } from "@/components/mic-button";
 import { PageHeader } from "@/components/page-header";
 import { apiFetch } from "@/lib/api";
 
@@ -364,14 +365,22 @@ export default function EvalsPage() {
                   }}
                   className="mb-3 space-y-3 rounded-lg border border-hairline p-4"
                 >
-                  <textarea
-                    value={form.input}
-                    onChange={(e) => setForm((f) => ({ ...f, input: e.target.value }))}
-                    placeholder="Input the agent will receive"
-                    rows={3}
-                    required
-                    className={inputClass}
-                  />
+                  <div className="relative">
+                    <textarea
+                      value={form.input}
+                      onChange={(e) => setForm((f) => ({ ...f, input: e.target.value }))}
+                      placeholder="Input the agent will receive"
+                      rows={3}
+                      required
+                      className={inputClass}
+                    />
+                    <MicButton
+                      className="absolute bottom-2 right-2 py-1"
+                      onTranscript={(t) =>
+                        setForm((f) => ({ ...f, input: f.input ? f.input + " " + t : t }))
+                      }
+                    />
+                  </div>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <input
                       value={form.expected_contains}
@@ -598,13 +607,19 @@ export default function EvalsPage() {
           description="Paste any text — retrieved content, a user message — to check for prompt-injection phrases and personal data."
           delay={80}
         >
-          <textarea
-            value={guardrailText}
-            onChange={(e) => setGuardrailText(e.target.value)}
-            placeholder="Paste text to scan…"
-            rows={4}
-            className={inputClass}
-          />
+          <div className="relative">
+            <textarea
+              value={guardrailText}
+              onChange={(e) => setGuardrailText(e.target.value)}
+              placeholder="Paste text to scan…"
+              rows={4}
+              className={inputClass}
+            />
+            <MicButton
+              className="absolute bottom-2 right-2 py-1"
+              onTranscript={(t) => setGuardrailText((v) => (v ? v + " " + t : t))}
+            />
+          </div>
           <div className="mt-2 flex items-center gap-3">
             <button
               onClick={scanGuardrails}

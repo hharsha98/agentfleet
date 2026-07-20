@@ -7,6 +7,7 @@ import { StatCard } from "@/components/dash/stat-card";
 import { EmptyState } from "@/components/empty-state";
 import { Icon } from "@/components/landing/icons";
 import { Reveal } from "@/components/landing/reveal";
+import { MicButton } from "@/components/mic-button";
 import { PageHeader } from "@/components/page-header";
 import { apiFetch } from "@/lib/api";
 
@@ -307,23 +308,35 @@ export default function PlaygroundPage() {
         <div className="space-y-3">
           <div>
             <label className="mb-1.5 block font-mono text-xs text-muted">system prompt</label>
-            <textarea
-              value={systemPrompt}
-              onChange={(e) => setSystemPrompt(e.target.value)}
-              placeholder="Optional — shared by both variants"
-              rows={3}
-              className={inputClass}
-            />
+            <div className="relative">
+              <textarea
+                value={systemPrompt}
+                onChange={(e) => setSystemPrompt(e.target.value)}
+                placeholder="Optional — shared by both variants"
+                rows={3}
+                className={inputClass}
+              />
+              <MicButton
+                className="absolute bottom-2 right-2 py-1"
+                onTranscript={(t) => setSystemPrompt((v) => (v ? v + " " + t : t))}
+              />
+            </div>
           </div>
           <div>
             <label className="mb-1.5 block font-mono text-xs text-muted">user message</label>
-            <textarea
-              value={userMessage}
-              onChange={(e) => setUserMessage(e.target.value)}
-              placeholder="What should both variants respond to?"
-              rows={3}
-              className={inputClass}
-            />
+            <div className="relative">
+              <textarea
+                value={userMessage}
+                onChange={(e) => setUserMessage(e.target.value)}
+                placeholder="What should both variants respond to?"
+                rows={3}
+                className={inputClass}
+              />
+              <MicButton
+                className="absolute bottom-2 right-2 py-1"
+                onTranscript={(t) => setUserMessage((v) => (v ? v + " " + t : t))}
+              />
+            </div>
           </div>
         </div>
 

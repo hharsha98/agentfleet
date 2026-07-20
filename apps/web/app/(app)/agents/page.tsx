@@ -8,6 +8,7 @@ import { StatCard } from "@/components/dash/stat-card";
 import { EmptyState } from "@/components/empty-state";
 import { Icon } from "@/components/landing/icons";
 import { Reveal } from "@/components/landing/reveal";
+import { MicButton } from "@/components/mic-button";
 import { PageHeader } from "@/components/page-header";
 import { apiFetch } from "@/lib/api";
 
@@ -526,14 +527,25 @@ export default function AgentsPage() {
               className={inputClass}
             />
 
-            <textarea
-              value={form.system_prompt}
-              onChange={(e) => setForm((f) => ({ ...f, system_prompt: e.target.value }))}
-              placeholder="System prompt"
-              rows={5}
-              required
-              className={inputClass}
-            />
+            <div className="relative">
+              <textarea
+                value={form.system_prompt}
+                onChange={(e) => setForm((f) => ({ ...f, system_prompt: e.target.value }))}
+                placeholder="System prompt"
+                rows={5}
+                required
+                className={inputClass}
+              />
+              <MicButton
+                className="absolute bottom-2 right-2 py-1"
+                onTranscript={(t) =>
+                  setForm((f) => ({
+                    ...f,
+                    system_prompt: f.system_prompt ? f.system_prompt + " " + t : t,
+                  }))
+                }
+              />
+            </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
               <input
