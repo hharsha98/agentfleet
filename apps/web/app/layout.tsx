@@ -35,8 +35,13 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">
         {children}
         <CommandPalette />
-        {/* Dev-only visual feedback toolbar; never render in production */}
-        {process.env.NODE_ENV === "development" && <Agentation />}
+        {/* Dev-only visual feedback toolbar; never render in production.
+            endpoint points at the local agentation-mcp server (registered
+            separately, `claude mcp add agentation`) so annotations sync to
+            Claude Code instead of just going to the clipboard. */}
+        {process.env.NODE_ENV === "development" && (
+          <Agentation endpoint="http://localhost:4747" />
+        )}
       </body>
     </html>
   );
