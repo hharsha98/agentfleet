@@ -92,6 +92,12 @@ class Run(Base):
     user_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
+    # Set when this Run was started from a saved Workflow (compiled by
+    # services/workflow_compiler.py) rather than freeform goal text planned
+    # by the LLM orchestrator. Nullable: most runs today are still freeform.
+    workflow_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("workflows.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     tasks: Mapped[list["RunTask"]] = relationship(
@@ -313,3 +319,34 @@ class Message(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     conversation: Mapped[Conversation] = relationship(back_populates="messages")
+
+
+class Workflow(Base):
+    """A human-authored visual workflow: a canvas graph of agent-step nodes
+    and dependency edges, built in the (future) drag-and-drop workflow
+    builder UI rather than planned by the LLM orchestrator.
+
+    `graph` is one JSONB blob — {schema_version, nodes[], edges[]} — instead
+    of normalized node/edge tables, for the same reason Agent.tools,
+    AgentVersion.config, and RunTask.depends_on are all JSONB here: the
+    canvas always reads and writes the whole graph at once, never queries
+    a single node or edge in isolation, so splitting it into tables would
+    buy nothing but migration overhead. The rigor a graph like this actually
+    needs — cycle detection, dangling-edge/unknown-agent validation,
+    deterministic topological ordering — lives in code, in the compiler
+    (services/workflow_compiler.py), not in table count.
+    """
+
+    __tablename__ = "workflows"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(120))
+    description: Mapped[str] = mapped_column(Text, default="")
+    graph: Mapped[dict] = mapped_column(JSONB, default=dict)  # {schema_version, nodes[], edges[]}
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )

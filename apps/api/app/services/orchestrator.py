@@ -24,6 +24,11 @@ from app.services.chat import stream_chat
 
 logger = logging.getLogger(__name__)
 
+# LLM-planner cap ONLY (parse_plan/plan_and_execute above) — how many tasks
+# the LLM may propose in a single planning call. Hand-authored workflows
+# compiled by services/workflow_compiler.py are capped independently, via
+# schemas.MAX_WORKFLOW_NODES. Never apply this constant to compiled
+# workflows.
 MAX_PLAN_TASKS = 6
 
 PLAN_PROMPT = """You are the AgentFleet Orchestrator. Decompose the user's goal into

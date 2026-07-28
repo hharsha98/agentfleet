@@ -247,3 +247,100 @@ class ScheduledRunOut(BaseModel):
     enabled: bool
     last_run_at: datetime | None
     created_at: datetime
+
+
+# --- Workflows (visual workflow builder — Stage 2 backend foundation) ---------
+#
+# Node/edge ids come from the canvas (React Flow), not the server, so they're
+# validated against a conservative charset rather than trusted as-is.
+
+WORKFLOW_ID_RE = r"^[A-Za-z0-9_-]{1,64}$"
+MAX_WORKFLOW_NODES = 40
+MAX_WORKFLOW_EDGES = 120
+
+
+class WorkflowPosition(BaseModel):
+    """Canvas coordinates — display-only, never read by the compiler."""
+
+    x: float = 0
+    y: float = 0
+
+
+class WorkflowNodeIn(BaseModel):
+    id: str = Field(pattern=WORKFLOW_ID_RE)
+    agent_slug: str = Field(min_length=1, max_length=64)
+    title: str = Field(min_length=1, max_length=200)
+    instruction: str = Field(default="", max_length=8000)
+    needs_approval: bool = False
+    position: WorkflowPosition = Field(default_factory=WorkflowPosition)
+
+
+class WorkflowEdgeIn(BaseModel):
+    id: str = Field(pattern=WORKFLOW_ID_RE)
+    source: str = Field(pattern=WORKFLOW_ID_RE)
+    target: str = Field(pattern=WORKFLOW_ID_RE)
+
+
+class WorkflowGraphIn(BaseModel):
+    schema_version: int = 1
+    nodes: list[WorkflowNodeIn] = Field(default_factory=list, max_length=MAX_WORKFLOW_NODES)
+    edges: list[WorkflowEdgeIn] = Field(default_factory=list, max_length=MAX_WORKFLOW_EDGES)
+
+
+class WorkflowCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    description: str = Field(default="", max_length=1000)
+    graph: WorkflowGraphIn
+
+
+class WorkflowUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    description: str | None = Field(default=None, max_length=1000)
+    graph: WorkflowGraphIn | None = None
+
+
+class WorkflowSummaryOut(BaseModel):
+    """List-view row — omits `graph` (see WorkflowOut), same split as
+    PlaygroundExperimentSummaryOut/EvalRunSummaryOut above."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+    description: str
+    node_count: int
+    edge_count: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class WorkflowOut(WorkflowSummaryOut):
+    graph: dict
+
+
+class WorkflowIssue(BaseModel):
+    """One compiler finding. `code` is one of: cycle, unknown_agent,
+    dangling_edge, self_loop, empty, duplicate_id, orphan_node, wide_fan_in."""
+
+    code: str
+    message: str
+    node_ids: list[str] = []
+
+
+class WorkflowTaskPreview(BaseModel):
+    """One compiled RunTask-to-be, for the dry-run validation endpoint —
+    shaped like the dict compile_workflow() emits, not the ORM RunTask."""
+
+    ordinal: int
+    title: str
+    agent_slug: str
+    depends_on: list[int]
+    needs_approval: bool
+
+
+class WorkflowValidationOut(BaseModel):
+    ok: bool
+    errors: list[WorkflowIssue] = []
+    warnings: list[WorkflowIssue] = []
+    tasks: list[WorkflowTaskPreview] = []
+    estimated_waves: int
