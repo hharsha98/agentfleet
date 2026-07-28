@@ -1,14 +1,29 @@
 """Tests for app/services/workflow_compiler.py — the DAG compiler that turns
-a human-authored Workflow graph into RunTask-shaped dicts.
+a human-authored Workflow graph into RunTask-shaped dicts — and (below the
+compiler section) for the REST routes in app/routes/workflows.py that wrap
+it (Stage 2 backend foundation, chunk 4).
 
 Fully hermetic, like test_orchestrator.py: pure functions over Pydantic
 objects, no DB, no HTTP, no LLM. compile_workflow/estimated_waves/
 find_warnings never touch the database or the network, so these tests build
 WorkflowGraphIn objects directly and assert on the returned dicts/exceptions.
+
+The route tests below follow tests/test_run_tasks.py's style: RawAsyncClient
++ ASGITransport + direct ORM setup (never POST /runs, which would kick off
+the real orchestrator). `dispatch_execute` is monkeypatched with an async
+recorder so nothing here ever touches arq/Redis or an LLM.
 """
 
-import pytest
+import uuid
+from datetime import datetime, timedelta, timezone
 
+import pytest
+from httpx import ASGITransport
+from sqlalchemy import func, select
+
+from app.db import SessionLocal, engine
+from app.main import app
+from app.models import Agent, Run, RunTask, User, Workflow
 from app.schemas import WorkflowEdgeIn, WorkflowGraphIn, WorkflowNodeIn
 from app.services.workflow_compiler import (
     WorkflowValidationError,
@@ -16,6 +31,7 @@ from app.services.workflow_compiler import (
     estimated_waves,
     find_warnings,
 )
+from tests.conftest import RawAsyncClient, mint_token
 
 SLUGS = {"orchestrator", "deep-research", "creative-writer"}
 
@@ -190,3 +206,537 @@ def test_orphan_node_and_wide_fan_in_are_warnings_not_errors() -> None:
     assert codes == {"orphan_node", "wide_fan_in"}
     assert next(w for w in warnings if w.code == "orphan_node").node_ids == ["ORPHAN"]
     assert next(w for w in warnings if w.code == "wide_fan_in").node_ids == ["E"]
+
+
+# =============================================================================
+# REST routes — app/routes/workflows.py (chunk 4)
+# =============================================================================
+
+
+def _client(token: str | None = None):
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    return RawAsyncClient(transport=ASGITransport(app=app), base_url="http://test", headers=headers)
+
+
+async def _make_user(email: str) -> uuid.UUID:
+    async with SessionLocal() as session:
+        user = User(email=email.strip().lower())
+        session.add(user)
+        await session.commit()
+        await session.refresh(user)
+        return user.id
+
+
+async def _make_agent(user_id: uuid.UUID | None, slug: str) -> uuid.UUID:
+    """A minimal Agent row so compile_workflow's valid_slugs check has
+    something real to accept. user_id=None means legacy-null (visible to
+    everyone, same as runs/workflows); pass a real user_id for the
+    private-agent security test."""
+    async with SessionLocal() as session:
+        agent = Agent(
+            slug=slug,
+            name=slug,
+            description="",
+            system_prompt="You are terse.",
+            model="test-model",
+            tools=[],
+            user_id=user_id,
+        )
+        session.add(agent)
+        await session.commit()
+        await session.refresh(agent)
+        return agent.id
+
+
+def _wf_node(node_id: str, *, agent_slug: str, title: str | None = None) -> dict:
+    return {
+        "id": node_id,
+        "agent_slug": agent_slug,
+        "title": title or node_id,
+        "instruction": f"do {node_id}",
+        "needs_approval": False,
+    }
+
+
+def _wf_edge(source: str, target: str) -> dict:
+    return {"id": f"{source}-{target}", "source": source, "target": target}
+
+
+def _wf_graph(nodes: list[dict], edges: list[dict]) -> dict:
+    return {"schema_version": 1, "nodes": nodes, "edges": edges}
+
+
+def _patch_dispatch(monkeypatch) -> list[uuid.UUID]:
+    """Same pattern as test_run_tasks.py's _patch_dispatch: records calls
+    instead of touching arq/Redis or the in-process orchestrator fallback."""
+    calls: list[uuid.UUID] = []
+
+    async def _fake_dispatch_execute(run_id: uuid.UUID) -> None:
+        calls.append(run_id)
+
+    monkeypatch.setattr("app.routes.workflows.dispatch_execute", _fake_dispatch_execute)
+    return calls
+
+
+async def _cleanup(
+    *,
+    workflow_ids: list[uuid.UUID] | None = None,
+    run_ids: list[uuid.UUID] | None = None,
+    agent_ids: list[uuid.UUID] | None = None,
+    emails: list[str] | None = None,
+) -> None:
+    async with SessionLocal() as session:
+        for rid in run_ids or []:
+            run = await session.get(Run, rid)
+            if run:
+                await session.delete(run)  # cascades to run_tasks
+        for wid in workflow_ids or []:
+            wf = await session.get(Workflow, wid)
+            if wf:
+                await session.delete(wf)
+        for aid in agent_ids or []:
+            agent = await session.get(Agent, aid)
+            if agent:
+                await session.delete(agent)
+        for email in emails or []:
+            user = (
+                await session.execute(select(User).where(User.email == email.strip().lower()))
+            ).scalar_one_or_none()
+            if user:
+                await session.delete(user)
+        await session.commit()
+    await engine.dispose()
+
+
+# --- CRUD --------------------------------------------------------------------
+
+
+async def test_workflow_crud_roundtrip() -> None:
+    await engine.dispose()
+    email = f"wf-crud-{uuid.uuid4().hex[:8]}@agentfleet.test"
+    await _make_user(email)
+    workflow_id: uuid.UUID | None = None
+    try:
+        token = mint_token(email=email)
+        async with _client(token) as client:
+            create_res = await client.post(
+                "/api/v1/workflows",
+                json={
+                    "name": "My Workflow",
+                    "description": "A test workflow",
+                    "graph": _wf_graph([], []),
+                },
+            )
+            assert create_res.status_code == 201, create_res.text
+            created = create_res.json()
+            workflow_id = uuid.UUID(created["id"])
+            assert created["name"] == "My Workflow"
+            assert created["description"] == "A test workflow"
+            assert created["node_count"] == 0
+            assert created["edge_count"] == 0
+            assert created["graph"]["nodes"] == []
+
+            get_res = await client.get(f"/api/v1/workflows/{workflow_id}")
+            assert get_res.status_code == 200, get_res.text
+            assert get_res.json()["name"] == "My Workflow"
+
+            put_res = await client.put(
+                f"/api/v1/workflows/{workflow_id}",
+                json={"name": "Renamed Workflow", "description": "Updated"},
+            )
+            assert put_res.status_code == 200, put_res.text
+            updated = put_res.json()
+            assert updated["name"] == "Renamed Workflow"
+            assert updated["description"] == "Updated"
+
+            delete_res = await client.delete(f"/api/v1/workflows/{workflow_id}")
+            assert delete_res.status_code == 200, delete_res.text
+            assert delete_res.json() == {"ok": True}
+
+            gone_res = await client.get(f"/api/v1/workflows/{workflow_id}")
+            assert gone_res.status_code == 404
+        workflow_id = None  # already deleted via the API
+    finally:
+        await _cleanup(
+            workflow_ids=[workflow_id] if workflow_id else [],
+            emails=[email],
+        )
+
+
+async def test_workflow_list_pagination_and_total_count() -> None:
+    await engine.dispose()
+    email = f"wf-list-{uuid.uuid4().hex[:8]}@agentfleet.test"
+    user_id = await _make_user(email)
+    workflow_ids: list[uuid.UUID] = []
+    try:
+        # Explicit, strictly increasing updated_at (like test_pagination.py's
+        # EvalRun rows) so ORDER BY updated_at DESC is unambiguous even when
+        # all 5 rows are inserted faster than DB clock resolution.
+        base = datetime(2025, 1, 1, tzinfo=timezone.utc)
+        async with SessionLocal() as session:
+            for i in range(5):
+                wf = Workflow(
+                    name=f"Workflow {i}",
+                    description="",
+                    graph=_wf_graph([], []),
+                    user_id=user_id,
+                    updated_at=base + timedelta(seconds=i),
+                )
+                session.add(wf)
+                await session.flush()
+                workflow_ids.append(wf.id)
+            await session.commit()
+
+        token = mint_token(email=email)
+        async with _client(token) as client:
+            res = await client.get("/api/v1/workflows", params={"limit": 2, "offset": 1})
+            assert res.status_code == 200, res.text
+            assert res.headers["X-Total-Count"] == "5"
+            body = res.json()
+            assert len(body) == 2
+            # DESC by updated_at: Workflow 4, 3, 2, 1, 0 -> offset 1 skips
+            # Workflow 4, so the page is [Workflow 3, Workflow 2].
+            assert [w["name"] for w in body] == ["Workflow 3", "Workflow 2"]
+    finally:
+        await _cleanup(workflow_ids=workflow_ids, emails=[email])
+
+
+async def test_workflow_of_another_user_is_404(monkeypatch) -> None:
+    await engine.dispose()
+    dispatch_calls = _patch_dispatch(monkeypatch)
+    email_a = f"wf-owner-a-{uuid.uuid4().hex[:8]}@agentfleet.test"
+    email_b = f"wf-owner-b-{uuid.uuid4().hex[:8]}@agentfleet.test"
+    user_a_id = await _make_user(email_a)
+    await _make_user(email_b)
+    workflow_id: uuid.UUID | None = None
+    try:
+        async with SessionLocal() as session:
+            wf = Workflow(
+                name="Private WF", description="", graph=_wf_graph([], []), user_id=user_a_id
+            )
+            session.add(wf)
+            await session.commit()
+            await session.refresh(wf)
+            workflow_id = wf.id
+
+        token_b = mint_token(email=email_b)
+        async with _client(token_b) as client:
+            assert (await client.get(f"/api/v1/workflows/{workflow_id}")).status_code == 404
+            assert (
+                await client.put(f"/api/v1/workflows/{workflow_id}", json={"name": "Hacked"})
+            ).status_code == 404
+            assert (
+                await client.post(f"/api/v1/workflows/{workflow_id}/validate")
+            ).status_code == 404
+            assert (await client.post(f"/api/v1/workflows/{workflow_id}/run")).status_code == 404
+            # DELETE last so the earlier assertions still have a row to 404 against.
+            assert (await client.delete(f"/api/v1/workflows/{workflow_id}")).status_code == 404
+
+        assert dispatch_calls == []
+    finally:
+        await _cleanup(
+            workflow_ids=[workflow_id] if workflow_id else [], emails=[email_a, email_b]
+        )
+
+
+# --- /validate -----------------------------------------------------------------
+
+
+async def test_validate_reports_cycle_without_writing(monkeypatch) -> None:
+    await engine.dispose()
+    dispatch_calls = _patch_dispatch(monkeypatch)
+    email = f"wf-cycle-{uuid.uuid4().hex[:8]}@agentfleet.test"
+    user_id = await _make_user(email)
+    agent_slug = f"wf-agent-{uuid.uuid4().hex[:8]}"
+    agent_id = await _make_agent(user_id, agent_slug)
+    workflow_id: uuid.UUID | None = None
+    try:
+        graph = _wf_graph(
+            [_wf_node("A", agent_slug=agent_slug), _wf_node("B", agent_slug=agent_slug)],
+            [_wf_edge("A", "B"), _wf_edge("B", "A")],
+        )
+        async with SessionLocal() as session:
+            wf = Workflow(name="Cyclic", description="", graph=graph, user_id=user_id)
+            session.add(wf)
+            await session.commit()
+            await session.refresh(wf)
+            workflow_id = wf.id
+
+        async with SessionLocal() as session:
+            runs_before = (
+                await session.execute(select(func.count()).select_from(Run))
+            ).scalar_one()
+            tasks_before = (
+                await session.execute(select(func.count()).select_from(RunTask))
+            ).scalar_one()
+
+        token = mint_token(email=email)
+        async with _client(token) as client:
+            res = await client.post(f"/api/v1/workflows/{workflow_id}/validate")
+            assert res.status_code == 200, res.text
+            body = res.json()
+            assert body["ok"] is False
+            assert len(body["errors"]) == 1
+            assert body["errors"][0]["code"] == "cycle"
+            assert body["tasks"] == []
+            assert body["estimated_waves"] == 0
+
+        async with SessionLocal() as session:
+            runs_after = (
+                await session.execute(select(func.count()).select_from(Run))
+            ).scalar_one()
+            tasks_after = (
+                await session.execute(select(func.count()).select_from(RunTask))
+            ).scalar_one()
+        assert runs_after == runs_before
+        assert tasks_after == tasks_before
+        assert dispatch_calls == []
+    finally:
+        await _cleanup(
+            workflow_ids=[workflow_id] if workflow_id else [],
+            agent_ids=[agent_id],
+            emails=[email],
+        )
+
+
+async def test_validate_reports_orphan_warning() -> None:
+    await engine.dispose()
+    email = f"wf-orphan-{uuid.uuid4().hex[:8]}@agentfleet.test"
+    user_id = await _make_user(email)
+    agent_slug = f"wf-agent-{uuid.uuid4().hex[:8]}"
+    agent_id = await _make_agent(user_id, agent_slug)
+    workflow_id: uuid.UUID | None = None
+    try:
+        graph = _wf_graph(
+            [
+                _wf_node("A", agent_slug=agent_slug),
+                _wf_node("B", agent_slug=agent_slug),
+                _wf_node("ORPHAN", agent_slug=agent_slug),
+            ],
+            [_wf_edge("A", "B")],
+        )
+        async with SessionLocal() as session:
+            wf = Workflow(name="Has Orphan", description="", graph=graph, user_id=user_id)
+            session.add(wf)
+            await session.commit()
+            await session.refresh(wf)
+            workflow_id = wf.id
+
+        token = mint_token(email=email)
+        async with _client(token) as client:
+            res = await client.post(f"/api/v1/workflows/{workflow_id}/validate")
+            assert res.status_code == 200, res.text
+            body = res.json()
+            assert body["ok"] is True
+            assert body["errors"] == []
+            codes = {w["code"] for w in body["warnings"]}
+            assert "orphan_node" in codes
+            assert len(body["tasks"]) == 3
+    finally:
+        await _cleanup(
+            workflow_ids=[workflow_id] if workflow_id else [],
+            agent_ids=[agent_id],
+            emails=[email],
+        )
+
+
+# --- /run ----------------------------------------------------------------------
+
+
+async def test_run_workflow_creates_run_and_tasks_and_dispatches(monkeypatch) -> None:
+    await engine.dispose()
+    dispatch_calls = _patch_dispatch(monkeypatch)
+    email = f"wf-run-{uuid.uuid4().hex[:8]}@agentfleet.test"
+    user_id = await _make_user(email)
+    agent_slug = f"wf-agent-{uuid.uuid4().hex[:8]}"
+    agent_id = await _make_agent(user_id, agent_slug)
+    workflow_id: uuid.UUID | None = None
+    run_id: uuid.UUID | None = None
+    try:
+        # Linear chain A -> B -> C, all on the same agent.
+        graph = _wf_graph(
+            [
+                _wf_node("A", agent_slug=agent_slug),
+                _wf_node("B", agent_slug=agent_slug),
+                _wf_node("C", agent_slug=agent_slug),
+            ],
+            [_wf_edge("A", "B"), _wf_edge("B", "C")],
+        )
+        async with SessionLocal() as session:
+            wf = Workflow(name="Chain", description="", graph=graph, user_id=user_id)
+            session.add(wf)
+            await session.commit()
+            await session.refresh(wf)
+            workflow_id = wf.id
+
+        token = mint_token(email=email)
+        async with _client(token) as client:
+            res = await client.post(f"/api/v1/workflows/{workflow_id}/run")
+            assert res.status_code == 201, res.text
+            body = res.json()
+            assert body["task_count"] == 3
+            run_id = uuid.UUID(body["run_id"])
+
+        async with SessionLocal() as session:
+            run = await session.get(Run, run_id)
+            assert run.status == "running"
+            assert run.workflow_id == workflow_id
+
+            tasks = (
+                (
+                    await session.execute(
+                        select(RunTask).where(RunTask.run_id == run_id).order_by(RunTask.ordinal)
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            assert len(tasks) == 3
+            assert [t.ordinal for t in tasks] == [0, 1, 2]
+            assert [t.depends_on for t in tasks] == [[], [0], [1]]
+            assert all(t.agent_slug == agent_slug for t in tasks)
+
+        assert dispatch_calls == [run_id]
+    finally:
+        await _cleanup(
+            workflow_ids=[workflow_id] if workflow_id else [],
+            run_ids=[run_id] if run_id else [],
+            agent_ids=[agent_id],
+            emails=[email],
+        )
+
+
+async def test_run_workflow_with_cycle_is_422(monkeypatch) -> None:
+    await engine.dispose()
+    dispatch_calls = _patch_dispatch(monkeypatch)
+    email = f"wf-run-cycle-{uuid.uuid4().hex[:8]}@agentfleet.test"
+    user_id = await _make_user(email)
+    agent_slug = f"wf-agent-{uuid.uuid4().hex[:8]}"
+    agent_id = await _make_agent(user_id, agent_slug)
+    workflow_id: uuid.UUID | None = None
+    try:
+        graph = _wf_graph(
+            [_wf_node("A", agent_slug=agent_slug), _wf_node("B", agent_slug=agent_slug)],
+            [_wf_edge("A", "B"), _wf_edge("B", "A")],
+        )
+        async with SessionLocal() as session:
+            wf = Workflow(name="Cyclic", description="", graph=graph, user_id=user_id)
+            session.add(wf)
+            await session.commit()
+            await session.refresh(wf)
+            workflow_id = wf.id
+
+        async with SessionLocal() as session:
+            runs_before = (
+                await session.execute(select(func.count()).select_from(Run))
+            ).scalar_one()
+
+        token = mint_token(email=email)
+        async with _client(token) as client:
+            res = await client.post(f"/api/v1/workflows/{workflow_id}/run")
+            assert res.status_code == 422, res.text
+
+        async with SessionLocal() as session:
+            runs_after = (
+                await session.execute(select(func.count()).select_from(Run))
+            ).scalar_one()
+        assert runs_after == runs_before
+        assert dispatch_calls == []
+    finally:
+        await _cleanup(
+            workflow_ids=[workflow_id] if workflow_id else [],
+            agent_ids=[agent_id],
+            emails=[email],
+        )
+
+
+async def test_run_workflow_rejects_agent_slug_not_visible_to_caller(monkeypatch) -> None:
+    """Security test: user A's workflow references a node with user B's
+    PRIVATE agent slug. valid_slugs must be scoped to the caller (A), so
+    the run must be rejected as unknown_agent — never silently allowed to
+    execute user B's private agent config."""
+    await engine.dispose()
+    dispatch_calls = _patch_dispatch(monkeypatch)
+    email_a = f"wf-sec-a-{uuid.uuid4().hex[:8]}@agentfleet.test"
+    email_b = f"wf-sec-b-{uuid.uuid4().hex[:8]}@agentfleet.test"
+    user_a_id = await _make_user(email_a)
+    user_b_id = await _make_user(email_b)
+    private_slug = f"wf-private-agent-{uuid.uuid4().hex[:8]}"
+    private_agent_id = await _make_agent(user_b_id, private_slug)
+    workflow_id: uuid.UUID | None = None
+    try:
+        graph = _wf_graph([_wf_node("A", agent_slug=private_slug)], [])
+        async with SessionLocal() as session:
+            wf = Workflow(
+                name="Sneaky", description="", graph=graph, user_id=user_a_id
+            )
+            session.add(wf)
+            await session.commit()
+            await session.refresh(wf)
+            workflow_id = wf.id
+
+        async with SessionLocal() as session:
+            runs_before = (
+                await session.execute(select(func.count()).select_from(Run))
+            ).scalar_one()
+
+        token_a = mint_token(email=email_a)
+        async with _client(token_a) as client:
+            res = await client.post(f"/api/v1/workflows/{workflow_id}/run")
+            assert res.status_code == 422, res.text
+            assert "Unknown agent slug" in res.json()["detail"]
+            assert private_slug in res.json()["detail"]
+
+        async with SessionLocal() as session:
+            runs_after = (
+                await session.execute(select(func.count()).select_from(Run))
+            ).scalar_one()
+        assert runs_after == runs_before
+        assert dispatch_calls == []
+    finally:
+        await _cleanup(
+            workflow_ids=[workflow_id] if workflow_id else [],
+            agent_ids=[private_agent_id],
+            emails=[email_a, email_b],
+        )
+
+
+# --- PUT leniency ----------------------------------------------------------------
+
+
+async def test_put_accepts_semantically_invalid_graph() -> None:
+    """PUT must accept a graph that's structurally valid (per Pydantic) but
+    semantically broken (a cycle referencing an agent slug that doesn't even
+    exist) — a builder that refuses to save work-in-progress is hostile.
+    compile_workflow is never called from PUT."""
+    await engine.dispose()
+    email = f"wf-lenient-{uuid.uuid4().hex[:8]}@agentfleet.test"
+    await _make_user(email)
+    workflow_id: uuid.UUID | None = None
+    try:
+        token = mint_token(email=email)
+        async with _client(token) as client:
+            create_res = await client.post(
+                "/api/v1/workflows",
+                json={"name": "WIP", "description": "", "graph": _wf_graph([], [])},
+            )
+            assert create_res.status_code == 201, create_res.text
+            workflow_id = uuid.UUID(create_res.json()["id"])
+
+            broken_graph = _wf_graph(
+                [
+                    _wf_node("A", agent_slug="totally-fake-agent-does-not-exist"),
+                    _wf_node("B", agent_slug="totally-fake-agent-does-not-exist"),
+                ],
+                [_wf_edge("A", "B"), _wf_edge("B", "A")],
+            )
+            put_res = await client.put(
+                f"/api/v1/workflows/{workflow_id}", json={"graph": broken_graph}
+            )
+            assert put_res.status_code == 200, put_res.text
+            body = put_res.json()
+            assert body["node_count"] == 2
+            assert body["edge_count"] == 2
+            assert body["graph"]["edges"] == broken_graph["edges"]
+    finally:
+        await _cleanup(workflow_ids=[workflow_id] if workflow_id else [], emails=[email])

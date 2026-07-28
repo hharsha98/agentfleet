@@ -31,6 +31,7 @@ from app.routes.templates import router as templates_router
 from app.routes.usage import router as usage_router
 from app.routes.voice import router as voice_router
 from app.routes.webhooks import router as webhooks_router
+from app.routes.workflows import router as workflows_router
 
 setup_logging()
 init_sentry()
@@ -164,6 +165,7 @@ app.include_router(agents_router, prefix="/api/v1/agents", tags=["agents"])
 app.include_router(chat_router, prefix="/api/v1/conversations", tags=["conversations"])
 app.include_router(documents_router, prefix="/api/v1/documents", tags=["documents"])
 app.include_router(runs_router, prefix="/api/v1/runs", tags=["runs"])
+app.include_router(workflows_router, prefix="/api/v1/workflows", tags=["workflows"])
 app.include_router(schedules_router, prefix="/api/v1/schedules", tags=["schedules"])
 app.include_router(webhooks_router, prefix="/api/v1/webhooks", tags=["webhooks"])
 app.include_router(hooks_router, prefix="/api/v1/hooks", tags=["hooks"])

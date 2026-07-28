@@ -56,6 +56,7 @@ def _run_dict(r: Run, with_tasks: bool = False) -> dict:
         "id": str(r.id),
         "goal": r.goal,
         "status": r.status,
+        "workflow_id": str(r.workflow_id) if r.workflow_id else None,
         "created_at": r.created_at.isoformat(),
     }
     if with_tasks:
