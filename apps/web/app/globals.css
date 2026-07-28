@@ -296,4 +296,16 @@ body {
     animation: none;
     opacity: 0;
   }
+
+  /* Workflow graph edges (components/workflow/flow-canvas.tsx): React Flow
+     animates an "in_progress" edge's dash pattern via its own inline
+     stroke-dasharray/animation, outside our animate-* utility classes above,
+     so it needs its own override here rather than falling out of the loop. */
+  .react-flow__edge.animated .react-flow__edge-path {
+    animation: none;
+  }
+
+  .react-flow__edge-path {
+    stroke-dasharray: none;
+  }
 }

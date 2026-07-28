@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useState, type DragEvent } from "react";
 
 import { AgentGlyph } from "@/components/agent-visual";
@@ -9,23 +10,18 @@ import { EmptyState } from "@/components/empty-state";
 import { HUE_CLASSES, Icon, type Hue } from "@/components/landing/icons";
 import { Reveal } from "@/components/landing/reveal";
 import { MicButton } from "@/components/mic-button";
+import { agentDisplayName } from "@/components/workflow/format";
+import type { Task } from "@/components/workflow/types";
 import { apiFetch } from "@/lib/api";
 
-type Task = {
-  id: string;
-  ordinal: number;
-  title: string;
-  description: string;
-  agent_slug: string;
-  depends_on: number[];
-  needs_approval: boolean;
-  status: "todo" | "in_progress" | "review" | "done" | "failed";
-  result: string;
-  error: string | null;
-  tokens_in: number;
-  tokens_out: number;
-  latency_ms: number | null;
-};
+// Lazy + never server-rendered: React Flow touches the DOM during layout,
+// and this keeps its chunk out of every other route's bundle. `ssr: false`
+// is legal here because this page is already "use client" (verified against
+// node_modules/next/dist/docs/01-app/02-guides/lazy-loading.md).
+const FlowCanvas = dynamic(() => import("@/components/workflow/flow-canvas"), {
+  ssr: false,
+  loading: () => <p className="pt-24 text-center text-sm text-muted">Loading graph…</p>,
+});
 
 type Run = {
   id: string;
@@ -64,13 +60,6 @@ const HUE_DOT: Record<Hue, string> = {
   green: "bg-hue-green",
   red: "bg-hue-red",
 };
-
-function agentDisplayName(slug: string): string {
-  return slug
-    .split("-")
-    .map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w))
-    .join(" ");
-}
 
 const RUN_BADGE: Record<string, string> = {
   planning: "border-accent/40 text-accent",
@@ -233,6 +222,10 @@ export default function MissionsPage() {
   const [detail, setDetail] = useState<Run | null>(null);
   const [goal, setGoal] = useState("");
   const [busy, setBusy] = useState(false);
+  // Board | Graph toggle (Stage 1 of the visual workflow feature) — the
+  // graph is a read-only alternate view of the same already-fetched tasks,
+  // no new state or requests needed to drive it.
+  const [view, setView] = useState<"board" | "graph">("board");
 
   // Drag-and-drop state (UI-5 Chunk C).
   const [draggingTask, setDraggingTask] = useState<{ id: string; status: Task["status"] } | null>(
@@ -511,7 +504,45 @@ export default function MissionsPage() {
           </div>
         </Panel>
 
-        <Panel title="Board" delay={80} className="lg:min-h-[420px]">
+        <Panel
+          title="Board"
+          delay={80}
+          className="lg:min-h-[420px]"
+          action={
+            <div
+              role="tablist"
+              aria-label="Board view"
+              className="flex items-center gap-1 rounded-md border border-hairline p-0.5"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={view === "board"}
+                onClick={() => setView("board")}
+                className={`cursor-pointer rounded px-2.5 py-1 text-xs font-medium transition-colors duration-200 ${
+                  view === "board"
+                    ? "bg-accent/15 text-foreground"
+                    : "text-muted hover:text-foreground"
+                }`}
+              >
+                Board
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={view === "graph"}
+                onClick={() => setView("graph")}
+                className={`cursor-pointer rounded px-2.5 py-1 text-xs font-medium transition-colors duration-200 ${
+                  view === "graph"
+                    ? "bg-accent/15 text-foreground"
+                    : "text-muted hover:text-foreground"
+                }`}
+              >
+                Graph
+              </button>
+            </div>
+          }
+        >
           {detail ? (
             <>
               <div className="flex items-center gap-3">
@@ -534,70 +565,76 @@ export default function MissionsPage() {
                 </p>
               )}
 
-              <div className="mt-4 grid flex-1 grid-cols-2 gap-3 md:grid-cols-5">
-                {COLUMNS.map((col) => {
-                  const items = tasks.filter((t) => t.status === col.key);
-                  const isLegalTarget =
-                    draggingTask != null && RETRY_TARGET[draggingTask.status] === col.key;
-                  const isDragOver = isLegalTarget && dragOverColumn === col.key;
+              {view === "board" ? (
+                <div className="mt-4 grid flex-1 grid-cols-2 gap-3 md:grid-cols-5">
+                  {COLUMNS.map((col) => {
+                    const items = tasks.filter((t) => t.status === col.key);
+                    const isLegalTarget =
+                      draggingTask != null && RETRY_TARGET[draggingTask.status] === col.key;
+                    const isDragOver = isLegalTarget && dragOverColumn === col.key;
 
-                  return (
-                    <div
-                      key={col.key}
-                      onDragOver={
-                        isLegalTarget
-                          ? (e) => {
-                              e.preventDefault();
-                              setDragOverColumn(col.key);
-                            }
-                          : undefined
-                      }
-                      onDragLeave={
-                        isLegalTarget
-                          ? () => setDragOverColumn((c) => (c === col.key ? null : c))
-                          : undefined
-                      }
-                      onDrop={isLegalTarget ? (e) => handleDrop(e, col.key) : undefined}
-                      className={`rounded-lg border p-2 transition-colors duration-150 ${
-                        isDragOver
-                          ? "border-accent bg-accent/[0.06] ring-2 ring-accent/40"
-                          : "border-hairline"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between px-1 pb-2">
-                        <span className="flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wide text-muted">
-                          <span className={`h-1.5 w-1.5 rounded-full ${HUE_DOT[col.hue]}`} />
-                          {col.label}
-                        </span>
-                        <span className="rounded-full border border-hairline px-1.5 py-0.5 font-mono text-[10px] text-muted">
-                          {items.length}
-                        </span>
+                    return (
+                      <div
+                        key={col.key}
+                        onDragOver={
+                          isLegalTarget
+                            ? (e) => {
+                                e.preventDefault();
+                                setDragOverColumn(col.key);
+                              }
+                            : undefined
+                        }
+                        onDragLeave={
+                          isLegalTarget
+                            ? () => setDragOverColumn((c) => (c === col.key ? null : c))
+                            : undefined
+                        }
+                        onDrop={isLegalTarget ? (e) => handleDrop(e, col.key) : undefined}
+                        className={`rounded-lg border p-2 transition-colors duration-150 ${
+                          isDragOver
+                            ? "border-accent bg-accent/[0.06] ring-2 ring-accent/40"
+                            : "border-hairline"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between px-1 pb-2">
+                          <span className="flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wide text-muted">
+                            <span className={`h-1.5 w-1.5 rounded-full ${HUE_DOT[col.hue]}`} />
+                            {col.label}
+                          </span>
+                          <span className="rounded-full border border-hairline px-1.5 py-0.5 font-mono text-[10px] text-muted">
+                            {items.length}
+                          </span>
+                        </div>
+                        <div className="space-y-2">
+                          {items.length === 0 ? (
+                            <div className="flex h-20 flex-col items-center justify-center gap-1 rounded-md border border-dashed border-hairline text-muted">
+                              <Icon name="list-checks" className="h-3.5 w-3.5" />
+                              <span className="font-mono text-[10px]">All clear</span>
+                            </div>
+                          ) : (
+                            items.map((t, i) => (
+                              <TaskCard
+                                key={t.id}
+                                task={t}
+                                tasks={tasks}
+                                delay={i * 40}
+                                isDragging={draggingTask?.id === t.id}
+                                onApprove={approve}
+                                onDragStart={handleDragStart}
+                                onDragEnd={handleDragEnd}
+                              />
+                            ))
+                          )}
+                        </div>
                       </div>
-                      <div className="space-y-2">
-                        {items.length === 0 ? (
-                          <div className="flex h-20 flex-col items-center justify-center gap-1 rounded-md border border-dashed border-hairline text-muted">
-                            <Icon name="list-checks" className="h-3.5 w-3.5" />
-                            <span className="font-mono text-[10px]">All clear</span>
-                          </div>
-                        ) : (
-                          items.map((t, i) => (
-                            <TaskCard
-                              key={t.id}
-                              task={t}
-                              tasks={tasks}
-                              delay={i * 40}
-                              isDragging={draggingTask?.id === t.id}
-                              onApprove={approve}
-                              onDragStart={handleDragStart}
-                              onDragEnd={handleDragEnd}
-                            />
-                          ))
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div key={detail.id} className="mt-4 h-[420px] rounded-lg border border-hairline">
+                  <FlowCanvas tasks={tasks} />
+                </div>
+              )}
             </>
           ) : selected ? (
             <p className="pt-24 text-center text-sm text-muted">Loading run…</p>
