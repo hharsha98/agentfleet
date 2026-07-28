@@ -37,3 +37,21 @@ export type TaskNodeData = {
 
 export type TaskFlowNode = Node<TaskNodeData, "task">;
 export type TaskFlowEdge = Edge;
+
+// --- Builder-specific types (components/workflow/workflow-builder.tsx) ----
+//
+// The builder edits a DRAFT graph — there's no run yet, so BuilderNodeData
+// carries the editable fields directly instead of wrapping a run `Task`
+// like TaskNodeData does above. Field names are camelCase (React/TS
+// convention) even though the wire format (WorkflowGraphIn on the API) uses
+// snake_case (agent_slug, needs_approval) — workflow-builder.tsx is the one
+// place that translates between the two.
+export type BuilderNodeData = {
+  agentSlug: string;
+  title: string;
+  instruction: string;
+  needsApproval: boolean;
+};
+
+export type BuilderFlowNode = Node<BuilderNodeData, "builder">;
+export type BuilderFlowEdge = Edge;

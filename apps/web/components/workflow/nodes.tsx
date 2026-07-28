@@ -3,11 +3,12 @@
 import type { CSSProperties, ReactNode } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 
-import { AgentGlyph } from "@/components/agent-visual";
+import { AGENT_VISUALS, AgentGlyph, hueForSlug } from "@/components/agent-visual";
 import { HUE_CLASSES, type Hue } from "@/components/landing/icons";
 
+import { agentDisplayName } from "./format";
 import { NODE_H, NODE_W } from "./layout";
-import type { Task, TaskFlowNode } from "./types";
+import type { BuilderFlowNode, Task, TaskFlowNode } from "./types";
 
 // Mirrors COLUMNS in missions/page.tsx — the board and this graph must never
 // disagree about what color a status is. If COLUMNS changes, update this too.
@@ -70,6 +71,7 @@ export function NodeShell({
   agentName,
   meta,
   invalid = false,
+  selected = false,
   children,
 }: {
   hue: Hue;
@@ -78,15 +80,18 @@ export function NodeShell({
   agentName: string;
   meta: ReactNode;
   invalid?: boolean;
+  // Builder-only: the run DAG (TaskNode) never passes this, so it always
+  // defaults to false there and the ring falls through to HUE_RING exactly
+  // as before this prop was added.
+  selected?: boolean;
   children?: ReactNode;
 }) {
   const c = HUE_CLASSES[hue];
+  const ringClass = invalid ? "ring-2 ring-red-500/60" : selected ? "ring-2 ring-accent" : HUE_RING[hue];
   return (
     <div
       style={{ width: NODE_W, minHeight: NODE_H }}
-      className={`relative rounded-md border border-hairline bg-background p-2.5 text-sm ring-1 ${
-        invalid ? "ring-2 ring-red-500/60" : HUE_RING[hue]
-      }`}
+      className={`relative rounded-md border border-hairline bg-background p-2.5 text-sm ring-1 ${ringClass}`}
       title={invalid ? "Depends on a task not shown in this run" : undefined}
     >
       <p className="truncate leading-snug">{title}</p>
@@ -129,6 +134,30 @@ export function TaskNode({ data }: NodeProps<TaskFlowNode>) {
           STATUS_LABEL[task.status]
         )
       }
+    >
+      <Handle type="target" position={Position.Left} style={handleStyle} />
+      <Handle type="source" position={Position.Right} style={handleStyle} />
+    </NodeShell>
+  );
+}
+
+// Builder node — same NodeShell chrome as the run DAG's TaskNode above, but
+// backed by a draft BuilderNodeData instead of a run Task (no status, no
+// tokens: nothing has executed yet). Hue comes from the agent itself
+// (AGENT_VISUALS / hueForSlug, the same source AgentGlyph uses) rather than
+// a run status, since a builder node has no status to color by.
+export function BuilderNode({ data, selected }: NodeProps<BuilderFlowNode>) {
+  const hue = AGENT_VISUALS[data.agentSlug]?.hue ?? hueForSlug(data.agentSlug);
+  const agentName = agentDisplayName(data.agentSlug);
+
+  return (
+    <NodeShell
+      hue={hue}
+      selected={selected}
+      title={data.title || "Untitled step"}
+      agentName={agentName}
+      glyph={<AgentGlyph slug={data.agentSlug} name={agentName} size="xs" />}
+      meta={data.needsApproval ? "Needs approval" : "Runs automatically"}
     >
       <Handle type="target" position={Position.Left} style={handleStyle} />
       <Handle type="source" position={Position.Right} style={handleStyle} />
