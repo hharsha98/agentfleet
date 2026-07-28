@@ -94,6 +94,11 @@ const pageChecks: Array<{ path: string; check: (page: Page) => Promise<unknown> 
       expect(p.getByRole("heading", { name: "Automations", level: 1 })).toBeVisible(),
   },
   {
+    path: "/workflows",
+    check: (p) =>
+      expect(p.getByRole("heading", { name: "Workflows", level: 1 })).toBeVisible(),
+  },
+  {
     path: "/playground",
     check: (p) =>
       expect(p.getByRole("heading", { name: "Prompt Playground", level: 1 })).toBeVisible(),

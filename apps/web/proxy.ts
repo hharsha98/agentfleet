@@ -29,5 +29,6 @@ export const config = {
     "/automations/:path*",
     "/playground/:path*",
     "/voice/:path*",
+    "/workflows/:path*",
   ],
 };

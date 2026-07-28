@@ -7,6 +7,7 @@ type IconName =
   | "chat"
   | "document"
   | "rocket"
+  | "workflow"
   | "robot"
   | "blocks"
   | "flask"
@@ -52,6 +53,15 @@ function Icon({ name }: { name: IconName }) {
         <svg {...common}>
           <path d="M12 3c2.8 1.6 4.5 4.6 4.5 8.5 0 2-1 4-2.3 5.3L12 19l-2.2-2.2C8.5 15.5 7.5 13.5 7.5 11.5 7.5 7.6 9.2 4.6 12 3Z" />
           <circle cx="12" cy="10.5" r="1.6" />
+        </svg>
+      );
+    case "workflow":
+      return (
+        <svg {...common}>
+          <circle cx="5.5" cy="6" r="2.25" />
+          <circle cx="5.5" cy="18" r="2.25" />
+          <circle cx="18.5" cy="12" r="2.25" />
+          <path d="M7.6 6.9 16.5 11M7.6 17.1 16.5 13" />
         </svg>
       );
     case "robot":
@@ -137,6 +147,7 @@ const COMMANDS: Command[] = [
   { label: "Chat", hint: "/chat", icon: "chat", href: "/chat" },
   { label: "Documents", hint: "/documents", icon: "document", href: "/documents" },
   { label: "Missions", hint: "/missions", icon: "rocket", href: "/missions" },
+  { label: "Workflows", hint: "/workflows", icon: "workflow", href: "/workflows" },
   { label: "Agents", hint: "/agents", icon: "robot", href: "/agents" },
   { label: "Templates", hint: "/templates", icon: "blocks", href: "/templates" },
   { label: "Evals", hint: "/evals", icon: "flask", href: "/evals" },

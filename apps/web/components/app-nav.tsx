@@ -12,6 +12,7 @@ const NAV_ITEMS: { href: string; label: string }[] = [
   { href: "/chat", label: "Chat" },
   { href: "/documents", label: "Documents" },
   { href: "/missions", label: "Missions" },
+  { href: "/workflows", label: "Workflows" },
   { href: "/agents", label: "Agents" },
   { href: "/templates", label: "Templates" },
   { href: "/evals", label: "Evals" },
