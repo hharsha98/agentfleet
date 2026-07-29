@@ -229,14 +229,29 @@ async def _run_turn(conversation_id: uuid.UUID, prompt: str) -> tuple[str, dict,
         async for frame in stream_chat(conversation_id, prompt):
             event = json.loads(frame[6:])  # strip "data: " SSE framing
             if event["type"] == "token":
-                text += event["content"]
+                # Belt and braces. services/chat.py now normalises provider
+                # content blocks to text at the source, but there are three
+                # other runtimes emitting this event; a malformed token must
+                # not be able to kill a task the way it did before, because
+                # a crash here is unretryable — every attempt hits the same
+                # provider response shape.
+                content = event["content"]
+                text += content if isinstance(content, str) else str(content or "")
             elif event["type"] == "done":
                 usage = event["usage"]
             elif event["type"] == "error":
                 error = event["message"]
     except Exception as exc:
         logger.exception("task turn crashed for conversation %s", conversation_id)
-        error = f"{type(exc).__name__}"
+        # Include the message, not just the class. The self-heal loop feeds
+        # this string back to the model as the thing to diagnose, and a bare
+        # "TypeError" gives it nothing to work with — observed in a real run
+        # where two repair attempts were asked to fix "TypeError" and
+        # correctly concluded they were getting nowhere. It also feeds the
+        # stall signature, so more detail means fewer false "same error"
+        # matches between genuinely different failures.
+        detail = str(exc).strip()
+        error = f"{type(exc).__name__}: {detail}" if detail else type(exc).__name__
     return text, usage, error
 
 

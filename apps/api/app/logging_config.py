@@ -26,6 +26,16 @@ class JSONFormatter(logging.Formatter):
             "msg": record.getMessage(),
             "request_id": request_id_var.get(),
         }
+        # Without this, logger.exception() wrote its message and silently
+        # discarded the traceback — every error in the app was logged in a
+        # form that could not be located in the source. json.dumps escapes
+        # the newlines, so a record still occupies exactly one line.
+        if record.exc_info:
+            payload["exc"] = self.formatException(record.exc_info)
+        elif record.exc_text:
+            payload["exc"] = record.exc_text
+        if record.stack_info:
+            payload["stack"] = self.formatStack(record.stack_info)
         return json.dumps(payload)
 
 

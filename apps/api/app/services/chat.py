@@ -42,6 +42,37 @@ FINAL_ANSWER_NOTE = (
 )
 
 
+def _content_text(content: object) -> str:
+    """Coerce a streamed `delta.content` to plain text.
+
+    The OpenAI wire format documents this as a string, but several providers
+    behind an OpenAI-compatible gateway stream a LIST of content blocks
+    instead. Passing that through unchecked broke a real workflow run in two
+    places from this one site: `parts.append(list)` made the closing
+    `"".join(parts)` raise "sequence item 0: expected str instance, list
+    found", and the SSE payload made the orchestrator's `text +=` raise "can
+    only concatenate str (not list) to str" — a task failure no retry could
+    fix, since the next attempt meets the same provider shape.
+
+    Unknown block shapes contribute nothing rather than a stringified repr:
+    a stray "{'type': 'thinking'}" inside the user's answer is worse than
+    dropping it.
+    """
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        out: list[str] = []
+        for block in content:
+            if isinstance(block, str):
+                out.append(block)
+            elif isinstance(block, dict):
+                text = block.get("text")
+                if isinstance(text, str):
+                    out.append(text)
+        return "".join(out)
+    return ""
+
+
 def _sse(data: dict) -> str:
     return f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
 
@@ -162,10 +193,11 @@ async def stream_chat(conversation_id: uuid.UUID, user_text: str) -> AsyncGenera
                             delta = chunk.choices[0].delta if chunk.choices else None
                             if delta is None:
                                 continue
-                            if delta.content:
-                                round_text.append(delta.content)
-                                parts.append(delta.content)
-                                yield _sse({"type": "token", "content": delta.content})
+                            delta_text = _content_text(delta.content)
+                            if delta_text:
+                                round_text.append(delta_text)
+                                parts.append(delta_text)
+                                yield _sse({"type": "token", "content": delta_text})
                             # Tool-call arguments stream in fragments — accumulate by index.
                             for tc in delta.tool_calls or []:
                                 slot = pending.setdefault(
