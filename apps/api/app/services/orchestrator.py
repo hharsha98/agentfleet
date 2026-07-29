@@ -350,11 +350,15 @@ async def _execute_task(task_id: uuid.UUID, context: dict[int, str]) -> None:
             "the action that just failed.\n\n"
             f"Then complete the original task and reply with ONLY its final result:\n{prompt_original}"
         )
+        # Store a SHORT note, not the follow-up prompt itself. That prompt now
+        # re-states the whole original brief, so logging it verbatim wrote
+        # several hundred characters per attempt into the row and buried the
+        # actual cause on the board. The error above is the useful part.
         heal_log.append(
             {
                 "attempt": attempts,
                 "error": _truncate(error),
-                "diagnosis": _truncate(follow_up),
+                "diagnosis": "Retried with a different approach.",
                 "resolved": False,
             }
         )

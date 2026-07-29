@@ -214,11 +214,25 @@ function TaskCard({
                 ? `gave up after ${task.attempts} attempts`
                 : `healed after ${task.attempts} attempts`}
             </summary>
-            <ul className="mt-1 space-y-1 text-[11px] leading-relaxed text-muted">
+            {/* Bounded like the "result" block below: an error string can run
+                to a few hundred characters, and rows written before the
+                diagnosis was shortened still carry the full repair prompt. */}
+            <ul className="mt-1 max-h-40 space-y-1.5 overflow-y-auto text-[11px] leading-relaxed text-muted">
               {task.heal_log.map((h) => (
                 <li key={h.attempt}>
-                  <span className="text-foreground">Attempt {h.attempt}:</span> {h.error} —{" "}
-                  {h.diagnosis} {h.resolved ? "(resolved)" : "(unresolved)"}
+                  <span className="text-foreground">Attempt {h.attempt}</span>
+                  <span className={h.resolved ? "text-emerald-300" : "text-muted"}>
+                    {h.resolved ? " · fixed" : " · unresolved"}
+                  </span>
+                  <span className="mt-0.5 block break-words">{h.error}</span>
+                  {/* Only the give-up reasons are worth showing — the
+                      mid-loop note just says it retried, which the attempt
+                      number already tells you. */}
+                  {h.diagnosis?.startsWith("Stopping:") && (
+                    <span className="mt-0.5 block break-words text-amber-300/80">
+                      {h.diagnosis}
+                    </span>
+                  )}
                 </li>
               ))}
             </ul>
@@ -452,6 +466,14 @@ export default function MissionsPage() {
     .filter((c) => c.count > 0)
     .map((c) => `${c.count} ${c.label.toLowerCase()}`)
     .join(" · ");
+  // "Skipped" only happens when a self-healing task finally gave up and its
+  // dependents can never run — the uncommon case. Showing the column
+  // unconditionally cost every other column a sixth of the width and
+  // squeezed cards to roughly one word per line, so it appears only once it
+  // actually holds something.
+  const boardColumns = COLUMNS.filter(
+    (c) => c.key !== "skipped" || tasks.some((t) => t.status === "skipped"),
+  );
   const tokensIn = tasks.reduce((sum, t) => sum + t.tokens_in, 0);
   const tokensOut = tasks.reduce((sum, t) => sum + t.tokens_out, 0);
   const tokensTotal = tokensIn + tokensOut;
@@ -629,8 +651,12 @@ export default function MissionsPage() {
               )}
 
               {view === "board" ? (
-                <div className="mt-4 grid flex-1 grid-cols-2 gap-3 md:grid-cols-6">
-                  {COLUMNS.map((col) => {
+                <div
+                  className={`mt-4 grid flex-1 grid-cols-2 gap-3 ${
+                    boardColumns.length === 6 ? "md:grid-cols-6" : "md:grid-cols-5"
+                  }`}
+                >
+                  {boardColumns.map((col) => {
                     const items = tasks.filter((t) => t.status === col.key);
                     const isLegalTarget =
                       draggingTask != null && RETRY_TARGET[draggingTask.status] === col.key;
