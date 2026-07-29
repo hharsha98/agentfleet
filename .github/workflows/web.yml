@@ -1,0 +1,47 @@
+name: web
+
+# The frontend had NO CI at all: evals.yml runs pytest and nothing else, so
+# a TypeScript error or a broken page could reach main unnoticed. That
+# matters more now that a cloud deploy is next.
+#
+# `next build` typechecks as part of building, so this single step is both
+# the build gate and the type gate.
+#
+# `npm run lint` is deliberately NOT here yet. It currently reports 9
+# pre-existing react-hooks/set-state-in-effect errors across pages that all
+# share the same fetch-on-mount idiom. Adding it today would make CI red on
+# arrival, which only teaches people to ignore it. It gets added as a second
+# step once those are fixed.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    env:
+      # Auth.js reads this at module scope. The build never authenticates
+      # anyone; the value just must not be missing. Not a real credential.
+      AUTH_SECRET: build-time-placeholder-not-a-secret
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      # `ci`, not `install`: fails on a package-lock that has drifted from
+      # package.json rather than quietly resolving something different.
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build and typecheck
+        run: npm run build
