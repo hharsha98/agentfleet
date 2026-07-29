@@ -34,10 +34,10 @@ jobs:
       # surface the key here and gate the eval step on env below.
       FREE_LLM_KEY: ${{ secrets.FREE_LLM_KEY }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v9
 
       - name: Install dependencies
         working-directory: apps/api
