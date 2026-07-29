@@ -14,6 +14,7 @@ import json
 import logging
 import re
 import time
+import traceback
 import uuid
 
 from sqlalchemy import select
@@ -46,6 +47,183 @@ def _error_signature(error: str) -> str:
 def _truncate(text: str | None, limit: int = 300) -> str:
     text = text or ""
     return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
+# --- failure classification (pure, no LLM call) -----------------------------
+#
+# Every failed attempt gets ONE label, which _execute_task uses to route the
+# retry. This is the fix for a real run that burned two full LLM reasoning
+# turns on a TypeError in our own frame-handling code (structurally
+# unfixable by retrying) before the stall detector finally gave up — and,
+# separately, wasted a reasoning turn on a plain transient provider blip
+# where a bare retry would have worked.
+#
+# Keyword lists match on the lower-cased error string (which already embeds
+# the provider/exception class name — see _run_turn and chat.py's sanitized
+# error message); bare numeric HTTP-status checks use word-boundaried regex
+# so they can't accidentally fire on digits embedded in an unrelated id.
+
+_CAPABILITY_KEYWORDS = (
+    # Bugs in OUR OWN code, not something the provider returned — these are
+    # structurally unfixable by retrying the same or a different prompt.
+    "typeerror",
+    "attributeerror",
+    "keyerror",
+    # Missing/invalid capability this agent doesn't have.
+    "missing credential",
+    "invalid credential",
+    "missing api key",
+    "invalid api key",
+    "no api key",
+    "unauthorized",
+    "authenticationerror",
+    "forbidden",
+    "permissiondeniederror",
+    "permission denied",
+    "unknown tool",
+    "no such tool",
+    "tool not found",
+    "unrecognized tool",
+)
+
+_TRANSIENT_KEYWORDS = (
+    "rate limit",
+    "ratelimit",
+    "internalservererror",
+    "bad gateway",
+    "service unavailable",
+    "gateway timeout",
+    "timeout",
+    "timed out",
+    "connection reset",
+    "connection refused",
+    "connection error",
+    "connection aborted",
+    "apiconnectionerror",
+    "stream aborted",
+    "stream closed unexpectedly",
+)
+
+_APPROACH_KEYWORDS = (
+    "guardrail",
+    "malformed",
+    "invalid argument",
+    "invalid arguments",
+    "bad request",
+    "badrequesterror",
+    "not found",
+    "empty result",
+    "no results",
+)
+
+# Isolated 3-digit HTTP-status-shaped tokens only (word-boundaried), so a
+# random uuid/request-id embedding "500" as part of a longer digit run can't
+# masquerade as a status code.
+_STATUS_5XX_RE = re.compile(r"\b5\d{2}\b")
+_STATUS_429_RE = re.compile(r"\b429\b")
+_STATUS_401_403_RE = re.compile(r"\b40[13]\b")
+
+
+def classify_failure(error: str | None, evidence: dict | None = None) -> str:
+    """Label a failed attempt as "transient", "approach", or "capability" —
+    pure function, no LLM call, so _execute_task can route the retry without
+    spending a reasoning turn deciding HOW to retry.
+
+    - "transient": provider 5xx/429/timeout/connection reset/stream aborted.
+      The approach was fine; infrastructure blipped. Retry the same prompt.
+    - "approach": the model did something wrong (bad tool arguments,
+      malformed output, tool returned not-found/empty, guardrail tripped).
+      Worth an LLM repair turn.
+    - "capability": structurally unfixable by this node — missing/invalid
+      credential, unknown tool, permission denied, or a bug in OUR OWN code
+      (TypeError/AttributeError/KeyError raised inside our stack rather than
+      returned by a provider). Stop immediately; retrying cannot fix it.
+
+    Unrecognized shapes default to "approach" — safer than silently stopping
+    (capability) or retrying forever with no plan (transient).
+    """
+    evidence = evidence or {}
+    text = error or ""
+    # Fold evidence["error_type"] (set by _run_turn from the actual raised
+    # exception's class, e.g. "KeyError") into the same text that keyword
+    # matching scans, so a caller passing structured evidence instead of a
+    # descriptive string still gets the right label.
+    lower = f"{text} {evidence.get('error_type') or ''}".lower()
+    status_code = evidence.get("status_code")
+
+    if any(keyword in lower for keyword in _CAPABILITY_KEYWORDS):
+        return "capability"
+    if status_code in (401, 403) or _STATUS_401_403_RE.search(text):
+        return "capability"
+
+    if status_code == 429 or (isinstance(status_code, int) and 500 <= status_code < 600):
+        return "transient"
+    if any(keyword in lower for keyword in _TRANSIENT_KEYWORDS):
+        return "transient"
+    if _STATUS_429_RE.search(text) or _STATUS_5XX_RE.search(text):
+        return "transient"
+
+    if evidence.get("guardrail"):
+        return "approach"
+    if status_code == 400:
+        return "approach"
+    if any(keyword in lower for keyword in _APPROACH_KEYWORDS):
+        return "approach"
+
+    return "approach"
+
+
+def _log_evidence(evidence: dict, limit: int = 300) -> dict:
+    """Compact copy of `evidence` for heal_log storage — these render on the
+    missions board, so every string value is truncated small. The fuller
+    ~2000-char traceback used in the repair prompt (see _build_repair_prompt)
+    is NOT what gets persisted here."""
+    out: dict = {}
+    for key, value in evidence.items():
+        out[key] = _truncate(value, limit) if isinstance(value, str) else value
+    return out
+
+
+def _build_repair_prompt(error: str, evidence: dict, prompt_original: str) -> str:
+    """The rich-evidence repair turn: same guarantee as before — restate the
+    ORIGINAL brief and ask for ONLY the final result, so the model diagnoses
+    privately instead of narrating the failure into the deliverable — but
+    now backed by concrete evidence (which tool failed and its raw output, a
+    trimmed traceback, guardrail flags) instead of a bare error string."""
+    lines = [f"That attempt failed with this error: {error}"]
+    if evidence.get("tool"):
+        lines.append(f"Tool that failed: {evidence['tool']}")
+    if evidence.get("tool_output"):
+        lines.append(f"That tool's raw output was:\n{evidence['tool_output']}")
+    if evidence.get("guardrail"):
+        lines.append(f"Guardrail flags tripped: {evidence['guardrail']}")
+    if evidence.get("traceback"):
+        lines.append(f"Traceback (most recent call last):\n{evidence['traceback']}")
+    evidence_block = "\n\n".join(lines)
+    return (
+        f"{evidence_block}\n\n"
+        "Work out what went wrong and take a different approach. Do not repeat "
+        "the action that just failed.\n\n"
+        f"Then complete the original task and reply with ONLY its final result:\n{prompt_original}"
+    )
+
+
+def _heal_entry(
+    attempt: int, error: str, diagnosis: str, classification: str, evidence: dict
+) -> dict:
+    """Build one heal_log entry with the classification (and, when present,
+    truncated evidence) recorded alongside the existing attempt/error/
+    diagnosis/resolved fields."""
+    entry = {
+        "attempt": attempt,
+        "error": _truncate(error),
+        "diagnosis": diagnosis,
+        "classification": classification,
+        "resolved": False,
+    }
+    if evidence:
+        entry["evidence"] = _log_evidence(evidence)
+    return entry
 
 
 # LLM-planner cap ONLY (parse_plan/plan_and_execute above) — how many tasks
@@ -220,15 +398,29 @@ async def execute_run(run_id: uuid.UUID) -> None:
         await asyncio.gather(*(_execute_task(task_id, context) for task_id in ready))
 
 
-async def _run_turn(conversation_id: uuid.UUID, prompt: str) -> tuple[str, dict, str | None]:
-    """Run one stream_chat turn to completion. Returns (text, usage, error) —
-    `usage` is {} when the turn errored (stream_chat only emits a "done"
-    event, carrying usage, on a clean finish)."""
+async def _run_turn(
+    conversation_id: uuid.UUID, prompt: str
+) -> tuple[str, dict, str | None, dict]:
+    """Run one stream_chat turn to completion. Returns (text, usage, error,
+    evidence) — `usage` is {} when the turn errored (stream_chat only emits a
+    "done" event, carrying usage, on a clean finish).
+
+    `evidence` is rich failure context beyond the bare error string: which
+    tool was last active and its raw output (from the "tool_call"/
+    "tool_result"/"guardrail" SSE frames — see services/chat.py), a trimmed
+    traceback, and any provider status_code/body already on the exception
+    when stream_chat itself raises rather than yielding a sanitized "error"
+    frame. Feeds classify_failure() and the repair prompt. Empty dict when
+    there's nothing beyond the plain error message (the common case)."""
     text, usage, error = "", {}, None
+    last_tool: str | None = None
+    last_tool_output: str | None = None
+    guardrail_flags: list | None = None
     try:
         async for frame in stream_chat(conversation_id, prompt):
             event = json.loads(frame[6:])  # strip "data: " SSE framing
-            if event["type"] == "token":
+            etype = event["type"]
+            if etype == "token":
                 # Belt and braces. services/chat.py now normalises provider
                 # content blocks to text at the source, but there are three
                 # other runtimes emitting this event; a malformed token must
@@ -237,9 +429,17 @@ async def _run_turn(conversation_id: uuid.UUID, prompt: str) -> tuple[str, dict,
                 # provider response shape.
                 content = event["content"]
                 text += content if isinstance(content, str) else str(content or "")
-            elif event["type"] == "done":
+            elif etype == "tool_call":
+                last_tool = event.get("name")
+            elif etype == "tool_result":
+                if event.get("name") == last_tool:
+                    last_tool_output = event.get("preview")
+            elif etype == "guardrail":
+                guardrail_flags = event.get("flags")
+                last_tool = last_tool or event.get("tool")
+            elif etype == "done":
                 usage = event["usage"]
-            elif event["type"] == "error":
+            elif etype == "error":
                 error = event["message"]
     except Exception as exc:
         logger.exception("task turn crashed for conversation %s", conversation_id)
@@ -252,7 +452,27 @@ async def _run_turn(conversation_id: uuid.UUID, prompt: str) -> tuple[str, dict,
         # matches between genuinely different failures.
         detail = str(exc).strip()
         error = f"{type(exc).__name__}: {detail}" if detail else type(exc).__name__
-    return text, usage, error
+        evidence_exc: dict = {
+            "traceback": _truncate(traceback.format_exc(), 2000),
+            "error_type": type(exc).__name__,
+        }
+        status_code = getattr(exc, "status_code", None)
+        if isinstance(status_code, int):
+            evidence_exc["status_code"] = status_code
+        body = getattr(exc, "body", None)
+        if body is not None:
+            evidence_exc["body"] = _truncate(str(body), 300)
+    else:
+        evidence_exc = {}
+
+    evidence: dict = dict(evidence_exc)
+    if last_tool:
+        evidence["tool"] = last_tool
+    if last_tool_output is not None:
+        evidence["tool_output"] = _truncate(last_tool_output, 500)
+    if guardrail_flags:
+        evidence["guardrail"] = guardrail_flags
+    return text, usage, error, evidence
 
 
 async def _execute_task(task_id: uuid.UUID, context: dict[int, str]) -> None:
@@ -270,7 +490,18 @@ async def _execute_task(task_id: uuid.UUID, context: dict[int, str]) -> None:
          the immediately preceding attempt (self-improvement has stalled);
       2. the wall-clock deadline (settings.self_heal_deadline_seconds) for
          this task has passed;
-      3. the budget is exhausted (services.budget.check_budget).
+      3. the budget is exhausted (services.budget.check_budget);
+      4. the failure is classified "capability" (classify_failure) — a
+         missing/invalid credential, unknown tool, or a bug in our own code.
+         Structurally unfixable by retrying, so it stops on the FIRST
+         occurrence without spending an LLM reasoning turn.
+
+    Every other failure is classified "transient" (provider blip — retry the
+    SAME prompt after a short backoff, no reasoning turn) or "approach" (the
+    model did something wrong — the existing LLM repair turn, now carrying
+    rich evidence from _run_turn). Both remain subject to (1)-(3) above, so
+    a transient failure that never stops recurring still terminates via
+    stall/deadline rather than looping forever.
     """
     async with SessionLocal() as session:
         task = await session.get(RunTask, task_id)
@@ -297,6 +528,7 @@ async def _execute_task(task_id: uuid.UUID, context: dict[int, str]) -> None:
     prior_signature: str | None = None
     heal_log: list[dict] = []
     text, usage, error = "", {}, None
+    evidence: dict = {}
 
     # Metering must cover EVERY attempt, not just the last one. Budget
     # enforcement reads Message rows (see services/budget.py) so it already
@@ -307,7 +539,7 @@ async def _execute_task(task_id: uuid.UUID, context: dict[int, str]) -> None:
 
     while True:
         attempts += 1
-        text, usage, error = await _run_turn(conversation_id, prompt)
+        text, usage, error, evidence = await _run_turn(conversation_id, prompt)
         spent["tokens_in"] += usage.get("tokens_in", 0) or 0
         spent["tokens_out"] += usage.get("tokens_out", 0) or 0
         spent["cost_usd"] += float(usage.get("cost_usd", 0) or 0)
@@ -317,68 +549,104 @@ async def _execute_task(task_id: uuid.UUID, context: dict[int, str]) -> None:
                 heal_log[-1]["resolved"] = True
             break  # succeeded (possibly after one or more repairs)
 
+        classification = classify_failure(error, evidence)
+
         async with SessionLocal() as session:
             violation = await check_budget(session, agent_id)
         if violation:
             heal_log.append(
-                {
-                    "attempt": attempts,
-                    "error": _truncate(error),
-                    "diagnosis": _truncate(f"Stopping: {violation}"),
-                    "resolved": False,
-                }
+                _heal_entry(
+                    attempts, error, _truncate(f"Stopping: {violation}"), classification, evidence
+                )
             )
             break
 
         if time.monotonic() >= deadline:
             heal_log.append(
-                {
-                    "attempt": attempts,
-                    "error": _truncate(error),
-                    "diagnosis": "Stopping: self-heal deadline exceeded.",
-                    "resolved": False,
-                }
+                _heal_entry(
+                    attempts,
+                    error,
+                    "Stopping: self-heal deadline exceeded.",
+                    classification,
+                    evidence,
+                )
+            )
+            break
+
+        if classification == "capability":
+            # Structurally unfixable by this node — stop on the FIRST
+            # occurrence, no stall check needed and no LLM reasoning turn
+            # spent. This is exactly the case that used to burn two repair
+            # attempts on a TypeError in our own code.
+            heal_log.append(
+                _heal_entry(
+                    attempts,
+                    error,
+                    "Stopping: needs a capability this agent doesn't have (missing "
+                    "credential / platform error) — retrying cannot fix it.",
+                    classification,
+                    evidence,
+                )
             )
             break
 
         signature = _error_signature(error)
         if prior_signature is not None and signature == prior_signature:
             heal_log.append(
-                {
-                    "attempt": attempts,
-                    "error": _truncate(error),
-                    "diagnosis": "Stopping: repeated the same error — self-improvement stalled.",
-                    "resolved": False,
-                }
+                _heal_entry(
+                    attempts,
+                    error,
+                    "Stopping: repeated the same error — self-improvement stalled.",
+                    classification,
+                    evidence,
+                )
             )
             break
 
-        # Re-state the ORIGINAL task in every repair turn. Asking only to
-        # "diagnose and try again" makes the model narrate the failure, and
-        # that narration then becomes the task's stored result — verified
-        # against the live model, which answered a "name a fruit" task with
-        # an essay about the upstream error. The deliverable must stay the
-        # deliverable: diagnose privately, then answer the original brief.
-        follow_up = (
-            f"That attempt failed with this error: {error}\n\n"
-            "Work out what went wrong and take a different approach. Do not repeat "
-            "the action that just failed.\n\n"
-            f"Then complete the original task and reply with ONLY its final result:\n{prompt_original}"
-        )
-        # Store a SHORT note, not the follow-up prompt itself. That prompt now
-        # re-states the whole original brief, so logging it verbatim wrote
-        # several hundred characters per attempt into the row and buried the
-        # actual cause on the board. The error above is the useful part.
-        heal_log.append(
-            {
-                "attempt": attempts,
-                "error": _truncate(error),
-                "diagnosis": "Retried with a different approach.",
-                "resolved": False,
-            }
-        )
-        prior_signature = signature
-        prompt = follow_up
+        if classification == "transient":
+            # Infrastructure blip, not a reasoning problem — retry the SAME
+            # prompt after a short backoff instead of spending an LLM turn.
+            # Still subject to the stall/deadline checks above, so a
+            # transient error that never stops recurring still terminates.
+            await asyncio.sleep(settings.self_heal_transient_backoff_seconds)
+            heal_log.append(
+                _heal_entry(
+                    attempts,
+                    error,
+                    "Retried the same prompt after a short backoff — no reasoning "
+                    "turn spent (transient failure).",
+                    classification,
+                    evidence,
+                )
+            )
+            prior_signature = signature
+            # prompt intentionally unchanged — same prompt, no follow-up.
+        else:
+            # "approach": re-state the ORIGINAL task in every repair turn.
+            # Asking only to "diagnose and try again" makes the model
+            # narrate the failure, and that narration then becomes the
+            # task's stored result — verified against the live model, which
+            # answered a "name a fruit" task with an essay about the
+            # upstream error. The deliverable must stay the deliverable:
+            # diagnose privately (now with rich evidence), then answer the
+            # original brief.
+            follow_up = _build_repair_prompt(error, evidence, prompt_original)
+            # Store a SHORT note, not the follow-up prompt itself. That
+            # prompt now re-states the whole original brief plus evidence,
+            # so logging it verbatim would write a lot per attempt into the
+            # row and bury the actual cause on the board. _heal_entry's
+            # truncated `evidence` field is the useful part.
+            heal_log.append(
+                _heal_entry(
+                    attempts,
+                    error,
+                    "Retried with a different approach.",
+                    classification,
+                    evidence,
+                )
+            )
+            prior_signature = signature
+            prompt = follow_up
 
     async with SessionLocal() as session:
         task = await session.get(RunTask, task_id)

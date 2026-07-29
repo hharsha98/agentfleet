@@ -58,9 +58,13 @@ def test_orchestrator_survives_a_list_valued_token_event() -> None:
     original = orchestrator.stream_chat
     orchestrator.stream_chat = fake_stream
     try:
-        text, usage, error = asyncio.run(orchestrator._run_turn("cid", "prompt"))
+        # _run_turn now returns a 4th value, `evidence` (rich failure
+        # context for classify_failure/the repair prompt — see Layer 1's
+        # rich-evidence capture); empty on a successful turn like this one.
+        text, usage, error, evidence = asyncio.run(orchestrator._run_turn("cid", "prompt"))
     finally:
         orchestrator.stream_chat = original
 
     assert error is None, f"a list-valued token must not fail the turn: {error}"
     assert usage.get("tokens_in") == 1
+    assert evidence == {}

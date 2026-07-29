@@ -111,6 +111,13 @@ class Settings(BaseSettings):
     # on stall detection (two consecutive attempts hit the same normalized
     # error) or budget exhaustion (services/budget.py::check_budget).
     self_heal_deadline_seconds: int = 300
+    # Failure classification (services/orchestrator.py::classify_failure): a
+    # "transient" failure (provider 5xx/429/timeout/connection reset) means
+    # the approach was fine and infrastructure blipped, so the retry reuses
+    # the SAME prompt rather than spending an LLM reasoning turn — but it
+    # still needs a brief pause before hammering the provider again. Tests
+    # monkeypatch this to 0 so the transient path doesn't slow the suite.
+    self_heal_transient_backoff_seconds: float = 1.0
 
 
 @lru_cache

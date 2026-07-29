@@ -21,7 +21,7 @@ from app.config import get_settings
 from app.db import SessionLocal, engine
 from app.models import Agent, Run, RunTask
 from app.services.chat import _sse
-from app.services.orchestrator import execute_run
+from app.services.orchestrator import classify_failure, execute_run
 
 
 def _frame(event: dict) -> str:
@@ -103,6 +103,11 @@ async def test_task_fails_once_then_succeeds(monkeypatch) -> None:
     agent_id = await _make_agent(agent_slug)
     run_id: uuid.UUID | None = None
     try:
+        # "boom: connection reset" is now classify_failure()'d as "transient"
+        # (see test_failure_classification below), so the retry takes the
+        # short-backoff path — zero it out so this test stays fast.
+        monkeypatch.setattr(get_settings(), "self_heal_transient_backoff_seconds", 0)
+
         run_id = await _make_run(
             agent_slug, [{"ordinal": 0, "title": "Do the thing", "description": "do it"}]
         )
@@ -153,6 +158,11 @@ async def test_repeated_same_error_signature_stalls_and_gives_up(monkeypatch) ->
     agent_id = await _make_agent(agent_slug)
     run_id: uuid.UUID | None = None
     try:
+        # "upstream 503" is classify_failure()'d as "transient" — zero the
+        # backoff so this test stays fast (still expected to stall on the
+        # 2nd attempt, same as before; see test_failure_classification).
+        monkeypatch.setattr(get_settings(), "self_heal_transient_backoff_seconds", 0)
+
         run_id = await _make_run(
             agent_slug, [{"ordinal": 0, "title": "Always fails", "description": "fail forever"}]
         )
@@ -297,6 +307,11 @@ async def test_no_fixed_attempt_cap_retries_until_deadline(monkeypatch) -> None:
         # this bound is TIME-based, not a hardcoded attempt count.
         settings = get_settings()
         monkeypatch.setattr(settings, "self_heal_deadline_seconds", 0.5)
+        # A couple of these errors classify as "transient" (see
+        # test_failure_classification) and take the short-backoff retry
+        # path — zero it out so the deadline budget above is spent on
+        # actual attempts, not sleeping.
+        monkeypatch.setattr(settings, "self_heal_transient_backoff_seconds", 0)
 
         run_id = await _make_run(
             agent_slug,
@@ -308,12 +323,28 @@ async def test_no_fixed_attempt_cap_retries_until_deadline(monkeypatch) -> None:
         # should end the loop. This is the regression guard for "no MAX_
         # ATTEMPTS constant anywhere": if a fixed cap of e.g. 3 or 4 were
         # ever reintroduced, this task would stop with attempts < 6.
+        #
+        # NOTE: none of these are "capability"-classified (no TypeError/
+        # AttributeError/KeyError, no credential/permission/unknown-tool
+        # wording) — capability failures are DELIBERATELY meant to stop on
+        # the first occurrence (see test_capability_failure_stops_without_
+        # llm_repair_turn), so mixing one in here would defeat the point of
+        # this regression guard rather than testing it. A prior version of
+        # this list included "KeyError: missing required field", which the
+        # new classifier correctly treats as capability (a bug in our own
+        # code) and stops on immediately — replaced with a non-capability
+        # error to keep testing the no-fixed-cap invariant for the
+        # transient/approach classes it actually governs.
         errors = [
             "ConnectionError: connection refused",
             "ValueError: malformed response body",
-            "KeyError: missing required field",
+            "FormatError: response missing required section",
             "TimeoutError: upstream did not respond",
-            "AuthError: credential rejected",
+            # Deliberately NOT credential/permission wording, per the note
+            # above: "credential rejected" reads like a capability failure
+            # even though it misses today's exact keywords, so it would break
+            # this guard confusingly the day "credential" joins the list.
+            "EncodingError: unexpected byte sequence",
             "ParseError: unexpected token in output",
             "RateLimitError: too many requests",
             "SchemaError: response shape invalid",
@@ -336,5 +367,250 @@ async def test_no_fixed_attempt_cap_retries_until_deadline(monkeypatch) -> None:
 
         run = await _get_run(run_id)
         assert run.status == "done_with_issues"
+    finally:
+        await _cleanup(run_id, agent_id)
+
+
+# --- failure classification (pure function, no DB/LLM at all) --------------
+
+
+def test_classify_failure_transient_cases() -> None:
+    assert classify_failure("RateLimitError: 429 Too Many Requests") == "transient"
+    assert classify_failure("APITimeoutError: Request timed out.") == "transient"
+    assert classify_failure("InternalServerError: 500 Internal Server Error") == "transient"
+    assert classify_failure("boom: connection reset") == "transient"
+    assert (
+        classify_failure("The model provider returned an error (RateLimitError). Please try again.")
+        == "transient"
+    )
+    # Evidence-driven: a raw provider status code is enough on its own.
+    assert classify_failure("some odd message", {"status_code": 429}) == "transient"
+    assert classify_failure("some odd message", {"status_code": 503}) == "transient"
+
+
+def test_classify_failure_capability_cases() -> None:
+    # Bugs in OUR OWN code — structurally unfixable by retrying.
+    assert classify_failure("TypeError: can only concatenate str (not 'list') to str") == "capability"
+    assert (
+        classify_failure("AttributeError: 'NoneType' object has no attribute 'content'")
+        == "capability"
+    )
+    assert classify_failure("KeyError: 'type'") == "capability"
+    # Missing/invalid capability this agent doesn't have.
+    assert classify_failure("AuthenticationError: invalid api key provided") == "capability"
+    assert classify_failure("PermissionDeniedError: access forbidden") == "capability"
+    assert classify_failure("Unknown tool requested: search_web_v2") == "capability"
+    assert classify_failure("some odd message", {"status_code": 401}) == "capability"
+    assert classify_failure("some odd message", {"error_type": "KeyError"}) == "capability"
+
+
+def test_classify_failure_approach_cases() -> None:
+    assert classify_failure("BadRequestError: malformed tool arguments") == "approach"
+    assert classify_failure("Tool returned: not found") == "approach"
+    assert (
+        classify_failure("Guardrail tripped mid-turn", {"guardrail": ["pii"]}) == "approach"
+    )
+    assert classify_failure("provider rejected the call", {"status_code": 400}) == "approach"
+    # Unrecognized shape defaults to approach (still gets a repair turn).
+    assert classify_failure("something entirely novel happened") == "approach"
+    assert classify_failure(None) == "approach"
+
+
+# --- capability failure: stop immediately, no LLM repair turn --------------
+
+
+async def test_capability_failure_stops_without_llm_repair_turn(monkeypatch) -> None:
+    await engine.dispose()
+    agent_slug = f"self-heal-capability-{uuid.uuid4().hex[:8]}"
+    agent_id = await _make_agent(agent_slug)
+    run_id: uuid.UUID | None = None
+    try:
+        run_id = await _make_run(
+            agent_slug,
+            [{"ordinal": 0, "title": "Needs a credential", "description": "call the api"}],
+        )
+
+        calls = {"n": 0}
+
+        async def fake_stream_chat(conversation_id, prompt):
+            calls["n"] += 1
+            yield _frame({"type": "error", "message": "AuthenticationError: invalid api key provided"})
+
+        monkeypatch.setattr("app.services.orchestrator.stream_chat", fake_stream_chat)
+
+        await execute_run(run_id)
+
+        task = await _get_task(run_id, 0)
+        assert task.status == "failed"
+        assert task.attempts == 1
+        assert calls["n"] == 1, "capability failure must not spend an LLM repair turn"
+        assert len(task.heal_log) == 1
+        assert task.heal_log[0]["classification"] == "capability"
+        assert "capability" in task.heal_log[0]["diagnosis"].lower()
+
+        run = await _get_run(run_id)
+        assert run.status == "done_with_issues"
+    finally:
+        await _cleanup(run_id, agent_id)
+
+
+# --- transient failure: retry the SAME prompt, no reasoning turn -----------
+
+
+async def test_transient_failure_retries_same_prompt_then_succeeds(monkeypatch) -> None:
+    await engine.dispose()
+    agent_slug = f"self-heal-transient-{uuid.uuid4().hex[:8]}"
+    agent_id = await _make_agent(agent_slug)
+    run_id: uuid.UUID | None = None
+    try:
+        monkeypatch.setattr(get_settings(), "self_heal_transient_backoff_seconds", 0)
+
+        run_id = await _make_run(
+            agent_slug, [{"ordinal": 0, "title": "Flaky call", "description": "call the flaky api"}]
+        )
+
+        prompts_seen: list[str] = []
+        calls = {"n": 0}
+
+        async def fake_stream_chat(conversation_id, prompt):
+            prompts_seen.append(prompt)
+            calls["n"] += 1
+            if calls["n"] == 1:
+                yield _frame({"type": "error", "message": "RateLimitError: 429 too many requests"})
+            else:
+                yield _frame({"type": "token", "content": "done"})
+                yield _frame(
+                    {
+                        "type": "done",
+                        "usage": {"tokens_in": 1, "tokens_out": 1, "cost_usd": 0, "latency_ms": 1},
+                    }
+                )
+
+        monkeypatch.setattr("app.services.orchestrator.stream_chat", fake_stream_chat)
+
+        await execute_run(run_id)
+
+        task = await _get_task(run_id, 0)
+        assert task.status == "done"
+        assert task.attempts == 2
+        assert len(prompts_seen) == 2
+        # SAME prompt reused — no LLM reasoning/repair narrative injected.
+        assert prompts_seen[0] == prompts_seen[1]
+        assert "That attempt failed" not in prompts_seen[1]
+        assert task.heal_log[0]["classification"] == "transient"
+
+        run = await _get_run(run_id)
+        assert run.status == "done"
+    finally:
+        await _cleanup(run_id, agent_id)
+
+
+# --- approach failure: still goes through the LLM repair turn --------------
+
+
+async def test_approach_failure_goes_through_repair_turn_then_succeeds(monkeypatch) -> None:
+    await engine.dispose()
+    agent_slug = f"self-heal-approach-{uuid.uuid4().hex[:8]}"
+    agent_id = await _make_agent(agent_slug)
+    run_id: uuid.UUID | None = None
+    try:
+        run_id = await _make_run(
+            agent_slug, [{"ordinal": 0, "title": "Bad args once", "description": "call the tool"}]
+        )
+
+        prompts_seen: list[str] = []
+        calls = {"n": 0}
+
+        async def fake_stream_chat(conversation_id, prompt):
+            prompts_seen.append(prompt)
+            calls["n"] += 1
+            if calls["n"] == 1:
+                yield _frame({"type": "error", "message": "BadRequestError: malformed tool arguments"})
+            else:
+                yield _frame({"type": "token", "content": "done"})
+                yield _frame(
+                    {
+                        "type": "done",
+                        "usage": {"tokens_in": 1, "tokens_out": 1, "cost_usd": 0, "latency_ms": 1},
+                    }
+                )
+
+        monkeypatch.setattr("app.services.orchestrator.stream_chat", fake_stream_chat)
+
+        await execute_run(run_id)
+
+        task = await _get_task(run_id, 0)
+        assert task.status == "done"
+        assert task.attempts == 2
+        # A real repair turn WAS requested — original brief re-stated,
+        # diagnosis requested, per the deliberate "answer ONLY the final
+        # result" contract.
+        assert "That attempt failed" in prompts_seen[1]
+        assert "call the tool" in prompts_seen[1]
+        assert task.heal_log[0]["classification"] == "approach"
+
+        run = await _get_run(run_id)
+        assert run.status == "done"
+    finally:
+        await _cleanup(run_id, agent_id)
+
+
+# --- rich evidence: repair prompt carries the failing tool + its output ----
+
+
+async def test_repair_prompt_includes_tool_name_and_output_on_failure(monkeypatch) -> None:
+    await engine.dispose()
+    agent_slug = f"self-heal-evidence-{uuid.uuid4().hex[:8]}"
+    agent_id = await _make_agent(agent_slug)
+    run_id: uuid.UUID | None = None
+    try:
+        run_id = await _make_run(
+            agent_slug,
+            [{"ordinal": 0, "title": "Search then answer", "description": "search then answer"}],
+        )
+
+        prompts_seen: list[str] = []
+        calls = {"n": 0}
+
+        async def fake_stream_chat(conversation_id, prompt):
+            prompts_seen.append(prompt)
+            calls["n"] += 1
+            if calls["n"] == 1:
+                yield _frame(
+                    {"type": "tool_call", "name": "search_web", "arguments": {"q": "x"}}
+                )
+                yield _frame(
+                    {
+                        "type": "tool_result",
+                        "name": "search_web",
+                        "preview": "NO_RESULTS_FOUND_MARKER",
+                    }
+                )
+                yield _frame({"type": "error", "message": "BadRequestError: malformed tool arguments"})
+            else:
+                yield _frame({"type": "token", "content": "done"})
+                yield _frame(
+                    {
+                        "type": "done",
+                        "usage": {"tokens_in": 1, "tokens_out": 1, "cost_usd": 0, "latency_ms": 1},
+                    }
+                )
+
+        monkeypatch.setattr("app.services.orchestrator.stream_chat", fake_stream_chat)
+
+        await execute_run(run_id)
+
+        task = await _get_task(run_id, 0)
+        assert task.status == "done"
+        repair_prompt = prompts_seen[1]
+        assert "search_web" in repair_prompt
+        assert "NO_RESULTS_FOUND_MARKER" in repair_prompt
+        # The heal_log entry itself also carries the (truncated) evidence,
+        # not just the bare error string.
+        assert task.heal_log[0]["evidence"]["tool"] == "search_web"
+        assert "NO_RESULTS_FOUND_MARKER" in task.heal_log[0]["evidence"]["tool_output"]
+
+        run = await _get_run(run_id)
+        assert run.status == "done"
     finally:
         await _cleanup(run_id, agent_id)
