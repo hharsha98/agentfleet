@@ -8,6 +8,8 @@
 import Link from "next/link";
 import { Fragment } from "react";
 
+import { NumberedCard } from "@/components/explainer";
+
 import { HUE_CLASSES, IconTile, type Hue, type IconName } from "./icons";
 import { Reveal } from "./reveal";
 import { SectionHeader } from "./section-header";
@@ -93,33 +95,6 @@ function StepCard({ step, i }: { step: WorkflowStep; i: number }) {
         {step.agent}
       </span>
       <span className="font-mono text-[10px] text-muted">{step.duration}</span>
-    </div>
-  );
-}
-
-// Numbered explainer card — same shape as deep-dives.tsx's
-// NumberedExplainerCard, kept local since it's only two consumers and not
-// worth a shared file for.
-function NumberedCard({
-  n,
-  hue,
-  title,
-  description,
-}: {
-  n: number;
-  hue: Hue;
-  title: string;
-  description: string;
-}) {
-  return (
-    <div className="flex flex-col gap-3 rounded-xl border border-hairline p-6">
-      <span
-        className={`flex h-8 w-8 items-center justify-center rounded-lg border font-mono text-xs font-medium ${HUE_CLASSES[hue].tile} ${HUE_CLASSES[hue].icon}`}
-      >
-        {n}
-      </span>
-      <h4 className="font-medium tracking-tight text-foreground">{title}</h4>
-      <p className="text-sm text-muted">{description}</p>
     </div>
   );
 }

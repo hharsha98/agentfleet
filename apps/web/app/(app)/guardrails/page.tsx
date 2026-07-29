@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { Panel } from "@/components/dash/panel";
-import { HUE_CLASSES, Icon, type Hue } from "@/components/landing/icons";
+import { HowItWorks, type ExplainerStep } from "@/components/explainer";
+import { Icon } from "@/components/landing/icons";
+import { Term } from "@/components/term";
 import { MicButton } from "@/components/mic-button";
 import { PageHeader } from "@/components/page-header";
 import { apiFetch } from "@/lib/api";
@@ -116,28 +118,12 @@ export default function GuardrailsPage() {
         description="Injection screening and PII masking run on every agent turn — before retrieved content reaches the model and before a reply leaves it. This page runs those same checks on any text you paste, so you can see exactly what they catch."
       />
 
-      <Panel title="How it works" className="mt-6" delay={0}>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <NumberedCard
-            n={1}
-            hue="red"
-            title="Screen retrieved content"
-            description="Web results, documents, and tool output are pattern-matched for smuggled instructions before the model ever reads them."
-          />
-          <NumberedCard
-            n={2}
-            hue="red"
-            title="Mask personal data"
-            description="Emails, phone numbers, cards, IBANs, and SSNs are replaced with tokens, so personal data never lands in a log or a reply."
-          />
-          <NumberedCard
-            n={3}
-            hue="red"
-            title="Flag or block the turn"
-            description="Anything that matches is wrapped in a security notice and surfaced as a guardrail event on the run — not silently dropped."
-          />
-        </div>
-      </Panel>
+      <HowItWorks
+        title="How it works"
+        className="mt-6"
+        delay={0}
+        steps={GUARDRAIL_STEPS}
+      />
 
       <div className="mt-4">
         <Panel
@@ -220,7 +206,8 @@ export default function GuardrailsPage() {
       </div>
 
       <p className="mt-4 text-sm text-muted">
-        These checks are fleet-wide. To probe one agent for jailbreaks, use the red-team runner on{" "}
+        These checks are fleet-wide. To probe one agent for jailbreaks, use the{" "}
+        <Term k="red_team">red-team</Term> runner on{" "}
         <Link
           href="/agents"
           className="cursor-pointer text-accent transition-opacity duration-200 hover:opacity-80"
@@ -233,30 +220,26 @@ export default function GuardrailsPage() {
   );
 }
 
-// Numbered explainer card — same idiom as app/(app)/voice/page.tsx's local
-// NumberedCard. Deliberately duplicated rather than extracted: a later stage
-// pulls both copies (and the landing page's) into one shared component, and
-// doing it here would touch files this change has no other reason to open.
-function NumberedCard({
-  n,
-  hue,
-  title,
-  description,
-}: {
-  n: number;
-  hue: Hue;
-  title: string;
-  description: string;
-}) {
-  return (
-    <div className="flex flex-col gap-3 rounded-xl border border-hairline p-6">
-      <span
-        className={`flex h-8 w-8 items-center justify-center rounded-lg border font-mono text-xs font-medium ${HUE_CLASSES[hue].tile} ${HUE_CLASSES[hue].icon}`}
-      >
-        {n}
-      </span>
-      <h4 className="font-medium tracking-tight text-foreground">{title}</h4>
-      <p className="text-sm text-muted">{description}</p>
-    </div>
-  );
-}
+// The local NumberedCard that used to live here — plus the "a later stage
+// pulls both copies into one shared component" note apologising for it — is
+// now components/explainer.tsx, rendered via HowItWorks above.
+const GUARDRAIL_STEPS: ExplainerStep[] = [
+  {
+    hue: "red",
+    title: "Screen retrieved content",
+    description:
+      "Web results, documents, and tool output are pattern-matched for smuggled instructions before the model ever reads them.",
+  },
+  {
+    hue: "red",
+    title: "Mask personal data",
+    description:
+      "Emails, phone numbers, cards, IBANs, and SSNs are replaced with tokens, so personal data never lands in a log or a reply.",
+  },
+  {
+    hue: "red",
+    title: "Flag or block the turn",
+    description:
+      "Anything that matches is wrapped in a security notice and surfaced as a guardrail event on the run — not silently dropped.",
+  },
+];

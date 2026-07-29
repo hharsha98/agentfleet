@@ -1,6 +1,8 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { NumberedCard } from "@/components/explainer";
+
 import { HeroTrace } from "./hero-trace";
 import { HUE_CLASSES, Icon, IconTile, type Hue, type IconName } from "./icons";
 import { Reveal } from "./reveal";
@@ -230,32 +232,6 @@ function OrchestrationDeepVignette() {
   );
 }
 
-// Numbered explainer card shared by the Kanban and Workflows sections
-// (small, local — not worth a shared file for two consumers).
-function NumberedExplainerCard({
-  n,
-  hue,
-  title,
-  description,
-}: {
-  n: number;
-  hue: Hue;
-  title: string;
-  description: string;
-}) {
-  return (
-    <div className="flex flex-col gap-3 rounded-xl border border-hairline p-6">
-      <span
-        className={`flex h-8 w-8 items-center justify-center rounded-lg border font-mono text-xs font-medium ${HUE_CLASSES[hue].tile} ${HUE_CLASSES[hue].icon}`}
-      >
-        {n}
-      </span>
-      <h4 className="font-medium tracking-tight text-foreground">{title}</h4>
-      <p className="text-sm text-muted">{description}</p>
-    </div>
-  );
-}
-
 // --- COMPACT vignettes ------------------------------------------------------
 
 function BuilderVignette() {
@@ -472,19 +448,19 @@ export function DeepDives() {
           {/* 3 numbered explainer cards below the Kanban vignette
               (reference-style), spanning the full section width. */}
           <div className="grid grid-cols-1 gap-4 pb-14 sm:grid-cols-3">
-            <NumberedExplainerCard
+            <NumberedCard
               n={1}
               hue="violet"
               title="Describe your goal"
               description="Type what you want in plain language — a report, a campaign, a migration. No workflow to configure, no DAG to draw by hand."
             />
-            <NumberedExplainerCard
+            <NumberedCard
               n={2}
               hue="violet"
               title="Auto-execute the DAG"
               description="The orchestrator breaks the goal into dependent steps and hands each one to the specialist agent best suited to run it."
             />
-            <NumberedExplainerCard
+            <NumberedCard
               n={3}
               hue="violet"
               title="Track & intervene"

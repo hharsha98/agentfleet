@@ -117,7 +117,7 @@ const STATUS_HUE: Record<string, Hue> = {
   done_with_issues: "amber",
 };
 
-// Run status -> glow on the "Run status" stat tile. Only one entry, and
+// Run status -> glow on the "Mission status" stat tile. Only one entry, and
 // deliberately so: a run that is planning/running already announces itself
 // with StatCard's live `pulse` dot, and "done" / "failed" are unambiguous
 // words in the tile's own value. "done_with_issues" is the one outcome that
@@ -606,14 +606,14 @@ export default function MissionsPage() {
 
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatCard
-          label="Runs"
+          label="Missions"
           value={totalRuns ?? runs.length}
           sub={totalRuns != null && totalRuns > runs.length ? `${runs.length} shown` : undefined}
           icon={<Icon name="workflow" />}
           hue="blue"
         />
         <StatCard
-          label="Run status"
+          label="Mission status"
           value={detail ? detail.status.replace("_", " ") : "—"}
           pulse={!!detail}
           hue={detail ? (STATUS_HUE[detail.status] ?? "blue") : "blue"}
@@ -626,7 +626,7 @@ export default function MissionsPage() {
         <StatCard
           label="Tasks"
           value={detail ? tasks.length : "—"}
-          sub={detail ? taskStatusSummary || "No tasks yet" : "Select a run"}
+          sub={detail ? taskStatusSummary || "No tasks yet" : "Select a mission"}
           icon={<Icon name="list-checks" />}
           hue="violet"
           delay={80}
@@ -642,7 +642,7 @@ export default function MissionsPage() {
       </div>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-[280px_1fr]">
-        <Panel title="Runs" description="Pick a mission to view its board" delay={40}>
+        <Panel title="Missions" description="Pick a mission to view its board" delay={40}>
           <div className="flex gap-2 overflow-x-auto pb-1 lg:flex-col lg:gap-1.5 lg:overflow-visible lg:pb-0">
             {runs.map((r) => (
               <button
@@ -811,7 +811,7 @@ export default function MissionsPage() {
               )}
             </>
           ) : selected ? (
-            <p className="pt-24 text-center text-sm text-muted">Loading run…</p>
+            <p className="pt-24 text-center text-sm text-muted">Loading mission…</p>
           ) : (
             <EmptyState
               glyph={<RocketIcon className="h-7 w-7" />}

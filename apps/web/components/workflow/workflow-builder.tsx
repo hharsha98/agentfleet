@@ -11,19 +11,16 @@ import { EmptyState } from "@/components/empty-state";
 import { Icon } from "@/components/landing/icons";
 import { PageHeader } from "@/components/page-header";
 import { apiFetch } from "@/lib/api";
+// This sentence used to be declared here. It now lives in lib/glossary.ts
+// with the rest of the app's vocabulary and is imported back, so the canvas
+// legend, each node's wave tooltip in nodes.tsx, and the Validate success
+// line still share ONE wording instead of drifting into three.
+import { WAVE_EXPLAINER } from "@/lib/glossary";
 import { WORKFLOW_EXAMPLES, type WorkflowExample } from "@/lib/workflow-examples";
 import { issueCopy } from "@/lib/workflow-issues";
 
 import { builderWaveRanks, H_GAP, NODE_H, NODE_W, V_GAP } from "./layout";
 import type { BuilderFlowEdge, BuilderFlowNode, BuilderNodeData } from "./types";
-
-// One sentence, reused wherever the word "wave" appears (the canvas legend,
-// each node's wave tooltip in nodes.tsx, the Validate success line) so it is
-// never an unexplained term. Semantics come straight from estimated_waves()
-// in apps/api/app/services/workflow_compiler.py: one execute_run while-loop
-// iteration, i.e. every step whose dependencies are already satisfied.
-const WAVE_EXPLAINER =
-  "A wave is one batch of steps that can run at the same time, because nothing in the batch depends on anything else in it.";
 
 // Lazy + never server-rendered: React Flow touches the DOM during layout,
 // and this keeps its chunk out of every other route's bundle. `ssr: false`

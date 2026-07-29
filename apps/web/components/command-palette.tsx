@@ -297,6 +297,14 @@ export function CommandPalette() {
             <li className="px-4 py-6 text-center text-sm text-muted">No matching commands.</li>
           )}
         </ul>
+        {/* The palette has handled ↑↓ / Enter / Escape since it shipped and
+            advertised none of them. This strip is a plain <div> OUTSIDE the
+            listbox, deliberately: e2e/palette.spec.ts asserts that typing
+            "voice" leaves exactly ONE role="option", so anything with that
+            role — or any extra <li> inside the <ul> — breaks the count. */}
+        <div className="flex items-center gap-3 border-t border-hairline px-4 py-2 font-mono text-[11px] text-muted">
+          ↑↓ navigate · ↵ open · esc close
+        </div>
       </div>
     </div>
   );

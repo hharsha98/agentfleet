@@ -8,6 +8,14 @@ import type { ReactNode } from "react";
 // `glyph` accepts a ReactNode (an inline SVG icon, per-page) rather than an
 // emoji string — see the hand-inlined icons at each call site. A default
 // muted-stroke "diamond" glyph covers any caller that doesn't pass one.
+//
+// `action` is either a destination or a callback. It started out href-only,
+// which quietly meant "your CTA must be a static link" — so workflows/page.tsx
+// (whose CTA has to POST a new workflow and then navigate to the id the API
+// hands back) built its own button beside the EmptyState instead, with a
+// comment explaining the workaround. The union below is that workaround's
+// fix; both arms render the same accent-text affordance, so an empty state
+// looks the same whether its CTA navigates or fires.
 export function EmptyState({
   glyph = <DefaultGlyph />,
   title,
@@ -17,7 +25,9 @@ export function EmptyState({
   glyph?: ReactNode;
   title: string;
   description: string;
-  action?: { href: string; label: string };
+  action?:
+    | { href: string; label: string }
+    | { onClick: () => void; label: string; disabled?: boolean };
 }) {
   return (
     <div className="flex flex-col items-center gap-3 py-12 text-center">
@@ -29,17 +39,29 @@ export function EmptyState({
       </span>
       <p className="text-sm font-medium text-foreground">{title}</p>
       <p className="max-w-xs text-sm text-muted">{description}</p>
-      {action && (
-        <Link
-          href={action.href}
-          className="mt-1 cursor-pointer text-sm font-medium text-accent transition-opacity duration-200 hover:opacity-80"
-        >
-          {action.label} →
-        </Link>
-      )}
+      {action &&
+        ("href" in action ? (
+          <Link href={action.href} className={ACTION_CLASS}>
+            {action.label} →
+          </Link>
+        ) : (
+          <button
+            type="button"
+            onClick={action.onClick}
+            disabled={action.disabled}
+            className={`${ACTION_CLASS} disabled:cursor-not-allowed disabled:opacity-40`}
+          >
+            {action.label} →
+          </button>
+        ))}
     </div>
   );
 }
+
+// One class string for both arms — the whole point of the union is that a
+// callback CTA and a link CTA are indistinguishable to the reader.
+const ACTION_CLASS =
+  "mt-1 cursor-pointer text-sm font-medium text-accent transition-opacity duration-200 hover:opacity-80";
 
 function DefaultGlyph() {
   return (

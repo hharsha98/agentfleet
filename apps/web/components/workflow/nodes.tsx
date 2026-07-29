@@ -7,6 +7,7 @@ import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { AGENT_VISUALS, AgentGlyph, hueForSlug } from "@/components/agent-visual";
 import { HUE_CLASSES, type Hue } from "@/components/landing/icons";
 import { TASK_STATUS_GLOW } from "@/components/ui/glow";
+import { WAVE_EXPLAINER } from "@/lib/glossary";
 
 import { agentDisplayName } from "./format";
 import { NODE_H, NODE_W } from "./layout";
@@ -307,7 +308,7 @@ export function BuilderNode({ data, selected }: NodeProps<BuilderFlowNode>) {
             title={
               data.waveUnknown
                 ? "These steps depend on each other in a loop, so there is no order to run them in yet."
-                : "A wave is one batch of steps that can run at the same time, because nothing in the batch depends on anything else in it."
+                : WAVE_EXPLAINER
             }
           >
             {waveLabel}

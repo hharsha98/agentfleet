@@ -241,23 +241,22 @@ export default function WorkflowsPage() {
             </Reveal>
           ))}
           {workflows.length === 0 && !note && (
-            <div className="col-span-full flex flex-col items-center gap-4">
+            <div className="col-span-full">
+              {/* Was an EmptyState with a hand-rolled button beside it, because
+                  `action` only accepted an href and this CTA has to POST first
+                  and then navigate to the id the API returns. `action` now
+                  takes a callback too, so the CTA lives inside the EmptyState
+                  where it belongs. */}
               <EmptyState
                 glyph={<Icon name="workflow" className="h-7 w-7" />}
                 title="No workflows yet"
                 description="Build a graph of agent steps and run it as one mission."
+                action={{
+                  onClick: createBlank,
+                  disabled: creating,
+                  label: creating ? "Creating…" : "Open blank builder",
+                }}
               />
-              {/* Not EmptyState's `action` prop — that renders a plain Link to
-                  a static href, but this CTA must POST a new workflow first
-                  and then navigate to the id the API returns. */}
-              <button
-                type="button"
-                onClick={createBlank}
-                disabled={creating}
-                className="cursor-pointer rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity duration-200 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {creating ? "Creating…" : "Open blank builder"}
-              </button>
             </div>
           )}
         </div>
