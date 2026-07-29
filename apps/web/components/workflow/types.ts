@@ -6,7 +6,10 @@
 // uses, with no risk of the two silently drifting apart.
 import type { Edge, Node } from "@xyflow/react";
 
-export type TaskStatus = "todo" | "in_progress" | "review" | "done" | "failed";
+// "skipped" (orchestrator self-heal) — a task whose dependency ultimately
+// failed or was skipped itself, propagated transitively through the DAG. It
+// never runs, so it carries no result/tokens (see Task fields below).
+export type TaskStatus = "todo" | "in_progress" | "review" | "done" | "failed" | "skipped";
 
 export type Task = {
   id: string;
@@ -22,6 +25,10 @@ export type Task = {
   tokens_in: number;
   tokens_out: number;
   latency_ms: number | null;
+  // Orchestrator self-heal (attempts always >= 1; a value > 1 means the
+  // orchestrator diagnosed and retried before landing on the final status).
+  attempts: number;
+  heal_log: { attempt: number; error: string; diagnosis: string; resolved: boolean }[];
 };
 
 // Data payload carried by every task node in the graph.

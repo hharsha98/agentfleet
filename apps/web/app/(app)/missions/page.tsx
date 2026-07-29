@@ -37,6 +37,10 @@ const COLUMNS: { key: Task["status"]; label: string; hue: Hue }[] = [
   { key: "review", label: "Needs approval", hue: "amber" },
   { key: "done", label: "Done", hue: "green" },
   { key: "failed", label: "Failed", hue: "red" },
+  // Never runs (a dependency failed/skipped first) — cyan because it's the
+  // one hue not already claimed by another status here. Mirrored in
+  // components/workflow/nodes.tsx's STATUS_HUE; keep both in sync.
+  { key: "skipped", label: "Skipped", hue: "cyan" },
 ];
 
 // Mirrors the backend's ALLOWED_TASK_TRANSITIONS (apps/api/app/routes/runs.py)
@@ -45,7 +49,9 @@ const COLUMNS: { key: Task["status"]; label: string; hue: Hue }[] = [
 // status is a key here, and the only column that ever highlights as a
 // legal drop target is "todo". Kept as an explicit map (not hardcoded to
 // "todo" everywhere) so a future backend transition just needs one entry
-// added here too.
+// added here too. "skipped" has no entry on purpose — the backend has no
+// (skipped, todo) transition (a skipped task's dependency is gone for good),
+// so skipped cards render but are never draggable.
 const RETRY_TARGET: Partial<Record<Task["status"], Task["status"]>> = {
   failed: "todo",
   review: "todo",
@@ -67,6 +73,9 @@ const RUN_BADGE: Record<string, string> = {
   awaiting_approval: "border-amber-400/40 text-amber-300",
   done: "border-emerald-400/40 text-emerald-300",
   failed: "border-red-400/40 text-red-300",
+  // Everything terminal, but something failed or was skipped along the way —
+  // amber-ish because it's neither a clean success nor an outright failure.
+  done_with_issues: "border-amber-400/40 text-amber-300",
 };
 
 // Stat-row hue per run status (Chunk D2) — same status vocabulary as
@@ -77,6 +86,7 @@ const STATUS_HUE: Record<string, Hue> = {
   awaiting_approval: "amber",
   done: "green",
   failed: "red",
+  done_with_issues: "amber",
 };
 
 function RocketIcon({ className }: { className?: string }) {
@@ -153,9 +163,19 @@ function TaskCard({
           {agentDisplayName(task.agent_slug)}
         </span>
 
-        {waitingOn > 0 && (
+        {/* Only "todo" is actually waiting on something that might still
+            complete — a "skipped" task's blocking dependency has already
+            failed/skipped for good, so showing "waiting" there would imply
+            work that will never happen. */}
+        {task.status === "todo" && waitingOn > 0 && (
           <p className="mt-1.5 font-mono text-[10px] text-muted">
             Waiting on {waitingOn} task{waitingOn === 1 ? "" : "s"}
+          </p>
+        )}
+
+        {task.status === "skipped" && (
+          <p className="mt-1.5 font-mono text-[10px] text-muted">
+            Skipped — a dependency didn&apos;t finish
           </p>
         )}
 
@@ -181,6 +201,28 @@ function TaskCard({
           >
             Approve & run
           </button>
+        )}
+
+        {/* Self-heal story (orchestrator retries a failing task before
+            giving up) — reuses the same details/summary disclosure as
+            "result" below instead of inventing a new one. attempts > 1
+            means the orchestrator diagnosed and retried at least once. */}
+        {task.attempts > 1 && (
+          <details className="mt-2">
+            <summary className="cursor-pointer font-mono text-[10px] text-muted">
+              {task.status === "failed"
+                ? `gave up after ${task.attempts} attempts`
+                : `healed after ${task.attempts} attempts`}
+            </summary>
+            <ul className="mt-1 space-y-1 text-[11px] leading-relaxed text-muted">
+              {task.heal_log.map((h) => (
+                <li key={h.attempt}>
+                  <span className="text-foreground">Attempt {h.attempt}:</span> {h.error} —{" "}
+                  {h.diagnosis} {h.resolved ? "(resolved)" : "(unresolved)"}
+                </li>
+              ))}
+            </ul>
+          </details>
         )}
 
         {task.result && (
@@ -587,7 +629,7 @@ export default function MissionsPage() {
               )}
 
               {view === "board" ? (
-                <div className="mt-4 grid flex-1 grid-cols-2 gap-3 md:grid-cols-5">
+                <div className="mt-4 grid flex-1 grid-cols-2 gap-3 md:grid-cols-6">
                   {COLUMNS.map((col) => {
                     const items = tasks.filter((t) => t.status === col.key);
                     const isLegalTarget =

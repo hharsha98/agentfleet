@@ -18,6 +18,7 @@ const STATUS_HUE: Record<Task["status"], Hue> = {
   review: "amber",
   done: "green",
   failed: "red",
+  skipped: "cyan",
 };
 
 const STATUS_LABEL: Record<Task["status"], string> = {
@@ -26,6 +27,7 @@ const STATUS_LABEL: Record<Task["status"], string> = {
   review: "Needs approval",
   done: "Done",
   failed: "Failed",
+  skipped: "Skipped",
 };
 
 const HUE_DOT: Record<Hue, string> = {
@@ -115,6 +117,15 @@ export function TaskNode({ data }: NodeProps<TaskFlowNode>) {
   const { task, agentName, invalid } = data;
   const hue = STATUS_HUE[task.status];
   const hasMeta = task.tokens_in > 0 || task.tokens_out > 0;
+  // Self-heal marker — subtle text folded into the existing meta line
+  // (not a new NodeShell element, per the "don't restructure NodeShell"
+  // constraint) so a healed/gave-up node still reads at a glance.
+  const healNote =
+    task.attempts > 1
+      ? task.status === "failed"
+        ? ` · ↻ gave up ×${task.attempts}`
+        : ` · ↻ healed ×${task.attempts}`
+      : "";
 
   return (
     <NodeShell
@@ -127,11 +138,15 @@ export function TaskNode({ data }: NodeProps<TaskFlowNode>) {
         hasMeta ? (
           // Byte-identical format to missions/page.tsx:217's meta line.
           <>
-            {STATUS_LABEL[task.status]} · ↑{task.tokens_in} ↓{task.tokens_out} tok
+            {STATUS_LABEL[task.status]}
+            {healNote} · ↑{task.tokens_in} ↓{task.tokens_out} tok
             {task.latency_ms != null && ` · ${task.latency_ms}ms`}
           </>
         ) : (
-          STATUS_LABEL[task.status]
+          <>
+            {STATUS_LABEL[task.status]}
+            {healNote}
+          </>
         )
       }
     >

@@ -48,6 +48,8 @@ def _task_dict(t: RunTask) -> dict:
         "tokens_in": t.tokens_in,
         "tokens_out": t.tokens_out,
         "latency_ms": t.latency_ms,
+        "attempts": t.attempts,
+        "heal_log": t.heal_log or [],
     }
 
 
