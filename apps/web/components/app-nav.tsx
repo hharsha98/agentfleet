@@ -50,7 +50,17 @@ export function AppNav({ userMenu }: { userMenu?: ReactNode }) {
         {/* Simplest correct responsive treatment per the design brief: one
             horizontally-scrolling row at every width, rather than a
             hamburger menu that would hide link names from selector-based
-            E2E specs. */}
+            E2E specs.
+
+            The scrollbar is hidden, so with 12 destinations the last item
+            gets sliced mid-word at ordinary widths and reads as a broken
+            layout rather than a scrollable one. The fade below is that
+            missing affordance. It is painted over the END of the row, so
+            when everything fits it covers empty space and is invisible —
+            no width measurement, no resize listener, no state (state here
+            would also have added a tenth react-hooks/set-state-in-effect
+            error to an already-red lint gate). */}
+        <div className="relative flex min-w-0 flex-1 items-center">
         <nav className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto font-mono text-xs [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {NAV_ITEMS.map((item) => {
             const active = pathname === item.href;
@@ -76,6 +86,11 @@ export function AppNav({ userMenu }: { userMenu?: ReactNode }) {
             );
           })}
         </nav>
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-background to-transparent"
+          />
+        </div>
 
         <button
           type="button"
