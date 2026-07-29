@@ -5,11 +5,12 @@ detection / a wall-clock deadline / budget exhaustion (no fixed attempt
 cap) — and one task's failure no longer stops the whole run.
 
 stream_chat is monkeypatched throughout — these tests must not call a real
-LLM (see tests/conftest.py's docstring on why the dev DB has no per-test
-isolation). Agent/Run/RunTask rows are built directly via the ORM, same
-pattern as test_run_tasks.py / test_budgets.py, and every row created here
-is deleted at the end of each test (deleting the Agent cascades to its
-Conversations/Messages; deleting the Run cascades to its RunTasks).
+LLM. Agent/Run/RunTask rows are built directly via the ORM, same pattern as
+test_run_tasks.py / test_budgets.py, and every row created here is deleted
+at the end of each test (deleting the Agent cascades to its
+Conversations/Messages; deleting the Run cascades to its RunTasks) — belt
+and braces on top of tests/conftest.py's `_isolated_test_db` fixture, which
+now truncates every app table before each test anyway (see its docstring).
 """
 
 import uuid

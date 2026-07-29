@@ -24,9 +24,18 @@ SAFETY_PREAMBLE = (
 
 
 def _harden(agents: list[dict]) -> list[dict]:
-    for a in agents:
-        a["system_prompt"] = SAFETY_PREAMBLE + a["system_prompt"]
-    return agents
+    """Return copies of `agents` with the safety preamble prepended.
+
+    Builds NEW dicts rather than mutating the input in place: BUILTIN is a
+    module-level list, so a prior in-place version of this function would
+    re-prepend the preamble onto whatever `system_prompt` already held on
+    every subsequent call within the same process — harmless for the normal
+    `python -m scripts.seed_agents` CLI use (one call per process), but
+    several tests import and call `main()` directly, and tests/conftest.py's
+    per-test reseed fixture calls it once per test — dozens/hundreds of
+    calls in one pytest process — which made the bug very visible (the
+    preamble stacking up to 100+ duplicates in a single system_prompt)."""
+    return [{**a, "system_prompt": SAFETY_PREAMBLE + a["system_prompt"]} for a in agents]
 
 
 BUILTIN: list[dict] = [
