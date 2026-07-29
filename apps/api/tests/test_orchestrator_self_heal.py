@@ -555,6 +555,249 @@ async def test_approach_failure_goes_through_repair_turn_then_succeeds(monkeypat
         await _cleanup(run_id, agent_id)
 
 
+# --- escalation ladder (Layer 2): approach failures climb it rung by rung --
+
+
+async def test_approach_failure_escalates_ladder_rung_by_rung(monkeypatch) -> None:
+    """Two consecutive "approach"-classified failures must escalate the
+    NEXT attempt to rung 1, then rung 2 — never retrying an approach
+    failure on the same model that just failed it."""
+    await engine.dispose()
+    agent_slug = f"self-heal-ladder-{uuid.uuid4().hex[:8]}"
+    agent_id = await _make_agent(agent_slug)  # agent.model == "test-model"
+    run_id: uuid.UUID | None = None
+    try:
+        settings = get_settings()
+        monkeypatch.setattr(
+            settings, "self_heal_escalation_models", "model-rung-1,model-rung-2"
+        )
+
+        run_id = await _make_run(
+            agent_slug, [{"ordinal": 0, "title": "Needs escalation", "description": "do it"}]
+        )
+
+        seen_models: list[str | None] = []
+        calls = {"n": 0}
+
+        async def fake_stream_chat(conversation_id, prompt, model_override=None):
+            calls["n"] += 1
+            seen_models.append(model_override)
+            if calls["n"] == 1:
+                yield _frame({"type": "error", "message": "BadRequestError: malformed tool arguments"})
+            elif calls["n"] == 2:
+                # DIFFERENT text from attempt 1's error (not just a different
+                # digit run) — proves this is escalation, not the ordinary
+                # stall detector; a repeated signature would stop the task
+                # instead of reaching rung 2 at all.
+                yield _frame({"type": "error", "message": "BadRequestError: invalid argument shape"})
+            else:
+                yield _frame({"type": "token", "content": "fixed by a stronger model"})
+                yield _frame(
+                    {
+                        "type": "done",
+                        "usage": {"tokens_in": 1, "tokens_out": 1, "cost_usd": 0, "latency_ms": 1},
+                    }
+                )
+
+        monkeypatch.setattr("app.services.orchestrator.stream_chat", fake_stream_chat)
+
+        await execute_run(run_id)
+
+        task = await _get_task(run_id, 0)
+        assert task.status == "done"
+        assert task.attempts == 3
+        # Attempt 1 used the agent's own model (no override yet); attempt 2
+        # escalated to rung 1; attempt 3 (which succeeded) escalated to rung 2.
+        assert seen_models == [None, "model-rung-1", "model-rung-2"]
+
+        assert len(task.heal_log) == 2
+        assert task.heal_log[0]["classification"] == "approach"
+        assert task.heal_log[0]["model"] == "model-rung-1"
+        assert "model-rung-1" in task.heal_log[0]["diagnosis"]
+        assert task.heal_log[1]["model"] == "model-rung-2"
+        assert "model-rung-2" in task.heal_log[1]["diagnosis"]
+        # The entry whose escalated model actually fixed the task is the one
+        # marked resolved — proving "the fix came from a stronger model".
+        assert task.heal_log[1]["resolved"] is True
+
+        run = await _get_run(run_id)
+        assert run.status == "done"
+    finally:
+        await _cleanup(run_id, agent_id)
+
+
+async def test_transient_failure_does_not_advance_ladder(monkeypatch) -> None:
+    """A transient (infrastructure) failure is never the model's fault, so
+    it must not consume a ladder rung — the retry stays on the same model."""
+    await engine.dispose()
+    agent_slug = f"self-heal-ladder-transient-{uuid.uuid4().hex[:8]}"
+    agent_id = await _make_agent(agent_slug)  # agent.model == "test-model"
+    run_id: uuid.UUID | None = None
+    try:
+        settings = get_settings()
+        monkeypatch.setattr(
+            settings, "self_heal_escalation_models", "model-rung-1,model-rung-2"
+        )
+        monkeypatch.setattr(settings, "self_heal_transient_backoff_seconds", 0)
+
+        run_id = await _make_run(
+            agent_slug, [{"ordinal": 0, "title": "Flaky then fine", "description": "call it"}]
+        )
+
+        seen_models: list[str | None] = []
+        calls = {"n": 0}
+
+        async def fake_stream_chat(conversation_id, prompt, model_override=None):
+            calls["n"] += 1
+            seen_models.append(model_override)
+            if calls["n"] == 1:
+                yield _frame({"type": "error", "message": "RateLimitError: 429 too many requests"})
+            else:
+                yield _frame({"type": "token", "content": "done"})
+                yield _frame(
+                    {
+                        "type": "done",
+                        "usage": {"tokens_in": 1, "tokens_out": 1, "cost_usd": 0, "latency_ms": 1},
+                    }
+                )
+
+        monkeypatch.setattr("app.services.orchestrator.stream_chat", fake_stream_chat)
+
+        await execute_run(run_id)
+
+        task = await _get_task(run_id, 0)
+        assert task.status == "done"
+        assert task.attempts == 2
+        # BOTH attempts used the agent's own model — a configured ladder
+        # exists, but the transient failure never advanced the rung.
+        assert seen_models == [None, None]
+        assert task.heal_log[0]["classification"] == "transient"
+        assert task.heal_log[0]["model"] == "test-model"
+
+        run = await _get_run(run_id)
+        assert run.status == "done"
+    finally:
+        await _cleanup(run_id, agent_id)
+
+
+async def test_ladder_exhausted_keeps_repairing_on_last_rung(monkeypatch) -> None:
+    """Once every rung has been used, further approach failures keep using
+    the STRONGEST rung rather than stopping — escalation exhaustion must
+    never become a new way to give up (that stays stall/deadline/budget/
+    capability's job). Also doubles as the no-fixed-cap regression guard
+    for the ladder specifically: with only ONE rung configured, the task
+    must still be retried many times past that single rung before the
+    wall-clock deadline ends it."""
+    await engine.dispose()
+    agent_slug = f"self-heal-ladder-exhausted-{uuid.uuid4().hex[:8]}"
+    agent_id = await _make_agent(agent_slug)  # agent.model == "test-model"
+    run_id: uuid.UUID | None = None
+    try:
+        settings = get_settings()
+        monkeypatch.setattr(settings, "self_heal_escalation_models", "model-rung-1")
+        monkeypatch.setattr(settings, "self_heal_deadline_seconds", 0.5)
+        monkeypatch.setattr(settings, "self_heal_transient_backoff_seconds", 0)
+
+        run_id = await _make_run(
+            agent_slug, [{"ordinal": 0, "title": "Never resolved", "description": "keeps failing"}]
+        )
+
+        # Rotating, genuinely different "approach"-classified error texts (no
+        # digits) so the ordinary stall detector never fires — only the
+        # ladder-exhaustion behaviour and the deadline are under test here.
+        errors = [
+            "BadRequestError: malformed tool arguments",
+            "BadRequestError: invalid argument shape",
+            "Tool returned: not found for widget",
+            "Tool returned: empty result for gadget",
+            "Tool returned: no results for gizmo",
+            "Guardrail flagged this response",
+        ]
+        seen_models: list[str | None] = []
+        calls = {"n": 0}
+
+        async def fake_stream_chat(conversation_id, prompt, model_override=None):
+            i = calls["n"]
+            calls["n"] += 1
+            seen_models.append(model_override)
+            yield _frame({"type": "error", "message": errors[i % len(errors)]})
+
+        monkeypatch.setattr("app.services.orchestrator.stream_chat", fake_stream_chat)
+
+        await execute_run(run_id)  # must not hang
+
+        task = await _get_task(run_id, 0)
+        assert task.status == "failed"
+        assert "deadline" in task.heal_log[-1]["diagnosis"]
+        # Escalated once (rung 1), then kept retrying on that SAME rung for
+        # every remaining attempt — well past the single configured rung —
+        # rather than stopping once the ladder ran out.
+        assert seen_models[0] is None
+        assert len(seen_models) >= 5, f"expected retries well past one rung, got {seen_models}"
+        assert all(m == "model-rung-1" for m in seen_models[1:])
+        assert task.heal_log[-1]["model"] == "model-rung-1"
+
+        run = await _get_run(run_id)
+        assert run.status == "done_with_issues"
+    finally:
+        await _cleanup(run_id, agent_id)
+
+
+async def test_empty_ladder_behaves_like_today(monkeypatch) -> None:
+    """No configured ladder and no planner_model -> no escalation at all:
+    every attempt (however many approach failures precede it) keeps using
+    the agent's own model, identical to the behaviour before this setting
+    existed."""
+    await engine.dispose()
+    agent_slug = f"self-heal-ladder-empty-{uuid.uuid4().hex[:8]}"
+    agent_id = await _make_agent(agent_slug)  # agent.model == "test-model"
+    run_id: uuid.UUID | None = None
+    try:
+        settings = get_settings()
+        monkeypatch.setattr(settings, "self_heal_escalation_models", "")
+        monkeypatch.setattr(settings, "planner_model", "")
+
+        run_id = await _make_run(
+            agent_slug, [{"ordinal": 0, "title": "No ladder configured", "description": "do it"}]
+        )
+
+        seen_models: list[str | None] = []
+        calls = {"n": 0}
+
+        async def fake_stream_chat(conversation_id, prompt, model_override=None):
+            calls["n"] += 1
+            seen_models.append(model_override)
+            if calls["n"] == 1:
+                yield _frame({"type": "error", "message": "BadRequestError: malformed tool arguments"})
+            elif calls["n"] == 2:
+                yield _frame({"type": "error", "message": "BadRequestError: invalid argument shape"})
+            else:
+                yield _frame({"type": "token", "content": "done"})
+                yield _frame(
+                    {
+                        "type": "done",
+                        "usage": {"tokens_in": 1, "tokens_out": 1, "cost_usd": 0, "latency_ms": 1},
+                    }
+                )
+
+        monkeypatch.setattr("app.services.orchestrator.stream_chat", fake_stream_chat)
+
+        await execute_run(run_id)
+
+        task = await _get_task(run_id, 0)
+        assert task.status == "done"
+        assert task.attempts == 3
+        assert seen_models == [None, None, None]
+        assert task.heal_log[0]["model"] == "test-model"
+        assert task.heal_log[1]["model"] == "test-model"
+        assert task.heal_log[1]["resolved"] is True
+
+        run = await _get_run(run_id)
+        assert run.status == "done"
+    finally:
+        await _cleanup(run_id, agent_id)
+
+
 # --- rich evidence: repair prompt carries the failing tool + its output ----
 
 

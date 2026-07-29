@@ -77,7 +77,15 @@ def _sse(data: dict) -> str:
     return f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
-async def stream_chat(conversation_id: uuid.UUID, user_text: str) -> AsyncGenerator[str, None]:
+async def stream_chat(
+    conversation_id: uuid.UUID, user_text: str, model_override: str | None = None
+) -> AsyncGenerator[str, None]:
+    """`model_override`, when given, is used for THIS turn's provider call and
+    its metering (tokens/cost recorded on the Message row and the "done"
+    frame) instead of `agent.model` — e.g. self-heal escalation
+    (services/orchestrator.py::_execute_task) routing a repair attempt to a
+    stronger model. `None` (every existing caller) is unchanged behaviour:
+    `agent.model` throughout, exactly as before this parameter existed."""
     async with SessionLocal() as session:
         try:
             conversation = await session.get(Conversation, conversation_id)
@@ -85,6 +93,12 @@ async def stream_chat(conversation_id: uuid.UUID, user_text: str) -> AsyncGenera
                 yield _sse({"type": "error", "message": "Conversation not found"})
                 return
             agent = await session.get(Agent, conversation.agent_id)
+            # The model actually used for this turn — overridden model, or
+            # the agent's own. Every kwargs["model"]/cost_usd(...) call below
+            # must use THIS, not agent.model directly, so a self-heal
+            # escalation is both applied to the provider call and metered
+            # accurately (see module docstring / _execute_task).
+            model = model_override or agent.model
 
             violation = await check_budget(session, agent.id)
             if violation:
@@ -165,7 +179,7 @@ async def stream_chat(conversation_id: uuid.UUID, user_text: str) -> AsyncGenera
                         final_note_added = True
 
                     kwargs: dict = {
-                        "model": agent.model,
+                        "model": model,
                         "messages": llm_messages,
                         "temperature": agent.temperature,
                         "stream": True,
@@ -325,10 +339,10 @@ async def stream_chat(conversation_id: uuid.UUID, user_text: str) -> AsyncGenera
                         role="assistant",
                         content=full_text,
                         tool_calls=tool_log or None,
-                        model=agent.model,
+                        model=model,
                         tokens_in=tokens_in,
                         tokens_out=tokens_out,
-                        cost_usd=cost_usd(agent.model, tokens_in, tokens_out),
+                        cost_usd=cost_usd(model, tokens_in, tokens_out),
                         latency_ms=latency_ms,
                     )
                 )
@@ -346,7 +360,7 @@ async def stream_chat(conversation_id: uuid.UUID, user_text: str) -> AsyncGenera
                     "usage": {
                         "tokens_in": tokens_in,
                         "tokens_out": tokens_out,
-                        "cost_usd": cost_usd(agent.model, tokens_in, tokens_out),
+                        "cost_usd": cost_usd(model, tokens_in, tokens_out),
                         "latency_ms": latency_ms,
                     },
                 }

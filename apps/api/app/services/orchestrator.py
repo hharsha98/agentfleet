@@ -208,17 +208,53 @@ def _build_repair_prompt(error: str, evidence: dict, prompt_original: str) -> st
     )
 
 
+def _escalation_ladder(settings) -> list[str]:
+    """Parse `settings.self_heal_escalation_models` into an ordered list of
+    progressively stronger model ids to escalate through on repeated
+    "approach"-classified repair failures (see _execute_task). No model
+    names are hardcoded here — the ladder is entirely configuration.
+
+    Empty setting -> falls back to a single-rung ladder made of
+    `planner_model`, if that's set (the "brain" model becomes the
+    escalation target for free, same tiered-routing idea as planning
+    already uses). If `planner_model` is ALSO empty, there is no
+    escalation at all: `_execute_task` never advances past rung 0, so every
+    attempt uses the agent's own model — identical to the behaviour before
+    this setting existed.
+    """
+    raw = (settings.self_heal_escalation_models or "").strip()
+    if raw:
+        return [m.strip() for m in raw.split(",") if m.strip()]
+    if settings.planner_model:
+        return [settings.planner_model]
+    return []
+
+
 def _heal_entry(
-    attempt: int, error: str, diagnosis: str, classification: str, evidence: dict
+    attempt: int,
+    error: str,
+    diagnosis: str,
+    classification: str,
+    evidence: dict,
+    model: str,
 ) -> dict:
-    """Build one heal_log entry with the classification (and, when present,
-    truncated evidence) recorded alongside the existing attempt/error/
-    diagnosis/resolved fields."""
+    """Build one heal_log entry with the classification, the model that
+    entry pertains to (and, when present, truncated evidence) recorded
+    alongside the existing attempt/error/diagnosis/resolved fields.
+
+    `model` lets the board show that a fix came from a stronger model: for
+    a continuing retry (transient/approach) it's the model the NEXT attempt
+    will use, so a `resolved: True` entry's `model` is the one that actually
+    produced the fix; for a stopping entry (capability/stall/deadline/
+    budget) it's the model the just-failed attempt used, since there is no
+    next attempt.
+    """
     entry = {
         "attempt": attempt,
         "error": _truncate(error),
         "diagnosis": diagnosis,
         "classification": classification,
+        "model": model,
         "resolved": False,
     }
     if evidence:
@@ -399,7 +435,7 @@ async def execute_run(run_id: uuid.UUID) -> None:
 
 
 async def _run_turn(
-    conversation_id: uuid.UUID, prompt: str
+    conversation_id: uuid.UUID, prompt: str, model_override: str | None = None
 ) -> tuple[str, dict, str | None, dict]:
     """Run one stream_chat turn to completion. Returns (text, usage, error,
     evidence) — `usage` is {} when the turn errored (stream_chat only emits a
@@ -411,13 +447,25 @@ async def _run_turn(
     traceback, and any provider status_code/body already on the exception
     when stream_chat itself raises rather than yielding a sanitized "error"
     frame. Feeds classify_failure() and the repair prompt. Empty dict when
-    there's nothing beyond the plain error message (the common case)."""
+    there's nothing beyond the plain error message (the common case).
+
+    `model_override` (self-heal escalation ladder, see _execute_task) is
+    passed to stream_chat ONLY when set, rather than always forwarding it
+    (even as None) — this keeps the call shape `stream_chat(conversation_id,
+    prompt)` byte-for-byte identical to before this parameter existed on the
+    common (unescalated) path, so every test double already monkeypatching
+    `stream_chat` with a 2-argument fake keeps working unchanged."""
     text, usage, error = "", {}, None
     last_tool: str | None = None
     last_tool_output: str | None = None
     guardrail_flags: list | None = None
     try:
-        async for frame in stream_chat(conversation_id, prompt):
+        stream = (
+            stream_chat(conversation_id, prompt, model_override)
+            if model_override
+            else stream_chat(conversation_id, prompt)
+        )
+        async for frame in stream:
             event = json.loads(frame[6:])  # strip "data: " SSE framing
             etype = event["type"]
             if etype == "token":
@@ -502,6 +550,17 @@ async def _execute_task(task_id: uuid.UUID, context: dict[int, str]) -> None:
     rich evidence from _run_turn). Both remain subject to (1)-(3) above, so
     a transient failure that never stops recurring still terminates via
     stall/deadline rather than looping forever.
+
+    Escalation ladder (Layer 2, settings.self_heal_escalation_models): attempt
+    1 always uses the agent's own model. Retrying an "approach" failure on
+    the SAME model that just failed is the weakest available move, so each
+    approach-class failure advances one rung up a configured ladder of
+    progressively stronger models for the NEXT attempt — a "transient"
+    failure never advances it, since the model was never the problem. Once
+    the ladder is exhausted, repairs keep using the strongest rung rather
+    than stopping. This only ever changes WHICH model an attempt uses; it
+    introduces no counter and no cap — stopping is still governed
+    exclusively by (1)-(4) above.
     """
     async with SessionLocal() as session:
         task = await session.get(RunTask, task_id)
@@ -509,6 +568,10 @@ async def _execute_task(task_id: uuid.UUID, context: dict[int, str]) -> None:
             await session.execute(select(Agent).where(Agent.slug == task.agent_slug))
         ).scalar_one()
         agent_id = agent.id
+        # Captured now (while the session is open) rather than read off
+        # `agent` later: this is attempt 1's model and the ladder's rung-0
+        # fallback, needed after this session block closes.
+        agent_model = agent.model
         conversation = Conversation(agent_id=agent.id, title=f"run-task {task.title[:50]}")
         session.add(conversation)
         await session.commit()
@@ -530,6 +593,22 @@ async def _execute_task(task_id: uuid.UUID, context: dict[int, str]) -> None:
     text, usage, error = "", {}, None
     evidence: dict = {}
 
+    # Escalation ladder (Layer 2): attempt 1 uses the agent's own model
+    # (model_override stays None, rung stays 0 — byte-for-byte today's
+    # behaviour). Only an "approach"-classified repair attempt that then
+    # FAILS advances `rung` by one, via the ladder branch below; a
+    # "transient" provider blip never touches `rung` — the model was never
+    # the problem, so retrying it isn't wasted, and escalating past it
+    # would burn the ladder on infrastructure noise instead of saving it
+    # for genuine reasoning failures. Once `rung` reaches len(ladder) it
+    # stays there: repairs keep using the strongest configured model rather
+    # than stopping — escalation only ever changes WHICH model the next
+    # attempt uses, never whether there IS a next attempt (that stays the
+    # job of stall/deadline/budget/capability below, no fixed attempt cap).
+    ladder = _escalation_ladder(settings)
+    rung = 0
+    model_override: str | None = None
+
     # Metering must cover EVERY attempt, not just the last one. Budget
     # enforcement reads Message rows (see services/budget.py) so it already
     # counts all turns, but RunTask's display copy is what the board shows —
@@ -539,7 +618,7 @@ async def _execute_task(task_id: uuid.UUID, context: dict[int, str]) -> None:
 
     while True:
         attempts += 1
-        text, usage, error, evidence = await _run_turn(conversation_id, prompt)
+        text, usage, error, evidence = await _run_turn(conversation_id, prompt, model_override)
         spent["tokens_in"] += usage.get("tokens_in", 0) or 0
         spent["tokens_out"] += usage.get("tokens_out", 0) or 0
         spent["cost_usd"] += float(usage.get("cost_usd", 0) or 0)
@@ -550,13 +629,22 @@ async def _execute_task(task_id: uuid.UUID, context: dict[int, str]) -> None:
             break  # succeeded (possibly after one or more repairs)
 
         classification = classify_failure(error, evidence)
+        # The model THIS attempt (the one that just failed) actually used —
+        # resolves to agent_model on rung 0, exactly like before escalation
+        # existed.
+        model_used = model_override or agent_model
 
         async with SessionLocal() as session:
             violation = await check_budget(session, agent_id)
         if violation:
             heal_log.append(
                 _heal_entry(
-                    attempts, error, _truncate(f"Stopping: {violation}"), classification, evidence
+                    attempts,
+                    error,
+                    _truncate(f"Stopping: {violation}"),
+                    classification,
+                    evidence,
+                    model_used,
                 )
             )
             break
@@ -569,6 +657,7 @@ async def _execute_task(task_id: uuid.UUID, context: dict[int, str]) -> None:
                     "Stopping: self-heal deadline exceeded.",
                     classification,
                     evidence,
+                    model_used,
                 )
             )
             break
@@ -586,6 +675,7 @@ async def _execute_task(task_id: uuid.UUID, context: dict[int, str]) -> None:
                     "credential / platform error) — retrying cannot fix it.",
                     classification,
                     evidence,
+                    model_used,
                 )
             )
             break
@@ -599,6 +689,7 @@ async def _execute_task(task_id: uuid.UUID, context: dict[int, str]) -> None:
                     "Stopping: repeated the same error — self-improvement stalled.",
                     classification,
                     evidence,
+                    model_used,
                 )
             )
             break
@@ -608,6 +699,8 @@ async def _execute_task(task_id: uuid.UUID, context: dict[int, str]) -> None:
             # prompt after a short backoff instead of spending an LLM turn.
             # Still subject to the stall/deadline checks above, so a
             # transient error that never stops recurring still terminates.
+            # `model_override`/`rung` are DELIBERATELY untouched here — a
+            # transient failure never consumes a ladder rung.
             await asyncio.sleep(settings.self_heal_transient_backoff_seconds)
             heal_log.append(
                 _heal_entry(
@@ -617,32 +710,49 @@ async def _execute_task(task_id: uuid.UUID, context: dict[int, str]) -> None:
                     "turn spent (transient failure).",
                     classification,
                     evidence,
+                    model_used,
                 )
             )
             prior_signature = signature
             # prompt intentionally unchanged — same prompt, no follow-up.
         else:
-            # "approach": re-state the ORIGINAL task in every repair turn.
-            # Asking only to "diagnose and try again" makes the model
-            # narrate the failure, and that narration then becomes the
-            # task's stored result — verified against the live model, which
-            # answered a "name a fruit" task with an essay about the
-            # upstream error. The deliverable must stay the deliverable:
-            # diagnose privately (now with rich evidence), then answer the
-            # original brief.
+            # "approach": retrying on the SAME model that just failed is the
+            # weakest available move — escalate to the next ladder rung (if
+            # any configured) BEFORE building the repair turn, so the
+            # follow-up actually runs on a stronger model. Ladder exhausted
+            # (rung already at len(ladder)) or empty -> min() keeps `rung`
+            # right where it is, so model_override stays whatever it already
+            # was (or None on an empty ladder) — repairs keep using the
+            # strongest rung reached rather than stopping.
+            if ladder:
+                rung = min(rung + 1, len(ladder))
+                model_override = ladder[rung - 1]
+            # re-state the ORIGINAL task in every repair turn. Asking only
+            # to "diagnose and try again" makes the model narrate the
+            # failure, and that narration then becomes the task's stored
+            # result — verified against the live model, which answered a
+            # "name a fruit" task with an essay about the upstream error.
+            # The deliverable must stay the deliverable: diagnose privately
+            # (now with rich evidence), then answer the original brief.
             follow_up = _build_repair_prompt(error, evidence, prompt_original)
+            diagnosis = "Retried with a different approach."
+            if model_override:
+                diagnosis += f" Escalated to {model_override}."
             # Store a SHORT note, not the follow-up prompt itself. That
             # prompt now re-states the whole original brief plus evidence,
             # so logging it verbatim would write a lot per attempt into the
             # row and bury the actual cause on the board. _heal_entry's
-            # truncated `evidence` field is the useful part.
+            # truncated `evidence` field is the useful part. `model` here is
+            # the NEXT attempt's model (post-escalation), so a `resolved`
+            # entry shows which model actually produced the fix.
             heal_log.append(
                 _heal_entry(
                     attempts,
                     error,
-                    "Retried with a different approach.",
+                    diagnosis,
                     classification,
                     evidence,
+                    model_override or agent_model,
                 )
             )
             prior_signature = signature

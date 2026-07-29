@@ -119,6 +119,27 @@ class Settings(BaseSettings):
     # monkeypatch this to 0 so the transient path doesn't slow the suite.
     self_heal_transient_backoff_seconds: float = 1.0
 
+    # Self-heal escalation ladder (services/orchestrator.py::_execute_task,
+    # Layer 2): a comma-separated, ORDERED list of progressively stronger
+    # model ids, e.g. "openai/gpt-oss-120b,anthropic/claude-sonnet-4". Retrying
+    # an "approach"-classified repair on the SAME model that just failed is
+    # the weakest available move — a person would bring in something
+    # stronger. Only "approach" failures advance one rung on the NEXT
+    # attempt (a "transient" provider blip is never the model's fault, so it
+    # never consumes a rung); once the ladder is exhausted, repairs keep
+    # using the strongest (last) rung rather than stopping — escalation
+    # picks WHICH model the next attempt uses, it never introduces a fixed
+    # attempt cap (see self_heal_deadline_seconds for the actual stop
+    # condition). Tiered routing, same style as planner_model above: strong
+    # model repairs, cheap model executes the happy path.
+    #
+    # Empty (default) -> falls back to a single-rung ladder made of
+    # planner_model, if that's set (the "brain" model becomes the
+    # escalation target for free); if planner_model is ALSO empty, there is
+    # no escalation at all — every attempt uses the agent's own model,
+    # identical to the behaviour before this setting existed.
+    self_heal_escalation_models: str = ""
+
 
 @lru_cache
 def get_settings() -> Settings:
