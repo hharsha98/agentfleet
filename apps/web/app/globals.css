@@ -17,6 +17,20 @@
   --color-hairline: var(--hairline);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  /* Registering this key is what makes Tailwind generate a `font-display`
+     utility; it does NOT apply the face anywhere on its own. The variable it
+     points at is defined by next/font in app/layout.tsx and attached to
+     <html>, so the family is available everywhere but only actually used by
+     the two landing-page callers (app/page.tsx's hero h1 and
+     components/landing/section-header.tsx's h2). The twelve in-app screens
+     never reach for this utility and stay on --font-sans.
+
+     `inline` matters here: it makes Tailwind emit `font-family:
+     var(--font-display)` at the use site instead of re-declaring
+     --font-display in :root, so the same-name key cannot shadow next/font's
+     own definition. Same reason --font-sans above can safely alias
+     --font-geist-sans. */
+  --font-display: var(--font-display);
 
   /* Per-feature icon-tile hues (registered here so Tailwind generates
      bg-hue-, text-hue-, and border-hue- utilities, opacity modifiers included). */

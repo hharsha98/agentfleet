@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
+import { Wordmark } from "@/components/brand/logo";
 import { GLOW_HOVER, HUE_TONE } from "@/components/ui/glow";
 
 // Shared top nav for every app-shell page (chat, documents, missions, …).
@@ -53,9 +54,12 @@ export function AppNav({ userMenu }: { userMenu?: ReactNode }) {
         <span className={`inline-flex shrink-0 rounded-md ${HUE_TONE.accent} ${GLOW_HOVER}`}>
           <Link
             href="/"
-            className="cursor-pointer font-medium tracking-tight transition-opacity duration-200 hover:opacity-80"
+            className="cursor-pointer transition-opacity duration-200 hover:opacity-80"
           >
-            AgentFleet
+            {/* Wordmark carries the mark + the same font-medium
+                tracking-tight type the bare text had, so the glow span's
+                box only grows by the 20px mark plus its gap. */}
+            <Wordmark />
           </Link>
         </span>
 

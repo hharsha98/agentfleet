@@ -29,7 +29,12 @@ export function SectionHeader({
         {icon ? <Icon name={icon} className="h-3.5 w-3.5" /> : null}
         {eyebrow}
       </span>
-      <h2 className="text-3xl font-medium tracking-tight text-foreground sm:text-4xl">
+      {/* font-display (Instrument Serif) — see app/page.tsx's hero h1 for
+          why font-normal rather than font-medium. This component is imported
+          only by app/page.tsx and four components/landing/* siblings, so the
+          serif stays on the landing page and never reaches the in-app
+          screens, which stay entirely on Geist. */}
+      <h2 className="font-display text-3xl font-normal tracking-tight text-foreground sm:text-4xl">
         {title}
       </h2>
       {tagline ? <p className="max-w-2xl text-muted">{tagline}</p> : null}

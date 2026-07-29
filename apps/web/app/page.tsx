@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { Wordmark } from "@/components/brand/logo";
 import { AutomationsSecurity } from "@/components/landing/automations-security";
 import { DeepDives } from "@/components/landing/deep-dives";
 import { FeatureGrid } from "@/components/landing/feature-grid";
@@ -49,8 +50,8 @@ export default function Home() {
 
       <header className="sticky top-0 z-50 border-b border-hairline bg-background/70 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
-          <Link href="/" className="font-medium tracking-tight">
-            AgentFleet
+          <Link href="/" className="cursor-pointer">
+            <Wordmark />
           </Link>
 
           <nav className="hidden items-center gap-6 font-mono text-xs text-muted sm:flex">
@@ -114,7 +115,14 @@ export default function Home() {
                 </span>
               </div>
 
-              <h1 className="text-4xl font-medium tracking-tight sm:text-5xl lg:text-6xl">
+              {/* font-display (Instrument Serif) is scoped to the landing
+                  page — this h1 and SectionHeader's h2. font-normal, not
+                  font-medium: Instrument Serif ships weight 400 only, so any
+                  heavier weight would synthesise a fake bold and smear the
+                  high-contrast strokes that are the whole point of the face.
+                  leading tightened because a serif at display size sets
+                  looser than Geist did at the same line-height. */}
+              <h1 className="font-display text-4xl font-normal leading-[1.1] tracking-tight sm:text-5xl lg:text-6xl">
                 <span className="block text-foreground">
                   Run a team of AI agents
                 </span>

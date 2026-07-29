@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="AgentFleet">
+  <!-- The AgentFleet mark, redrawn for favicon sizes. Same three-node delta
+       as components/brand/logo.tsx, but simplified twice over so it survives
+       16px: the two trailing nodes are filled discs rather than 1.75-stroke
+       rings (a ring's hole closes up and turns to mush below ~20px), and the
+       whole thing sits on a solid accent plate with a near-white mark
+       instead of an accent mark on near-black, because a coloured tile is
+       what stays findable in a strip of browser tabs. -->
+  <rect width="32" height="32" rx="7" fill="#5e6ad2"/>
+  <g fill="#f4f4f5">
+    <!-- Lead node / arrow tip, then the two trailing nodes. -->
+    <circle cx="16" cy="8" r="3.4"/>
+    <circle cx="7.6" cy="23" r="3.4"/>
+    <circle cx="24.4" cy="23" r="3.4"/>
+  </g>
+  <!-- Two edges, trimmed clear of each node so nothing merges into a blob. -->
+  <g stroke="#f4f4f5" stroke-width="3" stroke-linecap="round" fill="none">
+    <path d="M13.9 11.75 9.7 19.25"/>
+    <path d="M18.1 11.75 22.3 19.25"/>
+  </g>
+</svg>
