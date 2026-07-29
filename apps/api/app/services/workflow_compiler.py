@@ -200,6 +200,13 @@ def find_warnings(graph: WorkflowGraphIn) -> list[WorkflowIssue]:
       but orchestrator._execute_task truncates each upstream result to 3000
       chars, so with this many predecessors some of their output is
       effectively invisible to the downstream agent.
+    - empty_instruction: a node whose instruction is empty/whitespace-only.
+      Legal — compile_workflow happily emits `description: ""` for it — but
+      the compiled task's brief then falls back to just the title, so the
+      agent receives something like "Clinical Research" with no actual ask
+      and typically responds by asking the user for clarification instead of
+      doing the work. Purely a per-node check, independent of edges/order,
+      so it's computed straight from graph.nodes.
     """
     order_index = {n.id: i for i, n in enumerate(graph.nodes)}
     edge_pairs: set[tuple[str, str]] = {(e.source, e.target) for e in graph.edges}
@@ -238,6 +245,26 @@ def find_warnings(graph: WorkflowGraphIn) -> list[WorkflowIssue]:
                     "crowded out: " + ", ".join(wide_fan_in)
                 ),
                 node_ids=wide_fan_in,
+            )
+        )
+
+    # empty_instruction — a per-node check over graph.nodes directly, so
+    # (unlike orphan_node/wide_fan_in above) it doesn't touch edges/indegree
+    # at all and can't be affected by dangling edges either way.
+    empty_instruction = sorted(
+        (n.id for n in graph.nodes if not n.instruction.strip()),
+        key=order_index.get,
+    )
+    if empty_instruction:
+        warnings.append(
+            WorkflowIssue(
+                code="empty_instruction",
+                message=(
+                    "Node(s) with no instruction — the agent only receives the node's title, "
+                    "so it may just ask for clarification instead of doing the work: "
+                    + ", ".join(empty_instruction)
+                ),
+                node_ids=empty_instruction,
             )
         )
 

@@ -208,6 +208,38 @@ def test_orphan_node_and_wide_fan_in_are_warnings_not_errors() -> None:
     assert next(w for w in warnings if w.code == "wide_fan_in").node_ids == ["E"]
 
 
+def test_empty_instruction_yields_warning_but_still_compiles() -> None:
+    # A blank instruction and a whitespace-only one both count as "empty" —
+    # only C (a real instruction) should be exempt. Legal either way: the
+    # graph still compiles (warnings never block), it just gets flagged.
+    blank = WorkflowNodeIn(
+        id="A", agent_slug="orchestrator", title="Clinical Research", instruction=""
+    )
+    whitespace_only = WorkflowNodeIn(
+        id="B", agent_slug="orchestrator", title="B", instruction="   \n\t  "
+    )
+    filled = _node("C")
+    nodes = [blank, whitespace_only, filled]
+    edges = [_edge("A", "C"), _edge("B", "C")]
+    graph = _graph(nodes, edges)
+
+    tasks = compile_workflow(graph, SLUGS)
+    assert len(tasks) == 3
+    by_title = {t["title"]: t for t in tasks}
+    assert by_title["Clinical Research"]["description"] == ""
+
+    warnings = find_warnings(graph)
+    empty_warning = next(w for w in warnings if w.code == "empty_instruction")
+    assert empty_warning.node_ids == ["A", "B"]
+
+
+def test_node_with_instruction_produces_no_empty_instruction_warning() -> None:
+    nodes = [_node("A"), _node("B")]
+    edges = [_edge("A", "B")]
+    warnings = find_warnings(_graph(nodes, edges))
+    assert all(w.code != "empty_instruction" for w in warnings)
+
+
 # =============================================================================
 # REST routes — app/routes/workflows.py (chunk 4)
 # =============================================================================
@@ -248,12 +280,18 @@ async def _make_agent(user_id: uuid.UUID | None, slug: str) -> uuid.UUID:
         return agent.id
 
 
-def _wf_node(node_id: str, *, agent_slug: str, title: str | None = None) -> dict:
+def _wf_node(
+    node_id: str,
+    *,
+    agent_slug: str,
+    title: str | None = None,
+    instruction: str | None = None,
+) -> dict:
     return {
         "id": node_id,
         "agent_slug": agent_slug,
         "title": title or node_id,
-        "instruction": f"do {node_id}",
+        "instruction": f"do {node_id}" if instruction is None else instruction,
         "needs_approval": False,
     }
 
@@ -540,6 +578,46 @@ async def test_validate_reports_orphan_warning() -> None:
         )
 
 
+async def test_validate_reports_empty_instruction_warning() -> None:
+    await engine.dispose()
+    email = f"wf-empty-instr-{uuid.uuid4().hex[:8]}@agentfleet.test"
+    user_id = await _make_user(email)
+    agent_slug = f"wf-agent-{uuid.uuid4().hex[:8]}"
+    agent_id = await _make_agent(user_id, agent_slug)
+    workflow_id: uuid.UUID | None = None
+    try:
+        graph = _wf_graph(
+            [
+                _wf_node("A", agent_slug=agent_slug, instruction=""),
+                _wf_node("B", agent_slug=agent_slug),
+            ],
+            [_wf_edge("A", "B")],
+        )
+        async with SessionLocal() as session:
+            wf = Workflow(name="Blank Instruction", description="", graph=graph, user_id=user_id)
+            session.add(wf)
+            await session.commit()
+            await session.refresh(wf)
+            workflow_id = wf.id
+
+        token = mint_token(email=email)
+        async with _client(token) as client:
+            res = await client.post(f"/api/v1/workflows/{workflow_id}/validate")
+            assert res.status_code == 200, res.text
+            body = res.json()
+            assert body["ok"] is True
+            assert body["errors"] == []
+            warning = next(w for w in body["warnings"] if w["code"] == "empty_instruction")
+            assert warning["node_ids"] == ["A"]
+            assert len(body["tasks"]) == 2
+    finally:
+        await _cleanup(
+            workflow_ids=[workflow_id] if workflow_id else [],
+            agent_ids=[agent_id],
+            emails=[email],
+        )
+
+
 # --- /run ----------------------------------------------------------------------
 
 
@@ -595,6 +673,56 @@ async def test_run_workflow_creates_run_and_tasks_and_dispatches(monkeypatch) ->
             assert [t.ordinal for t in tasks] == [0, 1, 2]
             assert [t.depends_on for t in tasks] == [[], [0], [1]]
             assert all(t.agent_slug == agent_slug for t in tasks)
+
+        assert dispatch_calls == [run_id]
+    finally:
+        await _cleanup(
+            workflow_ids=[workflow_id] if workflow_id else [],
+            run_ids=[run_id] if run_id else [],
+            agent_ids=[agent_id],
+            emails=[email],
+        )
+
+
+async def test_run_workflow_with_empty_instruction_still_runs(monkeypatch) -> None:
+    # empty_instruction is a WARNING, never an error — a half-finished graph
+    # must stay runnable. /run doesn't even call find_warnings, but assert
+    # the observable behavior directly: this graph runs exactly like any
+    # other, warning or not.
+    await engine.dispose()
+    dispatch_calls = _patch_dispatch(monkeypatch)
+    email = f"wf-run-empty-instr-{uuid.uuid4().hex[:8]}@agentfleet.test"
+    user_id = await _make_user(email)
+    agent_slug = f"wf-agent-{uuid.uuid4().hex[:8]}"
+    agent_id = await _make_agent(user_id, agent_slug)
+    workflow_id: uuid.UUID | None = None
+    run_id: uuid.UUID | None = None
+    try:
+        graph = _wf_graph(
+            [
+                _wf_node("A", agent_slug=agent_slug, instruction="   "),
+                _wf_node("B", agent_slug=agent_slug),
+            ],
+            [_wf_edge("A", "B")],
+        )
+        async with SessionLocal() as session:
+            wf = Workflow(name="Blank Instr Run", description="", graph=graph, user_id=user_id)
+            session.add(wf)
+            await session.commit()
+            await session.refresh(wf)
+            workflow_id = wf.id
+
+        token = mint_token(email=email)
+        async with _client(token) as client:
+            res = await client.post(f"/api/v1/workflows/{workflow_id}/run")
+            assert res.status_code == 201, res.text
+            body = res.json()
+            assert body["task_count"] == 2
+            run_id = uuid.UUID(body["run_id"])
+
+        async with SessionLocal() as session:
+            run = await session.get(Run, run_id)
+            assert run.status == "running"
 
         assert dispatch_calls == [run_id]
     finally:

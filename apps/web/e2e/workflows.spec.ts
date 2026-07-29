@@ -51,6 +51,53 @@ test("builds a two-node graph, saves, and validates successfully", async ({ page
   await expect(card).not.toBeVisible();
 });
 
+test("an empty instruction warns but never blocks validation or rings the node", async ({
+  page,
+}) => {
+  page.on("dialog", (dialog) => dialog.accept());
+  const name = `E2E empty instruction ${Date.now()}`;
+
+  await page.goto("/workflows");
+  await page.getByRole("button", { name: "New workflow" }).click();
+  await expect(page).toHaveURL(/\/workflows\/[^/]+$/);
+  await expect(page.locator(".react-flow")).toBeVisible();
+
+  await page.getByPlaceholder("Workflow name").fill(name);
+
+  const paletteButtons = page.locator("ul.space-y-1\\.5 li button");
+  await expect(paletteButtons.first()).toBeVisible();
+  await paletteButtons.first().click(); // node A — added and selected, instruction left blank
+  await paletteButtons.first().click(); // node B — added and selected, instruction left blank
+
+  // This is the moment the mistake is made — the inspector hint should
+  // already be visible for the selected node, before Validate is ever
+  // clicked.
+  await expect(
+    page.getByText(/No instruction — the agent will only see the title/),
+  ).toBeVisible();
+
+  // B is selected here, so this wires B -> A. Direction doesn't matter for
+  // an acyclic-graph check.
+  const connectSelect = page.locator("select").filter({ hasText: "Choose a node…" });
+  await connectSelect.selectOption({ index: 1 });
+
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByText("Saved", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Validate", exact: true }).click();
+  await expect(page.getByText(/^Valid\b/)).toBeVisible();
+  await expect(page.getByText("1 warning", { exact: true })).toBeVisible();
+  await expect(page.getByText(/empty_instruction/)).toBeVisible();
+
+  // A warning must never get NodeShell's error-only red ring.
+  await expect(page.locator('[class*="ring-red-500"]')).toHaveCount(0);
+
+  await page.getByRole("link", { name: "← All workflows" }).click();
+  const card = page.locator("div", { hasText: name }).last();
+  await card.getByRole("button", { name: "Delete" }).click();
+  await expect(card).not.toBeVisible();
+});
+
 test("a cycle fails validation, rings both nodes, and never creates a run", async ({ page }) => {
   page.on("dialog", (dialog) => dialog.accept());
   const name = `E2E cycle ${Date.now()}`;

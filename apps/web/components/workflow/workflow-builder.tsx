@@ -651,6 +651,12 @@ export default function WorkflowBuilder({ workflowId }: { workflowId: string }) 
                   rows={5}
                   className={inputClass}
                 />
+                {selectedNode.data.instruction.trim() === "" && (
+                  <p className="mt-1 font-mono text-[11px] text-amber-300/70">
+                    No instruction — the agent will only see the title and may just ask for
+                    clarification instead of doing the work.
+                  </p>
+                )}
               </div>
 
               <label className="flex items-center gap-2 text-sm">

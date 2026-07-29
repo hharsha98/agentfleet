@@ -320,7 +320,8 @@ class WorkflowOut(WorkflowSummaryOut):
 
 class WorkflowIssue(BaseModel):
     """One compiler finding. `code` is one of: cycle, unknown_agent,
-    dangling_edge, self_loop, empty, duplicate_id, orphan_node, wide_fan_in."""
+    dangling_edge, self_loop, empty, duplicate_id, orphan_node, wide_fan_in,
+    empty_instruction."""
 
     code: str
     message: str
