@@ -109,7 +109,7 @@ class Run(Base):
     goal: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(
         String(20), default="planning"
-    )  # planning|running|awaiting_approval|done|failed
+    )  # planning|running|awaiting_approval|done|done_with_issues|failed
     user_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
@@ -141,9 +141,17 @@ class RunTask(Base):
     needs_approval: Mapped[bool] = mapped_column(Boolean, default=False)
     status: Mapped[str] = mapped_column(
         String(20), default="todo"
-    )  # todo|in_progress|review|done|failed
+    )  # todo|in_progress|review|done|failed|skipped
     result: Mapped[str] = mapped_column(Text, default="")
     error: Mapped[str | None] = mapped_column(String(300))
+    # Self-healing execution (services/orchestrator.py::_execute_task): a
+    # failed attempt is retried as a follow-up turn in the same conversation
+    # rather than giving up immediately. `attempts` counts every try
+    # (1 == succeeded/failed on the first try, no retry happened);
+    # `heal_log` has one small entry per repair — {"attempt", "error",
+    # "diagnosis", "resolved"} — so the UI can show the repair history.
+    attempts: Mapped[int] = mapped_column(Integer, default=1)
+    heal_log: Mapped[list] = mapped_column(JSONB, default=list)
     tokens_in: Mapped[int] = mapped_column(Integer, default=0)
     tokens_out: Mapped[int] = mapped_column(Integer, default=0)
     cost_usd: Mapped[float] = mapped_column(Numeric(10, 6), default=0)

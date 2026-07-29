@@ -102,6 +102,16 @@ class Settings(BaseSettings):
     # the model is a ~130MB download; tests/conftest.py sets this).
     embeddings_prewarm: str = "1"
 
+    # Self-healing task execution (services/orchestrator.py::_execute_task):
+    # a failed attempt is retried as a follow-up turn in the SAME
+    # conversation asking the agent to diagnose and try a different
+    # approach, instead of giving up. This is a WALL-CLOCK bound on how long
+    # that repair loop may keep retrying a single task — deliberately NOT an
+    # attempt count (there is no fixed retry cap). The loop also stops early
+    # on stall detection (two consecutive attempts hit the same normalized
+    # error) or budget exhaustion (services/budget.py::check_budget).
+    self_heal_deadline_seconds: int = 300
+
 
 @lru_cache
 def get_settings() -> Settings:
