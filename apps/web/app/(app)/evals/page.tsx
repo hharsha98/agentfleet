@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import { Panel } from "@/components/dash/panel";
@@ -76,11 +77,6 @@ type EvalRunSummary = {
   created_at: string;
 };
 
-type GuardrailScanResult = {
-  injection_flags: string[];
-  pii: { masked: string; replacements: number };
-};
-
 type CaseFormState = {
   input: string;
   expected_contains: string;
@@ -121,12 +117,6 @@ export default function EvalsPage() {
   const [latestRun, setLatestRun] = useState<EvalRun | null>(null);
   const [recentRuns, setRecentRuns] = useState<EvalRunSummary[]>([]);
   const [totalRuns, setTotalRuns] = useState<number | null>(null);
-
-  // Guardrails sandbox: paste text, scan it, see injection flags + PII masking.
-  const [guardrailText, setGuardrailText] = useState("");
-  const [guardrailBusy, setGuardrailBusy] = useState(false);
-  const [guardrailResult, setGuardrailResult] = useState<GuardrailScanResult | null>(null);
-  const [guardrailError, setGuardrailError] = useState<string | null>(null);
 
   async function refreshAgents() {
     try {
@@ -242,29 +232,6 @@ export default function EvalsPage() {
       }
     } finally {
       setRunning(false);
-    }
-  }
-
-  async function scanGuardrails() {
-    if (guardrailBusy || !guardrailText.trim()) return;
-    setGuardrailBusy(true);
-    setGuardrailError(null);
-    try {
-      const res = await apiFetch("/api/v1/guardrails/scan", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: guardrailText }),
-      });
-      if (res.ok) {
-        setGuardrailResult(await res.json());
-      } else {
-        const body = await res.json().catch(() => ({}));
-        setGuardrailError(body.detail ?? `Scan failed (${res.status})`);
-      }
-    } catch {
-      setGuardrailError("API offline — start the backend and reload.");
-    } finally {
-      setGuardrailBusy(false);
     }
   }
 
@@ -601,71 +568,19 @@ export default function EvalsPage() {
         </>
       )}
 
-      <div className="mt-4">
-        <Panel
-          title="Guardrails sandbox"
-          description="Paste any text — retrieved content, a user message — to check for prompt-injection phrases and personal data."
-          delay={80}
+      {/* The guardrails sandbox used to live here as a trailing panel. It now
+          has its own page, which the landing page's "Guardrails" pillar links
+          to — this pointer keeps the path discoverable from Evals. */}
+      <p className="mt-4 text-sm text-muted">
+        Looking for injection screening and PII masking?{" "}
+        <Link
+          href="/guardrails"
+          className="cursor-pointer text-accent transition-opacity duration-200 hover:opacity-80"
         >
-          <div className="relative">
-            <textarea
-              value={guardrailText}
-              onChange={(e) => setGuardrailText(e.target.value)}
-              placeholder="Paste text to scan…"
-              rows={4}
-              className={inputClass}
-            />
-            <MicButton
-              className="absolute bottom-2 right-2 py-1"
-              onTranscript={(t) => setGuardrailText((v) => (v ? v + " " + t : t))}
-            />
-          </div>
-          <div className="mt-2 flex items-center gap-3">
-            <button
-              onClick={scanGuardrails}
-              disabled={guardrailBusy || !guardrailText.trim()}
-              className="cursor-pointer rounded-md bg-accent px-4 py-1.5 text-xs font-medium text-white transition-opacity duration-200 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              {guardrailBusy ? "Scanning…" : "Scan"}
-            </button>
-            {guardrailError && <p className="font-mono text-xs text-muted">⚠ {guardrailError}</p>}
-          </div>
-
-          {guardrailResult && (
-            <div className="mt-4 space-y-3">
-              <div>
-                <p className="mb-1.5 font-mono text-xs text-muted">injection flags</p>
-                {guardrailResult.injection_flags.length === 0 ? (
-                  <span className="rounded-full border border-emerald-400/40 px-2.5 py-0.5 font-mono text-[10px] text-emerald-300">
-                    clean
-                  </span>
-                ) : (
-                  <div className="flex flex-wrap gap-1.5">
-                    {guardrailResult.injection_flags.map((flag) => (
-                      <span
-                        key={flag}
-                        className="rounded-full border border-red-400/40 px-2.5 py-0.5 font-mono text-[10px] text-red-300"
-                      >
-                        {flag}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <p className="mb-1.5 font-mono text-xs text-muted">
-                  pii-masked text · {guardrailResult.pii.replacements} replacement
-                  {guardrailResult.pii.replacements === 1 ? "" : "s"}
-                </p>
-                <pre className="max-h-48 overflow-y-auto whitespace-pre-wrap rounded-md border border-hairline bg-transparent p-3 font-mono text-[11px] leading-relaxed">
-                  {guardrailResult.pii.masked}
-                </pre>
-              </div>
-            </div>
-          )}
-        </Panel>
-      </div>
+          Open the Guardrails sandbox
+        </Link>
+        .
+      </p>
     </main>
   );
 }

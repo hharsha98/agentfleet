@@ -28,7 +28,7 @@ const OPS_ITEMS: {
     title: "Guardrails",
     description:
       "Prompt-injection screening and PII masking run on every agent turn, and a red-team suite probes for jailbreaks in CI. Nothing here is a manual review step — it's automated on every run.",
-    href: "/agents",
+    href: "/guardrails",
   },
   {
     icon: "gauge",

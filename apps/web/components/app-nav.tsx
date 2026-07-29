@@ -16,6 +16,7 @@ const NAV_ITEMS: { href: string; label: string }[] = [
   { href: "/agents", label: "Agents" },
   { href: "/templates", label: "Templates" },
   { href: "/evals", label: "Evals" },
+  { href: "/guardrails", label: "Guardrails" },
   { href: "/usage", label: "Usage" },
   { href: "/automations", label: "Automations" },
   { href: "/playground", label: "Playground" },

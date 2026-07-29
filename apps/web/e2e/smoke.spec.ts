@@ -84,6 +84,11 @@ const pageChecks: Array<{ path: string; check: (page: Page) => Promise<unknown> 
       expect(p.getByRole("heading", { name: "Eval Center", level: 1 })).toBeVisible(),
   },
   {
+    path: "/guardrails",
+    check: (p) =>
+      expect(p.getByRole("heading", { name: "Guardrails", level: 1 })).toBeVisible(),
+  },
+  {
     path: "/usage",
     check: (p) =>
       expect(p.getByRole("heading", { name: "Usage & cost", level: 1 })).toBeVisible(),

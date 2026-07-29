@@ -11,6 +11,7 @@ type IconName =
   | "robot"
   | "blocks"
   | "flask"
+  | "shield"
   | "compare"
   | "activity"
   | "clock"
@@ -88,6 +89,12 @@ function Icon({ name }: { name: IconName }) {
           <path d="M7.5 15h9" />
         </svg>
       );
+    case "shield":
+      return (
+        <svg {...common}>
+          <path d="M12 3.25 4.75 6v5.4c0 4.4 3 7.9 7.25 9.35 4.25-1.45 7.25-4.95 7.25-9.35V6L12 3.25Z" />
+        </svg>
+      );
     case "compare":
       return (
         <svg {...common}>
@@ -151,6 +158,7 @@ const COMMANDS: Command[] = [
   { label: "Agents", hint: "/agents", icon: "robot", href: "/agents" },
   { label: "Templates", hint: "/templates", icon: "blocks", href: "/templates" },
   { label: "Evals", hint: "/evals", icon: "flask", href: "/evals" },
+  { label: "Guardrails", hint: "/guardrails", icon: "shield", href: "/guardrails" },
   { label: "Playground", hint: "/playground", icon: "compare", href: "/playground" },
   { label: "Voice", hint: "/voice", icon: "mic", href: "/voice" },
   { label: "Usage", hint: "/usage", icon: "activity", href: "/usage" },

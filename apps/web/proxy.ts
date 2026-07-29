@@ -25,6 +25,7 @@ export const config = {
     "/agents/:path*",
     "/templates/:path*",
     "/evals/:path*",
+    "/guardrails/:path*",
     "/usage/:path*",
     "/automations/:path*",
     "/playground/:path*",
