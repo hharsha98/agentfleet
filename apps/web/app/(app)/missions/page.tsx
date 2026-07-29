@@ -31,12 +31,20 @@ type Run = {
   tasks?: Task[];
 };
 
-const COLUMNS: { key: Task["status"]; label: string; hue: Hue }[] = [
+// "muted" (superseded only) isn't a real Hue — see nodes.tsx's STATUS_HUE
+// comment for why this reuses that same bypass instead of widening the
+// shared Hue union in landing/icons.tsx.
+const COLUMNS: { key: Task["status"]; label: string; hue: Hue | "muted" }[] = [
   { key: "todo", label: "To do", hue: "blue" },
   { key: "in_progress", label: "In progress", hue: "violet" },
   { key: "review", label: "Needs approval", hue: "amber" },
   { key: "done", label: "Done", hue: "green" },
   { key: "failed", label: "Failed", hue: "red" },
+  // Layer 3 re-planning (orchestrator's append-and-supersede): the task got
+  // stuck and was replaced by a repair plan instead of failing outright.
+  // NOT a failure — see the card's "Replaced by step N" line. Rendered only
+  // when non-empty, same reasoning as "skipped" below.
+  { key: "superseded", label: "Replanned", hue: "muted" },
   // Never runs (a dependency failed/skipped first) — cyan because it's the
   // one hue not already claimed by another status here. Mirrored in
   // components/workflow/nodes.tsx's STATUS_HUE; keep both in sync.
@@ -49,9 +57,11 @@ const COLUMNS: { key: Task["status"]; label: string; hue: Hue }[] = [
 // status is a key here, and the only column that ever highlights as a
 // legal drop target is "todo". Kept as an explicit map (not hardcoded to
 // "todo" everywhere) so a future backend transition just needs one entry
-// added here too. "skipped" has no entry on purpose — the backend has no
-// (skipped, todo) transition (a skipped task's dependency is gone for good),
-// so skipped cards render but are never draggable.
+// added here too. "skipped" and "superseded" have no entry on purpose — the
+// backend has no (skipped, todo) or (superseded, todo) transition (a
+// skipped task's dependency is gone for good, and a superseded task's work
+// has already moved on to its replacement), so those cards render but are
+// never draggable.
 const RETRY_TARGET: Partial<Record<Task["status"], Task["status"]>> = {
   failed: "todo",
   review: "todo",
@@ -65,6 +75,23 @@ const HUE_DOT: Record<Hue, string> = {
   amber: "bg-hue-amber",
   green: "bg-hue-green",
   red: "bg-hue-red",
+};
+
+// "muted" isn't in the Hue union (see COLUMNS comment above), so the one
+// column-header dot that can be "superseded" reads this instead of
+// HUE_DOT — keeping HUE_DOT itself an exhaustive, unmodified Record<Hue,_>.
+function dotClassFor(hue: Hue | "muted"): string {
+  return hue === "muted" ? "bg-muted" : HUE_DOT[hue];
+}
+
+// Board grid column count: 5 base columns, +1 each for "skipped" and
+// "superseded" once either is non-empty (see boardColumns below). A plain
+// lookup rather than a template string — Tailwind's JIT scanner needs
+// complete literal class names in source (same reasoning as HUE_DOT/HUE_RING).
+const BOARD_GRID_COLS: Record<number, string> = {
+  5: "md:grid-cols-5",
+  6: "md:grid-cols-6",
+  7: "md:grid-cols-7",
 };
 
 const RUN_BADGE: Record<string, string> = {
@@ -179,6 +206,18 @@ function TaskCard({
           </p>
         )}
 
+        {/* Layer 3 re-planning: reads as "replaced", not "failed" — no red,
+            no error icon, just where the work went. superseded_by is an
+            ordinal (see types.ts), and following it card-to-card is how a
+            reader traces a chain like 3 -> 7 -> 9. */}
+        {task.status === "superseded" && (
+          <p className="mt-1.5 font-mono text-[10px] text-muted">
+            {task.superseded_by != null
+              ? `Replaced by step ${task.superseded_by}`
+              : "Replaced by a repair plan"}
+          </p>
+        )}
+
         {task.status === "review" && task.needs_approval && (
           <span
             className={`mt-1.5 inline-block rounded-full border px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wide ${HUE_CLASSES.amber.tile} ${HUE_CLASSES.amber.icon}`}
@@ -212,7 +251,9 @@ function TaskCard({
             <summary className="cursor-pointer font-mono text-[10px] text-muted">
               {task.status === "failed"
                 ? `gave up after ${task.attempts} attempts`
-                : `healed after ${task.attempts} attempts`}
+                : task.status === "superseded"
+                  ? `re-planned after ${task.attempts} attempts`
+                  : `healed after ${task.attempts} attempts`}
             </summary>
             {/* Bounded like the "result" block below: an error string can run
                 to a few hundred characters, and rows written before the
@@ -221,6 +262,11 @@ function TaskCard({
               {task.heal_log.map((h) => (
                 <li key={h.attempt}>
                   <span className="text-foreground">Attempt {h.attempt}</span>
+                  {/* classification/model already existed on heal_log but
+                      weren't surfaced — kept to one inline clause each so
+                      this doesn't balloon into a second disclosure. */}
+                  {h.classification && <span className="text-muted"> · {h.classification}</span>}
+                  {h.model && <span className="text-muted"> · {h.model}</span>}
                   <span className={h.resolved ? "text-emerald-300" : "text-muted"}>
                     {h.resolved ? " · fixed" : " · unresolved"}
                   </span>
@@ -232,6 +278,9 @@ function TaskCard({
                     <span className="mt-0.5 block break-words text-amber-300/80">
                       {h.diagnosis}
                     </span>
+                  )}
+                  {h.diagnosis?.startsWith("Re-planned") && (
+                    <span className="mt-0.5 block break-words text-muted">{h.diagnosis}</span>
                   )}
                 </li>
               ))}
@@ -466,13 +515,15 @@ export default function MissionsPage() {
     .filter((c) => c.count > 0)
     .map((c) => `${c.count} ${c.label.toLowerCase()}`)
     .join(" · ");
-  // "Skipped" only happens when a self-healing task finally gave up and its
-  // dependents can never run — the uncommon case. Showing the column
-  // unconditionally cost every other column a sixth of the width and
-  // squeezed cards to roughly one word per line, so it appears only once it
-  // actually holds something.
+  // "Skipped" and "superseded" only happen on the self-healing paths (a
+  // dependency finally gave up, or the orchestrator re-planned a stuck
+  // task) — both uncommon. Showing either column unconditionally cost
+  // every other column width and squeezed cards to roughly one word per
+  // line, so each appears only once it actually holds something.
   const boardColumns = COLUMNS.filter(
-    (c) => c.key !== "skipped" || tasks.some((t) => t.status === "skipped"),
+    (c) =>
+      (c.key !== "skipped" && c.key !== "superseded") ||
+      tasks.some((t) => t.status === c.key),
   );
   const tokensIn = tasks.reduce((sum, t) => sum + t.tokens_in, 0);
   const tokensOut = tasks.reduce((sum, t) => sum + t.tokens_out, 0);
@@ -653,7 +704,11 @@ export default function MissionsPage() {
               {view === "board" ? (
                 <div
                   className={`mt-4 grid flex-1 grid-cols-2 gap-3 ${
-                    boardColumns.length === 6 ? "md:grid-cols-6" : "md:grid-cols-5"
+                    // 5 columns normally; +1 each for "skipped"/"superseded"
+                    // once either actually holds a task (see boardColumns
+                    // above). Literal classes (not a template string) so
+                    // Tailwind's JIT scanner can find them.
+                    BOARD_GRID_COLS[boardColumns.length] ?? "md:grid-cols-5"
                   }`}
                 >
                   {boardColumns.map((col) => {
@@ -687,7 +742,7 @@ export default function MissionsPage() {
                       >
                         <div className="flex items-center justify-between px-1 pb-2">
                           <span className="flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wide text-muted">
-                            <span className={`h-1.5 w-1.5 rounded-full ${HUE_DOT[col.hue]}`} />
+                            <span className={`h-1.5 w-1.5 rounded-full ${dotClassFor(col.hue)}`} />
                             {col.label}
                           </span>
                           <span className="rounded-full border border-hairline px-1.5 py-0.5 font-mono text-[10px] text-muted">

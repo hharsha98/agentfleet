@@ -43,6 +43,7 @@ def _task_dict(t: RunTask) -> dict:
         "depends_on": t.depends_on or [],
         "needs_approval": t.needs_approval,
         "status": t.status,
+        "superseded_by": t.superseded_by,
         "result": t.result,
         "error": t.error,
         "tokens_in": t.tokens_in,

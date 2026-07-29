@@ -66,6 +66,22 @@ os.environ.setdefault("RATE_LIMIT_DISABLED", "1")
 # existing test does that; this env guard keeps it off even if one ever does.
 os.environ.setdefault("EMBEDDINGS_PREWARM", "0")
 
+# --- Self-heal knobs must not be inherited from the developer's .env ------
+# Assignment, not setdefault: pydantic-settings reads the .env FILE, and
+# os.environ takes precedence over it, so only an explicit assignment
+# actually pins the value.
+#
+# The suite asserts on exact retry/escalation behaviour, so a ladder
+# configured for real use silently changes what is being tested. Observed:
+# setting SELF_HEAL_ESCALATION_MODELS in .env made three tests fail and took
+# the suite from 23s to 4m34s, because escalated attempts left the mocked
+# path. Same class of bug as the suite once sharing the dev database — tests
+# must not depend on local configuration. Tests that exercise escalation set
+# these explicitly via monkeypatch. Values below are the declared defaults.
+os.environ["SELF_HEAL_ESCALATION_MODELS"] = ""
+os.environ["SELF_HEAL_DEADLINE_SECONDS"] = "300"
+os.environ["SELF_HEAL_TRANSIENT_BACKOFF_SECONDS"] = "1.0"
+
 # --- Point tests at their own database, never the dev one -----------------
 # Must happen before ANY app.* import in this process too — see point 4
 # above (app.db builds `engine` from get_settings().database_url at import

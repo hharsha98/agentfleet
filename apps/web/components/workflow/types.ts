@@ -9,7 +9,22 @@ import type { Edge, Node } from "@xyflow/react";
 // "skipped" (orchestrator self-heal) — a task whose dependency ultimately
 // failed or was skipped itself, propagated transitively through the DAG. It
 // never runs, so it carries no result/tokens (see Task fields below).
-export type TaskStatus = "todo" | "in_progress" | "review" | "done" | "failed" | "skipped";
+//
+// "superseded" (Layer 3 re-planning, orchestrator's append-and-supersede) —
+// the task got stuck and the orchestrator proposed a repair plan instead of
+// just failing it: new task(s) were appended and this one was marked
+// superseded, pointing at its replacement via `superseded_by`. This is NOT
+// a failure — the replacement (or a chain of them) carries the work
+// forward, and this task's own dependents wait for that chain to resolve
+// rather than being skipped. Like "skipped", it never produces a result.
+export type TaskStatus =
+  | "todo"
+  | "in_progress"
+  | "review"
+  | "done"
+  | "failed"
+  | "skipped"
+  | "superseded";
 
 export type Task = {
   id: string;
@@ -22,13 +37,31 @@ export type Task = {
   status: TaskStatus;
   result: string;
   error: string | null;
+  // Set together with status="superseded" — the ORDINAL (not id) of the
+  // RunTask that now carries this task's work forward. May itself point at
+  // a superseded task (a chain, e.g. 3 -> 7 -> 9); null for every other
+  // status. See apps/api/app/models.py's RunTask.superseded_by for the
+  // full backend contract.
+  superseded_by: number | null;
   tokens_in: number;
   tokens_out: number;
   latency_ms: number | null;
   // Orchestrator self-heal (attempts always >= 1; a value > 1 means the
   // orchestrator diagnosed and retried before landing on the final status).
   attempts: number;
-  heal_log: { attempt: number; error: string; diagnosis: string; resolved: boolean }[];
+  heal_log: {
+    attempt: number;
+    error: string;
+    diagnosis: string;
+    resolved: boolean;
+    // Pure classification of the failure (services/orchestrator.py's
+    // classify_failure) — lets the board explain WHY a repair happened,
+    // not just that it did.
+    classification: "transient" | "approach" | "capability";
+    // The model this attempt ran on (escalation ladder, Layer 2) — for a
+    // `resolved: true` entry, the model that actually produced the fix.
+    model: string;
+  }[];
 };
 
 // Data payload carried by every task node in the graph.

@@ -12,13 +12,20 @@ import type { BuilderFlowNode, Task, TaskFlowNode } from "./types";
 
 // Mirrors COLUMNS in missions/page.tsx — the board and this graph must never
 // disagree about what color a status is. If COLUMNS changes, update this too.
-const STATUS_HUE: Record<Task["status"], Hue> = {
+//
+// "superseded" gets "muted" rather than a real Hue: every one of the 6
+// palette hues is already claimed by another status (see landing/icons.tsx's
+// Hue union), and this task isn't a failure — reusing e.g. red or cyan would
+// visually lie about that. NodeShell below special-cases "muted" to a
+// neutral ring/dot/text treatment instead of indexing the Hue-keyed maps.
+const STATUS_HUE: Record<Task["status"], Hue | "muted"> = {
   todo: "blue",
   in_progress: "violet",
   review: "amber",
   done: "green",
   failed: "red",
   skipped: "cyan",
+  superseded: "muted",
 };
 
 const STATUS_LABEL: Record<Task["status"], string> = {
@@ -28,6 +35,7 @@ const STATUS_LABEL: Record<Task["status"], string> = {
   done: "Done",
   failed: "Failed",
   skipped: "Skipped",
+  superseded: "Replanned",
 };
 
 const HUE_DOT: Record<Hue, string> = {
@@ -76,7 +84,12 @@ export function NodeShell({
   selected = false,
   children,
 }: {
-  hue: Hue;
+  // "muted" (superseded tasks only) bypasses the Hue-keyed maps below
+  // rather than adding a 7th member to the shared Hue union in
+  // landing/icons.tsx — that union is also used by unrelated dash/landing
+  // components, so widening it there would ripple into every exhaustive
+  // Record<Hue, ...> across the app for one status this graph renders.
+  hue: Hue | "muted";
   glyph: ReactNode;
   title: string;
   agentName: string;
@@ -88,8 +101,16 @@ export function NodeShell({
   selected?: boolean;
   children?: ReactNode;
 }) {
-  const c = HUE_CLASSES[hue];
-  const ringClass = invalid ? "ring-2 ring-red-500/60" : selected ? "ring-2 ring-accent" : HUE_RING[hue];
+  const isMuted = hue === "muted";
+  const ringClass = invalid
+    ? "ring-2 ring-red-500/60"
+    : selected
+      ? "ring-2 ring-accent"
+      : isMuted
+        ? "ring-muted/30"
+        : HUE_RING[hue];
+  const dotClass = isMuted ? "bg-muted" : HUE_DOT[hue];
+  const metaTextClass = isMuted ? "text-muted" : HUE_CLASSES[hue].icon;
   return (
     <div
       style={{ width: NODE_W, minHeight: NODE_H }}
@@ -104,8 +125,8 @@ export function NodeShell({
       </span>
 
       <span className="mt-1.5 flex items-center gap-1.5 font-mono text-[10px] text-muted">
-        <span aria-hidden className={`h-1.5 w-1.5 shrink-0 rounded-full ${HUE_DOT[hue]}`} />
-        <span className={c.icon}>{meta}</span>
+        <span aria-hidden className={`h-1.5 w-1.5 shrink-0 rounded-full ${dotClass}`} />
+        <span className={metaTextClass}>{meta}</span>
       </span>
 
       {children}
@@ -124,7 +145,16 @@ export function TaskNode({ data }: NodeProps<TaskFlowNode>) {
     task.attempts > 1
       ? task.status === "failed"
         ? ` · ↻ gave up ×${task.attempts}`
-        : ` · ↻ healed ×${task.attempts}`
+        : task.status === "superseded"
+          ? ` · ↻ re-planned ×${task.attempts}`
+          : ` · ↻ healed ×${task.attempts}`
+      : "";
+  // No result, no tokens for a superseded node most of the time (it never
+  // finished its own work) — but it still points forward at whatever
+  // replaced it, which is the one thing worth saying here.
+  const supersededNote =
+    task.status === "superseded" && task.superseded_by != null
+      ? ` · → step ${task.superseded_by}`
       : "";
 
   return (
@@ -139,13 +169,15 @@ export function TaskNode({ data }: NodeProps<TaskFlowNode>) {
           // Byte-identical format to missions/page.tsx:217's meta line.
           <>
             {STATUS_LABEL[task.status]}
-            {healNote} · ↑{task.tokens_in} ↓{task.tokens_out} tok
+            {healNote}
+            {supersededNote} · ↑{task.tokens_in} ↓{task.tokens_out} tok
             {task.latency_ms != null && ` · ${task.latency_ms}ms`}
           </>
         ) : (
           <>
             {STATUS_LABEL[task.status]}
             {healNote}
+            {supersededNote}
           </>
         )
       }
