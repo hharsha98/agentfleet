@@ -48,6 +48,7 @@ export default defineConfig({
         "documents.spec.ts",
         "automations.spec.ts",
         "auth.spec.ts",
+        "workflows.spec.ts",
       ],
       retries: 0,
       timeout: 30_000,

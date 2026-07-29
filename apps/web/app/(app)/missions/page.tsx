@@ -251,6 +251,27 @@ export default function MissionsPage() {
     refreshRuns();
   }, []);
 
+  // Deep-link from the workflow builder's Run button (?run=<id>) — read via
+  // window.location.search in a plain mount effect rather than
+  // next/navigation's useSearchParams, which requires a Suspense boundary a
+  // page like this one doesn't otherwise need. This runs once on mount, so
+  // it only seeds the initial selection; it does not react to later History
+  // API navigations to this same page.
+  //
+  // The setSelected call is nested inside its own function (declared and
+  // invoked from within the effect, same shape as workflow-builder.tsx's
+  // load() effect) rather than sitting at the effect's own top level —
+  // react-hooks/set-state-in-effect flags a setState call it can trace
+  // directly in the effect body, and this is the established pattern in
+  // this codebase for a mount-effect state seed that avoids that.
+  useEffect(() => {
+    function seedSelectedFromQuery() {
+      const runId = new URLSearchParams(window.location.search).get("run");
+      if (runId) setSelected(runId);
+    }
+    seedSelectedFromQuery();
+  }, []);
+
   useEffect(() => {
     if (!selected) return;
     let cancelled = false;

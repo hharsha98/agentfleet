@@ -51,6 +51,11 @@ export type BuilderNodeData = {
   title: string;
   instruction: string;
   needsApproval: boolean;
+  // Set by workflow-builder.tsx from a validate response's error node_ids —
+  // NodeShell paints the red ring off this flag. Never sent to the API:
+  // toGraph() builds its own plain object per node and never reads this
+  // field, so it can't leak into a save payload.
+  invalid?: boolean;
 };
 
 export type BuilderFlowNode = Node<BuilderNodeData, "builder">;

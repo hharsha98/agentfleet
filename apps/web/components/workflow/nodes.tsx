@@ -154,6 +154,7 @@ export function BuilderNode({ data, selected }: NodeProps<BuilderFlowNode>) {
     <NodeShell
       hue={hue}
       selected={selected}
+      invalid={data.invalid}
       title={data.title || "Untitled step"}
       agentName={agentName}
       glyph={<AgentGlyph slug={data.agentSlug} name={agentName} size="xs" />}
