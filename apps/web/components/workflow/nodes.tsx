@@ -1,6 +1,7 @@
 "use client";
 
 import type { CSSProperties, ReactNode } from "react";
+import { useState } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 
 import { AGENT_VISUALS, AgentGlyph, hueForSlug } from "@/components/agent-visual";
@@ -71,6 +72,56 @@ const handleStyle: CSSProperties = {
   border: "1px solid var(--background)",
 };
 
+// Builder-only handle. Deliberately NOT a change to `handleStyle` above: that
+// one is shared with TaskNode, and the run DAG has no drag-to-connect, so
+// growing its dots would be decoration with no affordance behind it.
+//
+// Why the size and the label live in React state instead of `hover:` classes:
+// the width/height that beat React Flow's own stylesheet have to be INLINE
+// (see the comment on handleStyle), and an inline style cannot be overridden
+// by a Tailwind hover: class — the class loses to any inline value regardless
+// of specificity. Tracking hover in state and recomputing the inline size is
+// the only version that actually grows.
+//
+// The label is the whole point of this component. Before it, the two dots were
+// visually identical and unexplained — the user's complaint ("which one to...
+// which connect, is little bit more brain consuming") is exactly this. The
+// left dot means "this step runs AFTER whatever connects into it"; the right
+// dot means "this step runs BEFORE whatever it connects out to".
+function BuilderHandle({ type }: { type: "source" | "target" }) {
+  const [hovered, setHovered] = useState(false);
+  const isSource = type === "source";
+  const size = hovered ? 14 : 10;
+  return (
+    <Handle
+      type={type}
+      position={isSource ? Position.Right : Position.Left}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        ...handleStyle,
+        width: size,
+        height: size,
+        transition: "width 120ms ease, height 120ms ease",
+      }}
+      // aria-label rather than visible text at rest: the dot is a
+      // mouse-only affordance (React Flow has no keyboard connect gesture),
+      // and the Inspector's "Connect to →" select remains the accessible
+      // path — so this only has to name itself for anyone inspecting it.
+      aria-label={isSource ? "Drag out: this step runs before" : "Drop here: this step runs after"}
+    >
+      {hovered && (
+        <span
+          className="pointer-events-none absolute top-1/2 -translate-y-1/2 whitespace-nowrap rounded border border-hairline bg-background px-1.5 py-0.5 font-mono text-[10px] text-muted"
+          style={isSource ? { left: size + 6 } : { right: size + 6 }}
+        >
+          {isSource ? "runs before →" : "← runs after"}
+        </span>
+      )}
+    </Handle>
+  );
+}
+
 // Shared shell every workflow node type renders inside — keeps graph nodes
 // visually identical to the board's TaskCard (rounded-md, hairline border,
 // bg-background) instead of React Flow's default boxes, plus a hue ring
@@ -82,6 +133,7 @@ export function NodeShell({
   agentName,
   meta,
   invalid = false,
+  invalidReason,
   selected = false,
   glow = "",
   children,
@@ -97,6 +149,15 @@ export function NodeShell({
   agentName: string;
   meta: ReactNode;
   invalid?: boolean;
+  // What to say in the hover tooltip when `invalid` is true. The default
+  // below ("Depends on a task not shown in this run") is RUN-graph copy: it
+  // describes TaskNode's only cause of invalidity, a dependency ordinal
+  // missing from the run. In the BUILDER there is no run and no ordinals, so
+  // that sentence was simply untrue there — the real cause is whichever
+  // compiler error named the node (a loop, an unknown agent, a self-loop…).
+  // BuilderNode therefore passes the humanized sentence for that error and
+  // TaskNode keeps the default by omitting this prop.
+  invalidReason?: string;
   // Builder-only: the run DAG (TaskNode) never passes this, so it always
   // defaults to false there and the ring falls through to HUE_RING exactly
   // as before this prop was added.
@@ -123,7 +184,7 @@ export function NodeShell({
     <div
       style={{ width: NODE_W, minHeight: NODE_H }}
       className={`relative rounded-md border border-hairline bg-background p-2.5 text-sm ring-1 ${ringClass}`}
-      title={invalid ? "Depends on a task not shown in this run" : undefined}
+      title={invalid ? (invalidReason ?? "Depends on a task not shown in this run") : undefined}
     >
       {/* The glow rides its own absolutely-positioned overlay instead of the
           shell above, for one hard reason: every ring-* utility on the shell
@@ -222,18 +283,42 @@ export function BuilderNode({ data, selected }: NodeProps<BuilderFlowNode>) {
   const hue = AGENT_VISUALS[data.agentSlug]?.hue ?? hueForSlug(data.agentSlug);
   const agentName = agentDisplayName(data.agentSlug);
 
+  // The wave number is the answer to "which step runs when?" — the thing the
+  // builder previously only hinted at, in a single "{n} waves" summary that
+  // appeared after a successful validate and nowhere else. `wave` is a
+  // zero-based rank from layout.ts's builderWaveRanks(), so it renders +1.
+  // `waveUnknown` means the graph has a loop: there is no valid ordering at
+  // all, so printing any number would be a lie — it greys out instead.
+  const waveLabel = data.waveUnknown ? "Wave —" : `Wave ${(data.wave ?? 0) + 1}`;
+
   return (
     <NodeShell
       hue={hue}
       selected={selected}
       invalid={data.invalid}
+      invalidReason={data.invalidReason}
       title={data.title || "Untitled step"}
       agentName={agentName}
       glyph={<AgentGlyph slug={data.agentSlug} name={agentName} size="xs" />}
-      meta={data.needsApproval ? "Needs approval" : "Runs automatically"}
+      meta={
+        <>
+          <span
+            className={data.waveUnknown ? "text-muted" : undefined}
+            title={
+              data.waveUnknown
+                ? "These steps depend on each other in a loop, so there is no order to run them in yet."
+                : "A wave is one batch of steps that can run at the same time, because nothing in the batch depends on anything else in it."
+            }
+          >
+            {waveLabel}
+          </span>
+          {" · "}
+          {data.needsApproval ? "Needs approval" : "Runs automatically"}
+        </>
+      }
     >
-      <Handle type="target" position={Position.Left} style={handleStyle} />
-      <Handle type="source" position={Position.Right} style={handleStyle} />
+      <BuilderHandle type="target" />
+      <BuilderHandle type="source" />
     </NodeShell>
   );
 }

@@ -96,6 +96,22 @@ export type BuilderNodeData = {
   // toGraph() builds its own plain object per node and never reads this
   // field, so it can't leak into a save payload.
   invalid?: boolean;
+  // The humanized sentence for the error that set `invalid` (see
+  // lib/workflow-issues.ts). NodeShell shows it as the node's hover title.
+  // Without it the builder inherited TaskNode's default tooltip, "Depends on
+  // a task not shown in this run" — run-graph copy that is simply false in a
+  // draft graph, where there is no run and the real cause is a loop, an
+  // unknown agent slug, and so on.
+  invalidReason?: string;
+  // --- derived display-only fields ------------------------------------------
+  // `wave` and `waveUnknown` are computed per render by builder-canvas.tsx
+  // from layout.ts's builderWaveRanks() — they are NOT stored in the
+  // builder's `nodes` state and, like `invalid` above, cannot reach a save
+  // payload. Zero-based rank; the node renders it as `wave + 1`.
+  wave?: number;
+  // True when the graph has a loop, so no wave number means anything. The
+  // node greys its wave label out rather than printing a misleading number.
+  waveUnknown?: boolean;
 };
 
 export type BuilderFlowNode = Node<BuilderNodeData, "builder">;

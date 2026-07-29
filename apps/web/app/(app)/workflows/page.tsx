@@ -11,6 +11,7 @@ import { Icon } from "@/components/landing/icons";
 import { Reveal } from "@/components/landing/reveal";
 import { PageHeader } from "@/components/page-header";
 import { apiFetch } from "@/lib/api";
+import { WORKFLOW_EXAMPLES, type WorkflowExample } from "@/lib/workflow-examples";
 
 type WorkflowSummary = {
   id: string;
@@ -83,6 +84,35 @@ export default function WorkflowsPage() {
     setCreating(false);
   }
 
+  // Same create-then-navigate flow as createBlank() above, with a curated
+  // graph instead of an empty one. This is the industry-standard shape for
+  // this niche (n8n ships 9,300+ importable templates): the fastest way to
+  // understand what a workflow is, is to open a finished one.
+  async function createFromExample(example: WorkflowExample) {
+    if (creating) return;
+    setCreating(true);
+    try {
+      const res = await apiFetch("/api/v1/workflows", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: example.name,
+          description: example.description,
+          graph: example.graph,
+        }),
+      });
+      if (res.ok) {
+        const created: WorkflowSummary = await res.json();
+        router.push(`/workflows/${created.id}`);
+        return;
+      }
+      setNote(`Could not create "${example.name}" — please retry.`);
+    } catch {
+      setNote(`Could not create "${example.name}" — please retry.`);
+    }
+    setCreating(false);
+  }
+
   async function deleteWorkflow(workflow: WorkflowSummary) {
     if (!confirm(`Delete workflow "${workflow.name}"? This cannot be undone.`)) return;
     setDeleteBusy((b) => ({ ...b, [workflow.id]: true }));
@@ -136,6 +166,35 @@ export default function WorkflowsPage() {
           delay={40}
         />
       </div>
+
+      {/* Inserted as a SIBLING above the list, never as a wrapper around the
+          cards below: e2e/workflows.spec.ts finds a workflow's card with
+          page.locator("div", { hasText: name }).last(), which silently
+          resolves to the wrong element the moment another div wraps them. */}
+      <Panel
+        title="Start from an example"
+        description="Opens a finished workflow you can read, edit, or run — the quickest way to see how steps and waves fit together."
+        className="mt-6"
+        delay={60}
+      >
+        <div className="grid gap-3 sm:grid-cols-2">
+          {WORKFLOW_EXAMPLES.map((example) => (
+            <button
+              key={example.id}
+              type="button"
+              onClick={() => createFromExample(example)}
+              disabled={creating}
+              className="af-hover-nav flex cursor-pointer flex-col rounded-lg border border-hairline p-3 text-left transition-colors duration-200 hover:border-accent/40 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <span className="text-sm font-medium">{example.name}</span>
+              <span className="mt-1 text-xs text-muted">{example.description}</span>
+              <span className="mt-2 font-mono text-[11px] text-muted">
+                {example.graph.nodes.length} steps · {example.shape}
+              </span>
+            </button>
+          ))}
+        </div>
+      </Panel>
 
       <Panel
         title="Your workflows"

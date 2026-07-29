@@ -62,3 +62,90 @@ export function layoutTasks(tasks: Task[]): LayoutPosition[] {
   }
   return positions;
 }
+
+// --- builder waves ----------------------------------------------------------
+//
+// The builder needs the same rank(i) number layoutTasks() computes above —
+// that rank IS the wave: "one batch of steps that can run at the same time,
+// because nothing in the batch depends on anything else in it", matching
+// estimated_waves() in apps/api/app/services/workflow_compiler.py (longest
+// dependency path + 1, i.e. one execute_run while-loop iteration per wave).
+//
+// It cannot reuse layoutTasks(), for one specific reason: layoutTasks relies
+// on Task.depends_on holding ORDINALS that only point backward, which makes
+// the array already topologically sorted and lets a single forward pass work.
+// A hand-drawn builder graph has no ordinals at all — its nodes sit in
+// whatever order they were clicked into existence, and an edge may point from
+// a later node to an earlier one. So the relaxation rule here is identical
+// (rank = 1 + max(rank of predecessors)); only the ORDER it is applied in has
+// to be discovered, via Kahn's algorithm, instead of assumed.
+export type WaveRanks = {
+  /** node id -> zero-based wave index. Empty/partial when hasCycle is true. */
+  rankById: Record<string, number>;
+  /** True when some node never reached indegree 0 — a loop (or a self-loop)
+   *  means no ordering exists, so every wave number is meaningless, not just
+   *  the ones inside the loop. Callers must grey the whole set out. */
+  hasCycle: boolean;
+  /** Highest rank + 1, or 0 when the graph is empty or has a loop. */
+  waveCount: number;
+};
+
+export function builderWaveRanks(
+  nodeIds: string[],
+  edges: { source: string; target: string }[],
+): WaveRanks {
+  const rankById: Record<string, number> = {};
+  const present = new Set(nodeIds);
+  const successors = new Map<string, string[]>();
+  const indegree = new Map<string, number>();
+  for (const id of nodeIds) indegree.set(id, 0);
+
+  const seenPairs = new Set<string>();
+  for (const e of edges) {
+    // Dangling endpoints are dropped rather than counted — same defensive
+    // spirit as the `rank[dep] ?? 0` fallback in layoutTasks above. The
+    // server still hard-errors `dangling_edge` on save/validate; degrading
+    // here just avoids blanking every wave number over one stale edge.
+    if (!present.has(e.source) || !present.has(e.target)) continue;
+    // A self-loop is deliberately NOT skipped: it leaves its own node stuck
+    // above indegree 0, so hasCycle comes out true and the wave numbers grey
+    // out — which is honest, because the server rejects `self_loop` too.
+    const key = `${e.source} ${e.target}`;
+    if (seenPairs.has(key)) continue; // matches compile_workflow's edge dedupe
+    seenPairs.add(key);
+    const list = successors.get(e.source);
+    if (list) list.push(e.target);
+    else successors.set(e.source, [e.target]);
+    indegree.set(e.target, (indegree.get(e.target) ?? 0) + 1);
+  }
+
+  // Kahn's algorithm over a plain array used as a FIFO queue (no shift() — an
+  // index cursor keeps this O(V + E) instead of O(V²)).
+  const queue = nodeIds.filter((id) => indegree.get(id) === 0);
+  for (const id of queue) rankById[id] = 0;
+
+  let processed = 0;
+  for (let head = 0; head < queue.length; head++) {
+    const id = queue[head];
+    processed++;
+    const rank = rankById[id] ?? 0;
+    for (const succ of successors.get(id) ?? []) {
+      // max, not assignment: a fan-in node's wave is set by its SLOWEST
+      // predecessor — it cannot start until every input has landed.
+      if (rank + 1 > (rankById[succ] ?? 0)) rankById[succ] = rank + 1;
+      const remaining = (indegree.get(succ) ?? 0) - 1;
+      indegree.set(succ, remaining);
+      if (remaining === 0) queue.push(succ);
+    }
+  }
+
+  const hasCycle = processed < nodeIds.length;
+  let waveCount = 0;
+  if (!hasCycle) {
+    for (const id of nodeIds) {
+      const rank = rankById[id] ?? 0;
+      if (rank + 1 > waveCount) waveCount = rank + 1;
+    }
+  }
+  return { rankById, hasCycle, waveCount };
+}
