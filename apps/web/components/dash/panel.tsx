@@ -25,9 +25,12 @@ export function Panel({
   delay?: number;
 }) {
   return (
+    // No hover styling, deliberately: a Panel is a container, not a
+    // control. Lighting its border under the cursor promised a click that
+    // never existed — 26 times over. Clickable things get .af-hover-nav.
     <Reveal
       delay={delay}
-      className={`rounded-lg border border-hairline p-4 transition-colors duration-200 hover:border-accent/20 sm:p-5 ${className}`}
+      className={`rounded-lg border border-hairline p-4 sm:p-5 ${className}`}
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>

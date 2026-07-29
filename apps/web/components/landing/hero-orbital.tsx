@@ -16,8 +16,8 @@
 import { useEffect, useRef } from "react";
 
 import { AGENT_VISUALS, AgentGlyph } from "@/components/agent-visual";
-import type { Hue } from "@/components/landing/icons";
 import { Icon } from "@/components/landing/icons";
+import { HUE_GLOW_STRONG } from "@/components/ui/glow";
 
 const MAX_TILT_DEG = 8;
 const LERP_FACTOR = 0.08;
@@ -122,15 +122,6 @@ function pointOnRing(angleDeg: number) {
   };
 }
 
-const HUE_GLOW: Record<Hue, string> = {
-  blue: "shadow-[0_0_16px_2px_color-mix(in_srgb,var(--hue-blue)_45%,transparent)]",
-  violet: "shadow-[0_0_16px_2px_color-mix(in_srgb,var(--hue-violet)_45%,transparent)]",
-  cyan: "shadow-[0_0_16px_2px_color-mix(in_srgb,var(--hue-cyan)_45%,transparent)]",
-  amber: "shadow-[0_0_16px_2px_color-mix(in_srgb,var(--hue-amber)_45%,transparent)]",
-  green: "shadow-[0_0_16px_2px_color-mix(in_srgb,var(--hue-green)_45%,transparent)]",
-  red: "shadow-[0_0_16px_2px_color-mix(in_srgb,var(--hue-red)_45%,transparent)]",
-};
-
 function OrbitNodeTile({ node, ring }: { node: OrbitNode; ring: Ring }) {
   const { left, top } = pointOnRing(node.angleDeg);
   const hue = AGENT_VISUALS[node.slug]?.hue ?? "blue";
@@ -152,8 +143,11 @@ function OrbitNodeTile({ node, ring }: { node: OrbitNode; ring: Ring }) {
         style={{ animationDuration: `${ring.durationSec}s` }}
       >
         <div className="group relative">
+          {/* State tier, not ambient: an orbit node is a *lit* agent, and
+              it is the hero's whole subject. The ambient 14% recipe reads
+              as almost-off at this tile size against pure black. */}
           <div
-            className={`rounded-lg transition-transform duration-200 group-hover:scale-125 ${HUE_GLOW[hue]}`}
+            className={`rounded-lg transition-transform duration-200 group-hover:scale-125 ${HUE_GLOW_STRONG[hue]}`}
           >
             <AgentGlyph slug={node.slug} name={node.name} size="md" />
           </div>

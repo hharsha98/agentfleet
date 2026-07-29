@@ -26,6 +26,16 @@
   --color-hue-amber: var(--hue-amber);
   --color-hue-green: var(--hue-green);
   --color-hue-red: var(--hue-red);
+
+  /* Surface elevation ladder (UI-6), registered so bg-surface-1 etc. generate.
+     Same late-definition pattern as the hues above: the raw --surface-* vars
+     live in the :root block further down, and `inline` emits a var() reference
+     rather than a resolved value, so declaration order between the two :root
+     blocks does not matter. */
+  --color-surface-0: var(--surface-0);
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
 }
 
 body {
@@ -45,6 +55,228 @@ body {
   --hue-amber: #e2a94d;
   --hue-green: #4dbb87;
   --hue-red: #e2685e;
+}
+
+/* === UI-6: the glow / glass / elevation system ========================
+   Defined ONCE here. Everything downstream composes these classes; no
+   consumer should hand-roll a colour, a shadow radius, or a duration
+   again. Two conventions this replaces:
+     - hero-orbital.tsx's local HUE_GLOW map (arbitrary Tailwind
+       shadow-[...] strings at 45% opacity)
+     - app/page.tsx's hard-coded rgba(94,106,210,...) CTA shadows
+
+   Why box-shadow rather than a blurred child <div>: a non-inset
+   box-shadow paints OUTSIDE the border box and underneath the element's
+   own background/border, so it survives the three things that break a
+   child-element glow here — Reveal's translate transform (creates a
+   stacking context + containing block that traps absolutely-positioned
+   children), overflow-hidden on icon tiles (clips descendants, never the
+   element's own outer shadow), and hover:bg-white/[0.02] (paints inside
+   the border box, so it cannot occlude an outer shadow). */
+:root {
+  /* Surface elevation ladder. --surface-0 is the page background itself;
+     each step up is a nominally "closer to the light" plane. */
+  --surface-0: #0a0a0a;
+  --surface-1: #111114;
+  --surface-2: #1a1a1f;
+  --surface-3: #222228;
+
+  /* Frosted-panel recipe, formalising what app-nav.tsx and the landing
+     page header were each doing ad hoc with bare `backdrop-blur`. */
+  --glass-blur: 20px;
+  --glass-sat: 1.6;
+
+  /* THE interaction timing. Every hover/state transition uses this pair
+     so the whole app settles at the same rate. */
+  --ease-ui: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-ui: 150ms;
+}
+
+/* Everything below is deliberately UNLAYERED plain CSS (not inside
+   @layer). Unlayered rules beat every @layer, so these reliably win over
+   Tailwind's own `transition-all` / `shadow-*` / `duration-*` utilities
+   regardless of source order or specificity ties.
+
+   Corollary worth knowing before composing these: Tailwind's `ring-*`
+   utilities are also box-shadow based and ARE layered, so an .af-glow-*
+   class on the same element will override focus-visible:ring-*. Put the
+   glow on a wrapper, not on the focusable element itself. */
+
+/* Base card chrome: border + radius + the standard state transition. */
+.af-card {
+  border: 1px solid var(--hairline);
+  border-radius: 0.5rem;
+  transition:
+    box-shadow var(--dur-ui) var(--ease-ui),
+    border-color var(--dur-ui) var(--ease-ui);
+}
+
+/* Frosted translucent panel. */
+.af-glass {
+  background-color: color-mix(in srgb, var(--surface-1) 70%, transparent);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+}
+
+/* --- Glow ladder ------------------------------------------------------
+   Each .af-glow-<hue> does two things: it publishes the hue as --glow so
+   the shared keyframes and the hover escalation below stay colour-
+   agnostic, and it paints the ambient recipe. The -strong variant is the
+   same recipe at state intensity. Static class names only — never build
+   these with template strings, because Tailwind's JIT scanner cannot see
+   a dynamically-assembled class name (same reason bar-chart.tsx reads the
+   --hue-* custom properties directly instead of using fill-hue-${hue}). */
+.af-glow-blue {
+  --glow: var(--hue-blue);
+}
+.af-glow-violet {
+  --glow: var(--hue-violet);
+}
+.af-glow-cyan {
+  --glow: var(--hue-cyan);
+}
+.af-glow-amber {
+  --glow: var(--hue-amber);
+}
+.af-glow-green {
+  --glow: var(--hue-green);
+}
+.af-glow-red {
+  --glow: var(--hue-red);
+}
+.af-glow-accent {
+  --glow: var(--accent);
+}
+
+.af-glow-blue,
+.af-glow-violet,
+.af-glow-cyan,
+.af-glow-amber,
+.af-glow-green,
+.af-glow-red,
+.af-glow-accent {
+  box-shadow:
+    0 0 16px 2px color-mix(in srgb, var(--glow) 14%, transparent),
+    inset 0 0 6px color-mix(in srgb, var(--glow) 5%, transparent);
+}
+
+.af-glow-blue-strong {
+  --glow: var(--hue-blue);
+}
+.af-glow-violet-strong {
+  --glow: var(--hue-violet);
+}
+.af-glow-cyan-strong {
+  --glow: var(--hue-cyan);
+}
+.af-glow-amber-strong {
+  --glow: var(--hue-amber);
+}
+.af-glow-green-strong {
+  --glow: var(--hue-green);
+}
+.af-glow-red-strong {
+  --glow: var(--hue-red);
+}
+.af-glow-accent-strong {
+  --glow: var(--accent);
+}
+
+.af-glow-blue-strong,
+.af-glow-violet-strong,
+.af-glow-cyan-strong,
+.af-glow-amber-strong,
+.af-glow-green-strong,
+.af-glow-red-strong,
+.af-glow-accent-strong {
+  box-shadow:
+    0 0 22px 4px color-mix(in srgb, var(--glow) 28%, transparent),
+    inset 0 0 8px color-mix(in srgb, var(--glow) 10%, transparent);
+}
+
+/* Opt-in hover escalation: pair with any .af-glow-* to go ambient ->
+   state on hover. One generic rule instead of seven hover-specific
+   classes, because the hue already travels in --glow. */
+.af-glow-hover:hover {
+  box-shadow:
+    0 0 22px 4px color-mix(in srgb, var(--glow, var(--accent)) 28%, transparent),
+    inset 0 0 8px color-mix(in srgb, var(--glow, var(--accent)) 10%, transparent);
+}
+
+/* Arrival bloom: overshoots, then lands exactly on the ambient recipe at
+   100%, so no fill-mode is needed — the element falls back onto its own
+   .af-glow-* box-shadow seamlessly, and later hover states still work
+   (which a `forwards` fill would have permanently locked out). */
+@keyframes glow-in {
+  0% {
+    box-shadow:
+      0 0 0 0 color-mix(in srgb, var(--glow, var(--accent)) 0%, transparent),
+      inset 0 0 0 color-mix(in srgb, var(--glow, var(--accent)) 0%, transparent);
+  }
+  55% {
+    box-shadow:
+      0 0 28px 6px color-mix(in srgb, var(--glow, var(--accent)) 34%, transparent),
+      inset 0 0 10px color-mix(in srgb, var(--glow, var(--accent)) 12%, transparent);
+  }
+  100% {
+    box-shadow:
+      0 0 16px 2px color-mix(in srgb, var(--glow, var(--accent)) 14%, transparent),
+      inset 0 0 6px color-mix(in srgb, var(--glow, var(--accent)) 5%, transparent);
+  }
+}
+
+.animate-glow-in {
+  animation: glow-in 600ms var(--ease-ui) 1;
+}
+
+/* Slow "this is alive" pulse for genuinely in-flight things. Starts and
+   ends on the ambient recipe for the same seamless-handoff reason. */
+@keyframes glow-breathe {
+  0%,
+  100% {
+    box-shadow:
+      0 0 16px 2px color-mix(in srgb, var(--glow, var(--accent)) 14%, transparent),
+      inset 0 0 6px color-mix(in srgb, var(--glow, var(--accent)) 5%, transparent);
+  }
+  50% {
+    box-shadow:
+      0 0 24px 4px color-mix(in srgb, var(--glow, var(--accent)) 26%, transparent),
+      inset 0 0 9px color-mix(in srgb, var(--glow, var(--accent)) 9%, transparent);
+  }
+}
+
+.animate-glow-breathe {
+  animation: glow-breathe 2.4s var(--ease-ui) infinite;
+}
+
+/* --- Hover dialects ---------------------------------------------------
+   Two, and only two. The distinction is affordance, not decoration:
+   .af-hover-nav is for things that navigate or act (it lifts, and pulls
+   its border toward the accent); .af-hover-surface is for containers that
+   merely contain (neutral brighten, no lift). A container that is not
+   clickable gets NEITHER — a border that lights up under the cursor on a
+   non-interactive card is a false affordance. */
+.af-hover-nav {
+  transition:
+    border-color var(--dur-ui) var(--ease-ui),
+    background-color var(--dur-ui) var(--ease-ui),
+    box-shadow var(--dur-ui) var(--ease-ui),
+    transform var(--dur-ui) var(--ease-ui);
+}
+
+.af-hover-nav:hover {
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  transform: translateY(-1px);
+}
+
+.af-hover-surface {
+  transition:
+    border-color var(--dur-ui) var(--ease-ui),
+    background-color var(--dur-ui) var(--ease-ui);
+}
+
+.af-hover-surface:hover {
+  border-color: rgba(255, 255, 255, 0.18);
 }
 
 /* Ultra-subtle dot texture, layered under the accent glows in the hero.
@@ -279,6 +511,18 @@ body {
     opacity: 1;
     transform: none;
     filter: none;
+  }
+
+  /* UI-6 glow animations. Enumerated by name like everything above, but in
+     their own rule: these ride on cards and tiles that may legitimately
+     carry their own opacity/transform/filter (a hover lift, a mid-reveal
+     fade), and the blanket `opacity: 1; transform: none; filter: none`
+     of the list above would stomp those. Killing the animation is the
+     whole requirement here — the element then falls back to its static
+     .af-glow-* box-shadow, which is exactly the keyframes' rest state. */
+  .animate-glow-in,
+  .animate-glow-breathe {
+    animation: none;
   }
 
   /* Static "fully lit" graph: solid edges instead of traveling dashes. */

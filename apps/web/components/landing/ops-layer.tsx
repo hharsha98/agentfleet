@@ -72,7 +72,7 @@ export function OpsLayer() {
             <Link
               href={item.href}
               aria-label={item.title}
-              className="group flex cursor-pointer flex-col gap-3 rounded-md pt-5 transition-opacity duration-200 hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="af-hover-nav group flex cursor-pointer flex-col gap-3 rounded-md pt-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >
               <div className="flex items-center gap-3">
                 <IconTile icon={item.icon} hue={item.hue} />

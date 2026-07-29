@@ -11,6 +11,7 @@ import { Roster } from "@/components/landing/roster";
 import { SectionHeader } from "@/components/landing/section-header";
 import { StatsStrip } from "@/components/landing/stats-strip";
 import { Workflows } from "@/components/landing/workflows";
+import { GLOW_HOVER, HUE_GLOW } from "@/components/ui/glow";
 import { UserMenu } from "@/components/user-menu";
 
 const GITHUB_URL = "https://github.com/hharsha98/agentfleet";
@@ -131,7 +132,7 @@ export default function Home() {
               <div className="flex flex-wrap items-center gap-5">
                 <Link
                   href="/chat"
-                  className="group inline-flex cursor-pointer items-center gap-2 rounded-full bg-accent px-5 py-2.5 text-sm font-medium text-white shadow-[0_8px_30px_-8px_rgba(94,106,210,0.6)] transition-all duration-200 hover:-translate-y-0.5 hover:opacity-90 hover:shadow-[0_12px_36px_-8px_rgba(94,106,210,0.75)]"
+                  className={`group inline-flex cursor-pointer items-center gap-2 rounded-full bg-accent px-5 py-2.5 text-sm font-medium text-white transition-all duration-200 hover:-translate-y-0.5 hover:opacity-90 ${HUE_GLOW.accent} ${GLOW_HOVER}`}
                 >
                   Launch the fleet
                   <svg
@@ -237,7 +238,7 @@ export default function Home() {
               <div className="flex flex-wrap items-center justify-center gap-5">
                 <Link
                   href="/chat"
-                  className="cursor-pointer rounded-full bg-accent px-5 py-2.5 text-sm font-medium text-white shadow-[0_8px_30px_-8px_rgba(94,106,210,0.6)] transition-all duration-200 hover:-translate-y-0.5 hover:opacity-90"
+                  className={`cursor-pointer rounded-full bg-accent px-5 py-2.5 text-sm font-medium text-white transition-all duration-200 hover:-translate-y-0.5 hover:opacity-90 ${HUE_GLOW.accent} ${GLOW_HOVER}`}
                 >
                   Launch the fleet →
                 </Link>

@@ -183,7 +183,7 @@ export function FeatureGrid() {
         <Reveal key={feature.title} delay={i * 80} className={feature.span}>
           <Link
             href={feature.href}
-            className="group relative flex h-full cursor-pointer flex-col justify-between gap-5 rounded-xl border border-hairline p-6 transition-all duration-300 hover:-translate-y-0.5 hover:border-accent/40 hover:bg-white/[0.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="af-hover-nav group relative flex h-full cursor-pointer flex-col justify-between gap-5 rounded-xl border border-hairline p-6 hover:bg-white/[0.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             <span
               aria-hidden

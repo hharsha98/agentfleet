@@ -36,10 +36,9 @@ export function StatCard({
     : icon;
 
   return (
-    <Reveal
-      delay={delay}
-      className={`rounded-lg border border-hairline p-4 transition-colors duration-200 hover:border-accent/30 ${className}`}
-    >
+    // No hover styling, deliberately — same reasoning as Panel: a stat tile
+    // displays a number, it does not go anywhere when clicked.
+    <Reveal delay={delay} className={`rounded-lg border border-hairline p-4 ${className}`}>
       <div className="flex items-start justify-between gap-2">
         <p className="text-xs text-muted">{label}</p>
         {pulse ? (

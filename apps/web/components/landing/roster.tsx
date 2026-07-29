@@ -120,7 +120,7 @@ function AgentCard({
       <Link
         href="/chat"
         aria-label={`Chat with ${agent.name}`}
-        className="group flex cursor-pointer flex-col gap-3 rounded-xl border border-hairline p-5 transition-all duration-300 hover:-translate-y-0.5 hover:border-accent/40 hover:bg-white/[0.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="af-hover-nav group flex cursor-pointer flex-col gap-3 rounded-xl border border-hairline p-5 hover:bg-white/[0.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         <div className="flex items-center gap-3">
           <AgentGlyph

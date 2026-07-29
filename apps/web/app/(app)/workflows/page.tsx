@@ -148,7 +148,7 @@ export default function WorkflowsPage() {
             <Reveal
               key={w.id}
               delay={i * 40}
-              className="flex flex-col rounded-lg border border-hairline p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-accent/30"
+              className="af-hover-nav flex flex-col rounded-lg border border-hairline p-4"
             >
               <Link
                 href={`/workflows/${w.id}`}
