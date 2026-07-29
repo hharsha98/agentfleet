@@ -46,6 +46,11 @@ type Agent = {
   id: string;
   slug: string;
   name: string;
+  // Already served by AgentOut and previously discarded. The palette listed
+  // 17 bare names with no indication of what any of them does, so picking
+  // one was guesswork — a real run ended up asking Clinical Research to list
+  // programming languages purely because it sorts first alphabetically.
+  description: string;
 };
 
 type GraphNode = {
@@ -578,10 +583,21 @@ export default function WorkflowBuilder({ workflowId }: { workflowId: string }) 
                   type="button"
                   onClick={() => addNode(a)}
                   disabled={nodes.length >= MAX_NODES}
-                  className="flex w-full cursor-pointer items-center gap-2 rounded-md border border-hairline px-2.5 py-2 text-left text-sm transition-colors duration-200 hover:border-accent/30 hover:bg-accent/5 disabled:cursor-not-allowed disabled:opacity-40"
+                  title={a.description || a.name}
+                  className="flex w-full cursor-pointer flex-col gap-0.5 rounded-md border border-hairline px-2.5 py-2 text-left text-sm transition-colors duration-200 hover:border-accent/30 hover:bg-accent/5 disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  <AgentGlyph slug={a.slug} name={a.name} size="xs" />
-                  <span className="truncate">{a.name}</span>
+                  <span className="flex items-center gap-2">
+                    <AgentGlyph slug={a.slug} name={a.name} size="xs" />
+                    <span className="truncate">{a.name}</span>
+                  </span>
+                  {/* One truncated line, plus the full text on hover. Enough
+                      to tell these apart at a glance without turning a
+                      17-item list into a wall of prose. */}
+                  {a.description && (
+                    <span className="line-clamp-2 text-[11px] leading-snug text-muted">
+                      {a.description}
+                    </span>
+                  )}
                 </button>
               </li>
             ))}
