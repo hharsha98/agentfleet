@@ -141,9 +141,20 @@ class RunTask(Base):
     needs_approval: Mapped[bool] = mapped_column(Boolean, default=False)
     status: Mapped[str] = mapped_column(
         String(20), default="todo"
-    )  # todo|in_progress|review|done|failed|skipped
+    )  # todo|in_progress|review|done|failed|skipped|superseded
     result: Mapped[str] = mapped_column(Text, default="")
     error: Mapped[str | None] = mapped_column(String(300))
+    # Layer 3 re-planning (services/orchestrator.py, append-and-supersede):
+    # set together with status="superseded" when this task got stuck and the
+    # orchestrator proposed a replacement instead of just failing. Points at
+    # the ordinal (not a row id — same convention as `depends_on` above) of
+    # the RunTask that now carries this task's work forward. May itself be
+    # superseded again (a chain), so resolving "is this task's work done"
+    # means following `superseded_by` transitively — see
+    # execute_run/_resolve_supersession. depends_on arrays elsewhere are
+    # NEVER rewritten when this happens; this pointer is how downstream
+    # tasks' existing (unchanged) depends_on entries still resolve correctly.
+    superseded_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # Self-healing execution (services/orchestrator.py::_execute_task): a
     # failed attempt is retried as a follow-up turn in the same conversation
     # rather than giving up immediately. `attempts` counts every try

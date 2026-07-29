@@ -7,6 +7,21 @@ tasks flagged needs_approval pause in "review" until a human approves.
 
 v1 executes in-process (asyncio task); the arq worker split happens with
 the packaging milestone (ARCHITECTURE.md ADR-004).
+
+Self-healing has three layers, each in _execute_task unless noted:
+  1. Retry a failed attempt as a follow-up turn in the same conversation.
+  2. Escalate "approach" failures up a configured model ladder.
+  3. Re-planning (append-and-supersede, see _attempt_replan): when a task
+     STALLS or hits a "capability" failure, ask the orchestrator whether the
+     SHAPE of the work should change instead of just retrying the same
+     approach — a missing step first, or a different agent. RunTask.depends_on
+     ordinals only ever point backward (0 <= d < ordinal), so a stuck task
+     can't be replaced "in place": new task(s) are APPENDED with higher
+     ordinals, and the stuck task is marked status="superseded",
+     superseded_by=<replacement ordinal>. execute_run resolves dependency
+     satisfaction and skip-blocking THROUGH that pointer transitively (see
+     _resolve_supersession) so existing depends_on arrays never need
+     rewriting.
 """
 
 import asyncio
@@ -17,7 +32,7 @@ import time
 import traceback
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.config import get_settings
 from app.db import SessionLocal
@@ -290,16 +305,25 @@ Respond with ONLY this JSON, no other text:
 Goal: {goal}"""
 
 
-def parse_plan(text: str, valid_slugs: set[str]) -> list[dict]:
-    """Extract and normalize the plan JSON; raises ValueError on garbage."""
+def _extract_json_object(text: str, error_context: str) -> dict:
+    """Strip optional markdown fences and parse the first {...} JSON object
+    in `text`. Factored out of parse_plan so parse_repair_plan (below) can
+    tolerate the same "```json ... ```" wrapping a chat model commonly adds
+    without duplicating the fence-stripping logic. `error_context` only
+    flavors the ValueError message (e.g. "plan" vs "repair plan")."""
     cleaned = text.strip()
     if "```" in cleaned:  # tolerate markdown fences
         cleaned = cleaned.split("```")[1]
         cleaned = cleaned.removeprefix("json").strip()
     start, end = cleaned.find("{"), cleaned.rfind("}")
     if start == -1 or end == -1:
-        raise ValueError("no JSON object in plan")
-    plan = json.loads(cleaned[start : end + 1])
+        raise ValueError(f"no JSON object in {error_context}")
+    return json.loads(cleaned[start : end + 1])
+
+
+def parse_plan(text: str, valid_slugs: set[str]) -> list[dict]:
+    """Extract and normalize the plan JSON; raises ValueError on garbage."""
+    plan = _extract_json_object(text, "plan")
     tasks = plan.get("tasks") or []
     if not tasks:
         raise ValueError("plan has no tasks")
@@ -315,6 +339,137 @@ def parse_plan(text: str, valid_slugs: set[str]) -> list[dict]:
                 "depends_on": deps,
                 "needs_approval": bool(t.get("needs_approval")),
             }
+        )
+    return normalized
+
+
+# --- Layer 3: re-planning a stuck workflow task (append-and-supersede) -----
+#
+# _execute_task's self-heal loop (see its docstring) can only rewrite a
+# task's own answer by retrying. When that loop itself gives up (stall or a
+# "capability" failure — see the two call sites in _execute_task), that's
+# the moment Claude-Code-style re-planning kicks in: instead of going
+# straight to "failed", ask the orchestrator (the planner-tier LLM, same
+# tiered routing as plan_and_execute) whether the SHAPE of the work needs to
+# change — a missing step first, or a different agent.
+#
+# RunTask.depends_on ordinals may only point BACKWARD (0 <= d < ordinal,
+# enforced by workflow_compiler and assumed by execute_run's dependency
+# check), so a stuck task can never be replaced "in place" — renumbering
+# would invalidate every existing depends_on. Instead: append new task(s)
+# with ordinals strictly greater than the current max, then mark the stuck
+# task status="superseded" with superseded_by=<replacement ordinal>. See
+# _resolve_supersession in execute_run for how dependents resolve through
+# that pointer instead of being skipped.
+
+# Structural cap on how many tasks ONE repair plan may append (helper steps
+# + the one required replacement) — analogous to MAX_PLAN_TASKS, but for a
+# single repair call's fan-out. This is NOT an attempt cap: it bounds one
+# LLM call's output size, never how many TIMES re-planning can happen for a
+# lineage (that stays governed by stall/deadline/budget, same as ordinary
+# self-heal retries — see _attempt_replan's deadline-inheritance comment).
+MAX_REPAIR_PLAN_TASKS = 4
+
+REPAIR_PLAN_PROMPT = """You are the AgentFleet Orchestrator, brought in because a running task \
+got stuck and could not fix itself no matter how it retried. When simply retrying stops \
+working, the fix is to re-plan: add a step it's missing, hand the work to a different agent, \
+or split it into smaller pieces — the same way a senior engineer unblocks stuck work.
+
+Available agents:
+{roster}
+
+The stuck task ("{title}"):
+{brief}
+
+Why it got stuck ({classification}):
+{evidence}
+
+Already-available results from its completed dependencies:
+{dependency_context}
+
+Propose a repair. You may add zero or more HELPER tasks that must run before the retry (e.g. a \
+missing research step) — chain them with depends_on if one helper needs another's output — plus \
+exactly ONE replacement task that redoes the stuck task's own work (it may use a DIFFERENT agent \
+than the original if that's the actual fix). Flag that one task with "replacement": true.
+
+Every depends_on value must be the integer ordinal of an EXISTING task in this run (0 through \
+{max_existing}) or an earlier task in this same list — never itself or a later one. Leave \
+depends_on off the replacement task entirely; its dependencies are wired up automatically.
+
+If there is no useful repair, respond with EXACTLY {{"tasks": []}} and nothing else.
+
+Otherwise respond with ONLY this JSON, no other text:
+{{"tasks": [{{"title": "...", "description": "...", "agent": "slug", "depends_on": [...], \
+"needs_approval": false, "replacement": false}}, ...]}}"""
+
+
+def parse_repair_plan(text: str, valid_slugs: set[str], next_ordinal: int) -> list[dict] | None:
+    """Extract and STRICTLY validate a repair plan.
+
+    Unlike parse_plan — which degrades LLM output gracefully for freeform
+    goals, per its module-level contrast with workflow_compiler.py — a
+    repair plan gets the workflow_compiler treatment: never trust the
+    model's output structurally, because a silently-coerced bad plan could
+    violate the compiler's backward-only depends_on invariant that
+    execute_run relies on. So this reuses parse_plan's slug-validity CHECK
+    (`agent in valid_slugs`) but not its coercion policy: an unknown slug
+    here REJECTS the whole plan (raises ValueError) instead of silently
+    falling back to "orchestrator".
+
+    Ordinals are real, run-global ordinals here (not parse_plan's
+    batch-local 0-based indices): entry i of `tasks` is assigned real
+    ordinal `next_ordinal + i`, and every depends_on value must satisfy
+    `0 <= d < next_ordinal + i` — backward to either an already-existing
+    task or an earlier entry in this same batch. Since ordinals are always
+    a contiguous 0..N-1 range in this system, that single range check is
+    sufficient to prove `d` refers to a real task.
+
+    Returns None for an explicit, valid "no useful plan" response (empty/
+    missing "tasks") — a deliberate outcome, not an error. Raises
+    ValueError for anything malformed: bad JSON, an unknown agent slug, a
+    depends_on that doesn't point backward, or not EXACTLY one task flagged
+    "replacement". Both outcomes are handled the same way by the caller
+    (the stuck task ends up "failed", not superseded) — only the heal_log
+    wording differs.
+    """
+    plan = _extract_json_object(text, "repair plan")
+    tasks = plan.get("tasks")
+    if tasks is None or not isinstance(tasks, list):
+        raise ValueError("repair plan missing a 'tasks' list")
+    if not tasks:
+        return None  # explicit "no useful plan" — not malformed
+
+    normalized: list[dict] = []
+    replacement_count = 0
+    for i, t in enumerate(tasks[:MAX_REPAIR_PLAN_TASKS]):
+        if not isinstance(t, dict):
+            raise ValueError(f"repair plan task at index {i} is not an object")
+        agent = t.get("agent")
+        if agent not in valid_slugs:
+            raise ValueError(f"unknown agent slug in repair plan: {agent!r}")
+        ordinal = next_ordinal + i
+        deps: list[int] = []
+        for d in t.get("depends_on") or []:
+            if not isinstance(d, int) or isinstance(d, bool) or not (0 <= d < ordinal):
+                raise ValueError(
+                    f"repair plan depends_on {d!r} on task at index {i} does not point backward"
+                )
+            deps.append(d)
+        is_replacement = bool(t.get("replacement"))
+        replacement_count += is_replacement
+        normalized.append(
+            {
+                "title": str(t.get("title") or f"Repair task {i + 1}")[:200],
+                "description": str(t.get("description") or ""),
+                "agent_slug": agent,
+                "depends_on": deps,
+                "needs_approval": bool(t.get("needs_approval")),
+                "replacement": is_replacement,
+            }
+        )
+    if replacement_count != 1:
+        raise ValueError(
+            f"repair plan must flag exactly one replacement task, got {replacement_count}"
         )
     return normalized
 
@@ -362,6 +517,43 @@ async def plan_and_execute(run_id: uuid.UUID) -> None:
     await execute_run(run_id)
 
 
+def _resolve_supersession(ordinal: int, by_ordinal: dict[int, RunTask]) -> RunTask | None:
+    """Follow `superseded_by` transitively — e.g. task 3 superseded_by 7,
+    task 7 superseded_by 9, resolves ordinal 3 to task 9: whichever task
+    actually carries that ordinal's work forward today. Returns the
+    terminal (non-superseded) RunTask, or None if `ordinal` isn't a real
+    task.
+
+    Bounded by the total task count rather than following `superseded_by`
+    until it stops: that pointer only ever targets a strictly larger
+    ordinal (see _apply_repair_plan), so a cycle should be unreachable, but
+    a legitimate chain can never be longer than the number of tasks that
+    exist. This guard costs nothing and turns a malformed/cyclic chain into
+    "treated as unresolved" instead of an infinite loop — see the
+    superseded-chain-of-depth-2 and cycle-safety tests.
+    """
+    current = by_ordinal.get(ordinal)
+    for _ in range(len(by_ordinal) + 1):
+        if current is None or current.status != "superseded" or current.superseded_by is None:
+            return current
+        current = by_ordinal.get(current.superseded_by)
+    return None  # chain longer than the total task count -> malformed/cyclic
+
+
+def _effectively_done(task: RunTask, by_ordinal: dict[int, RunTask]) -> bool:
+    """A task counts toward the run's "did everything succeed" check either
+    directly (status == "done"), or — since append-and-supersede never sets
+    a superseded task's own status to "done" — by its supersession chain
+    resolving to a task that succeeded. Lets a run where re-planning healed
+    every stuck task still end "done" rather than "done_with_issues"."""
+    if task.status == "done":
+        return True
+    if task.status == "superseded":
+        resolved = _resolve_supersession(task.ordinal, by_ordinal)
+        return resolved is not None and resolved.status == "done"
+    return False
+
+
 async def execute_run(run_id: uuid.UUID) -> None:
     """Drive the DAG until every task reaches a terminal state, or the run
     pauses for approval. A task's own failure no longer stops the run
@@ -371,13 +563,37 @@ async def execute_run(run_id: uuid.UUID) -> None:
     skipped is marked "skipped" (propagated transitively through the DAG),
     while independent branches keep executing to completion.
 
-    Terminal run status: "done" only if every task succeeded,
-    "awaiting_approval" while a review gate is open, otherwise
-    "done_with_issues" once nothing is left to run (something failed or was
-    skipped). This also guarantees the loop always terminates: it returns
-    the instant there are no more "ready" tasks to dispatch, regardless of
-    which branch set the final status.
+    Layer 3 (append-and-supersede, see _attempt_replan): a "superseded" task
+    is neither terminal-failing nor immediately done — its dependents wait
+    for whatever replaced it. Dependency satisfaction ("is ordinal d done?")
+    and skip-blocking ("did ordinal d's work ultimately fail?") both resolve
+    THROUGH `superseded_by` transitively via _resolve_supersession, so
+    existing depends_on arrays never need rewriting when a replacement is
+    appended.
+
+    Terminal run status: "done" only if every task succeeded (directly or
+    via a successful replacement — _effectively_done), "awaiting_approval"
+    while a review gate is open, otherwise "done_with_issues" once nothing
+    is left to run (something failed or was skipped). This also guarantees
+    the loop always terminates: it returns the instant there are no more
+    "ready" tasks to dispatch, regardless of which branch set the final
+    status.
     """
+    # Ordinal -> inherited wall-clock deadline (an absolute time.monotonic()
+    # cutoff), threaded through every _execute_task call for the life of
+    # THIS execute_run invocation. When a stuck task gets superseded,
+    # _attempt_replan writes the CURRENT task's own deadline in here under
+    # the new replacement's ordinal, so the replacement's self-heal loop
+    # shares that same cutoff instead of getting a fresh
+    # settings.self_heal_deadline_seconds window. That is what bounds an
+    # entire re-planning lineage (3 -> 7 -> 9 -> ...) by ONE deadline rather
+    # than letting each generation reset the clock — without it, re-planning
+    # would have no wall-clock bound at all, only ever a NEW per-task one.
+    # Safe to mutate across the concurrent _execute_task calls below:
+    # different tasks only ever touch DIFFERENT ordinal keys, and asyncio
+    # coroutines never interleave mid dict-operation.
+    deadlines: dict[int, float] = {}
+
     while True:
         async with SessionLocal() as session:
             tasks = (
@@ -387,9 +603,21 @@ async def execute_run(run_id: uuid.UUID) -> None:
             )
             by_ordinal = {t.ordinal: t for t in tasks}
 
+            # A task is "blocked" — nothing depending on it can ever run —
+            # if it directly failed/was skipped, OR its supersession chain
+            # resolves to a task that did. A superseded task whose
+            # replacement is still todo/in_progress resolves to that
+            # (non-terminal) replacement, so it is NOT blocked yet — that's
+            # what lets a superseded node's dependents wait instead of
+            # being skipped.
+            blocked: set[int] = set()
+            for t in tasks:
+                resolved = _resolve_supersession(t.ordinal, by_ordinal)
+                if resolved is None or resolved.status in ("failed", "skipped"):
+                    blocked.add(t.ordinal)
+
             # Propagate "skipped" to a fixed point: a dependency chain
             # A (failed) -> B (skipped) -> C (depends on B) also skips C.
-            blocked = {t.ordinal for t in tasks if t.status in ("failed", "skipped")}
             changed = True
             while changed:
                 changed = False
@@ -399,7 +627,20 @@ async def execute_run(run_id: uuid.UUID) -> None:
                         blocked.add(t.ordinal)
                         changed = True
 
-            done = {t.ordinal for t in tasks if t.status == "done"}
+            # A dependency ordinal counts as satisfied either directly, or
+            # (same resolution) once its replacement chain finishes
+            # successfully. `context` mirrors that: a downstream task's
+            # depends_on still names the ORIGINAL ordinal (never rewritten),
+            # so its prompt-building code must find the REPLACEMENT's
+            # result under that original key.
+            done: set[int] = set()
+            context: dict[int, str] = {}
+            for t in tasks:
+                resolved = _resolve_supersession(t.ordinal, by_ordinal)
+                if resolved is not None and resolved.status == "done":
+                    done.add(t.ordinal)
+                    context[t.ordinal] = resolved.result
+
             ready, reviewing = [], False
             for t in tasks:
                 if t.status == "review":
@@ -417,7 +658,7 @@ async def execute_run(run_id: uuid.UUID) -> None:
             if not ready:
                 if reviewing:
                     run.status = "awaiting_approval"
-                elif all(t.status == "done" for t in tasks):
+                elif all(_effectively_done(t, by_ordinal) for t in tasks):
                     run.status = "done"
                 else:
                     # Nothing left to dispatch and not everything succeeded —
@@ -430,8 +671,9 @@ async def execute_run(run_id: uuid.UUID) -> None:
             await session.commit()
             if not ready:
                 return
-            context = {o: by_ordinal[o].result for o in done}
-        await asyncio.gather(*(_execute_task(task_id, context) for task_id in ready))
+        await asyncio.gather(
+            *(_execute_task(task_id, context, deadlines) for task_id in ready)
+        )
 
 
 async def _run_turn(
@@ -523,7 +765,188 @@ async def _run_turn(
     return text, usage, error, evidence
 
 
-async def _execute_task(task_id: uuid.UUID, context: dict[int, str]) -> None:
+# One asyncio.Lock per run, lazily created — serializes _attempt_replan's
+# read-max-ordinal + append + supersede sequence. execute_run's
+# asyncio.gather runs every "ready" task in a wave CONCURRENTLY; if two of
+# them stall / hit a capability failure at the same moment, both would
+# otherwise read the same "current max ordinal" and race onto the SAME new
+# ordinal — RunTask has no DB-level uniqueness on (run_id, ordinal) to catch
+# that. Entries are left in the dict for the process's lifetime rather than
+# cleaned up after use — small, bounded by how many runs ever re-plan
+# during this process's uptime, same "v1, in-process" pragmatism as
+# services/queue.py's `_pool` global.
+_replan_locks: dict[uuid.UUID, asyncio.Lock] = {}
+
+
+def _replan_lock(run_id: uuid.UUID) -> asyncio.Lock:
+    lock = _replan_locks.get(run_id)
+    if lock is None:
+        lock = asyncio.Lock()
+        _replan_locks[run_id] = lock
+    return lock
+
+
+async def _attempt_replan(
+    run_id: uuid.UUID,
+    task_id: uuid.UUID,
+    title: str,
+    brief: str,
+    deps: list[int],
+    context: dict[int, str],
+    error: str,
+    classification: str,
+    evidence: dict,
+    deadline: float,
+    deadlines: dict[int, float],
+) -> tuple[int | None, str]:
+    """Ask the orchestrator (planner-tier LLM) to propose a repair plan for
+    a task that just exhausted its own self-repair (called only from
+    _execute_task's "capability" and stall branches — see there). Never
+    raises: any failure proposing or applying a plan is caught and reported
+    as "no repair" so the caller's self-heal loop can fall back to its
+    normal "stopping" path instead of crashing.
+
+    Returns (replacement_ordinal, note). On success, replacement_ordinal is
+    the new task's ordinal and the ORIGINAL task has already been committed
+    as status="superseded" (superseded_by=replacement_ordinal) by the time
+    this returns. On failure — the LLM call itself erroring, a malformed
+    plan (parse_repair_plan raising ValueError), or an explicit "no useful
+    plan" — replacement_ordinal is None and nothing was written; either way
+    `note` is a short, human-readable reason for the caller's heal_log.
+    """
+    try:
+        async with SessionLocal() as session:
+            agents = (await session.execute(select(Agent))).scalars().all()
+            hint_max_ordinal = (
+                await session.execute(
+                    select(func.max(RunTask.ordinal)).where(RunTask.run_id == run_id)
+                )
+            ).scalar_one()
+        valid_slugs = {a.slug for a in agents}
+        roster = "\n".join(f"- {a.slug}: {a.description}" for a in agents)
+
+        dependency_context = (
+            "\n\n".join(f"[Result of task {d}]\n{context.get(d, '')[:3000]}" for d in deps)
+            or "(none)"
+        )
+        evidence_lines = [f"error: {error}"]
+        if evidence.get("tool"):
+            evidence_lines.append(f"tool: {evidence['tool']}")
+        if evidence.get("tool_output"):
+            evidence_lines.append(f"tool output: {evidence['tool_output']}")
+        if evidence.get("guardrail"):
+            evidence_lines.append(f"guardrail flags: {evidence['guardrail']}")
+        if evidence.get("traceback"):
+            evidence_lines.append(f"traceback: {evidence['traceback']}")
+
+        prompt = REPAIR_PLAN_PROMPT.format(
+            roster=roster,
+            title=title,
+            brief=brief,
+            classification=classification,
+            evidence="\n".join(evidence_lines),
+            dependency_context=dependency_context,
+            # Informational only (the actual ordinal numbering — and
+            # depends_on validation — happens fresh under the lock below,
+            # in case another task's repair plan appended tasks meanwhile).
+            max_existing=(hint_max_ordinal or 0),
+        )
+
+        settings = get_settings()
+        client = get_llm_client()
+        planner = settings.planner_model or settings.default_model
+        response = await client.chat.completions.create(
+            model=planner,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.2,
+        )
+        response_text = response.choices[0].message.content or ""
+    except Exception as exc:
+        logger.exception("repair-plan call failed for task %s", task_id)
+        return None, f"repair-plan call failed: {exc}"
+
+    async with _replan_lock(run_id):
+        try:
+            async with SessionLocal() as session:
+                task = await session.get(RunTask, task_id)
+                max_ordinal = (
+                    await session.execute(
+                        select(func.max(RunTask.ordinal)).where(RunTask.run_id == run_id)
+                    )
+                ).scalar_one()
+                next_ordinal = (max_ordinal or 0) + 1
+
+                try:
+                    normalized = parse_repair_plan(response_text, valid_slugs, next_ordinal)
+                except ValueError as exc:
+                    return None, f"repair plan rejected: {exc}"
+                if normalized is None:
+                    return None, "orchestrator proposed no useful repair plan"
+
+                helper_ordinals = [
+                    next_ordinal + i
+                    for i, spec in enumerate(normalized)
+                    if not spec["replacement"]
+                ]
+                replacement_ordinal = next(
+                    next_ordinal + i for i, spec in enumerate(normalized) if spec["replacement"]
+                )
+                replacement_agent = next(
+                    spec["agent_slug"] for spec in normalized if spec["replacement"]
+                )
+
+                new_rows = []
+                for i, spec in enumerate(normalized):
+                    ordinal = next_ordinal + i
+                    if spec["replacement"]:
+                        # Deterministic, NOT the model's proposed depends_on
+                        # (which the prompt tells it to omit anyway): the
+                        # replacement redoes the stuck task's work, so it
+                        # needs everything the original depended on, plus
+                        # every helper this same plan just added.
+                        row_deps = sorted(set(task.depends_on or []) | set(helper_ordinals))
+                        description = spec["description"] or brief
+                    else:
+                        row_deps = spec["depends_on"]
+                        description = spec["description"]
+                    new_rows.append(
+                        RunTask(
+                            run_id=run_id,
+                            ordinal=ordinal,
+                            title=spec["title"],
+                            description=description,
+                            agent_slug=spec["agent_slug"],
+                            depends_on=row_deps,
+                            needs_approval=spec["needs_approval"],
+                            status="todo",
+                        )
+                    )
+                session.add_all(new_rows)
+
+                task.status = "superseded"
+                task.superseded_by = replacement_ordinal
+                await session.commit()
+
+            # Propagate THIS task's own (possibly already-inherited)
+            # deadline forward to the replacement — see execute_run's
+            # `deadlines` comment: it's what bounds an entire re-planning
+            # lineage by one wall-clock window instead of each generation
+            # resetting the clock.
+            deadlines[replacement_ordinal] = deadline
+        except Exception as exc:
+            logger.exception("failed to apply repair plan for task %s", task_id)
+            return None, f"failed to apply repair plan: {exc}"
+
+    note = (
+        f"added {len(helper_ordinals)} helper task(s) and replacement ordinal "
+        f"{replacement_ordinal} (agent {replacement_agent})"
+    )
+    return replacement_ordinal, note
+
+
+async def _execute_task(
+    task_id: uuid.UUID, context: dict[int, str], deadlines: dict[int, float]
+) -> None:
     """Run one task through the chat runtime (tools/metering/tracing
     included), self-healing on failure rather than giving up.
 
@@ -578,6 +1001,12 @@ async def _execute_task(task_id: uuid.UUID, context: dict[int, str]) -> None:
         conversation_id = conversation.id
         deps = task.depends_on or []
         brief = task.description or task.title
+        # Captured for Layer 3 re-planning (_attempt_replan, below) — the
+        # run/ordinal this task belongs to and its own title, needed after
+        # this session block closes.
+        run_id = task.run_id
+        task_ordinal = task.ordinal
+        task_title = task.title
 
     prior = "\n\n".join(f"[Result of task {d}]\n{context.get(d, '')[:3000]}" for d in deps)
     prompt = f"{prior}\n\nYour task: {brief}" if prior else f"Your task: {brief}"
@@ -586,12 +1015,28 @@ async def _execute_task(task_id: uuid.UUID, context: dict[int, str]) -> None:
     prompt_original = prompt
 
     settings = get_settings()
-    deadline = time.monotonic() + settings.self_heal_deadline_seconds
+    # Layer 3: a replacement task appended by _attempt_replan inherits its
+    # predecessor's own deadline (see execute_run's `deadlines` comment)
+    # instead of getting a fresh settings.self_heal_deadline_seconds window
+    # — that's what bounds an ENTIRE re-planning lineage by one wall-clock
+    # cutoff rather than letting each new generation reset the clock. Absent
+    # for an ordinary (non-replacement) task, exactly like before this
+    # existed.
+    inherited_deadline = deadlines.pop(task_ordinal, None)
+    deadline = (
+        inherited_deadline
+        if inherited_deadline is not None
+        else time.monotonic() + settings.self_heal_deadline_seconds
+    )
     attempts = 0
     prior_signature: str | None = None
     heal_log: list[dict] = []
     text, usage, error = "", {}, None
     evidence: dict = {}
+    # Set by a successful _attempt_replan call (capability/stall branches,
+    # below) — non-None means this task ended "superseded", not
+    # "done"/"failed", and the final status block must not override it.
+    superseded_ordinal: int | None = None
 
     # Escalation ladder (Layer 2): attempt 1 uses the agent's own model
     # (model_override stays None, rung stays 0 — byte-for-byte today's
@@ -663,35 +1108,98 @@ async def _execute_task(task_id: uuid.UUID, context: dict[int, str]) -> None:
             break
 
         if classification == "capability":
-            # Structurally unfixable by this node — stop on the FIRST
-            # occurrence, no stall check needed and no LLM reasoning turn
-            # spent. This is exactly the case that used to burn two repair
-            # attempts on a TypeError in our own code.
-            heal_log.append(
-                _heal_entry(
-                    attempts,
-                    error,
-                    "Stopping: needs a capability this agent doesn't have (missing "
-                    "credential / platform error) — retrying cannot fix it.",
-                    classification,
-                    evidence,
-                    model_used,
-                )
+            # Structurally unfixable by this node — no stall check needed
+            # and no LLM reasoning turn spent retrying the SAME approach.
+            # This is exactly the case that used to burn two repair
+            # attempts on a TypeError in our own code. But before giving up
+            # outright, Layer 3: ask the orchestrator whether the SHAPE of
+            # the work should change (e.g. a different agent that actually
+            # has the missing capability) rather than failing this node.
+            replacement_ordinal, replan_note = await _attempt_replan(
+                run_id,
+                task_id,
+                task_title,
+                brief,
+                deps,
+                context,
+                error,
+                classification,
+                evidence,
+                deadline,
+                deadlines,
             )
+            if replacement_ordinal is not None:
+                superseded_ordinal = replacement_ordinal
+                heal_log.append(
+                    _heal_entry(
+                        attempts,
+                        error,
+                        "Re-planned instead of failing: needs a capability this agent "
+                        f"doesn't have — {replan_note}.",
+                        classification,
+                        evidence,
+                        model_used,
+                    )
+                )
+            else:
+                heal_log.append(
+                    _heal_entry(
+                        attempts,
+                        error,
+                        "Stopping: needs a capability this agent doesn't have (missing "
+                        "credential / platform error) — retrying cannot fix it. Tried "
+                        f"re-planning first: {replan_note}.",
+                        classification,
+                        evidence,
+                        model_used,
+                    )
+                )
             break
 
         signature = _error_signature(error)
         if prior_signature is not None and signature == prior_signature:
-            heal_log.append(
-                _heal_entry(
-                    attempts,
-                    error,
-                    "Stopping: repeated the same error — self-improvement stalled.",
-                    classification,
-                    evidence,
-                    model_used,
-                )
+            # Self-improvement has stalled on this node's own approach.
+            # Layer 3, same as the capability branch above: ask the
+            # orchestrator for a repair plan before giving up — maybe this
+            # needs a missing step first, or a different agent entirely.
+            replacement_ordinal, replan_note = await _attempt_replan(
+                run_id,
+                task_id,
+                task_title,
+                brief,
+                deps,
+                context,
+                error,
+                classification,
+                evidence,
+                deadline,
+                deadlines,
             )
+            if replacement_ordinal is not None:
+                superseded_ordinal = replacement_ordinal
+                heal_log.append(
+                    _heal_entry(
+                        attempts,
+                        error,
+                        "Re-planned instead of failing: repeated the same error — "
+                        f"self-improvement stalled — {replan_note}.",
+                        classification,
+                        evidence,
+                        model_used,
+                    )
+                )
+            else:
+                heal_log.append(
+                    _heal_entry(
+                        attempts,
+                        error,
+                        "Stopping: repeated the same error — self-improvement stalled. "
+                        f"Tried re-planning first: {replan_note}.",
+                        classification,
+                        evidence,
+                        model_used,
+                    )
+                )
             break
 
         if classification == "transient":
@@ -760,7 +1268,13 @@ async def _execute_task(task_id: uuid.UUID, context: dict[int, str]) -> None:
 
     async with SessionLocal() as session:
         task = await session.get(RunTask, task_id)
-        if error and not text:
+        if superseded_ordinal is not None:
+            # Already committed as status="superseded"/superseded_by=... by
+            # _attempt_replan — don't override it here. Metering below still
+            # applies: every attempt this (now-superseded) task actually
+            # made still cost real tokens/time and belongs on its row.
+            pass
+        elif error and not text:
             task.status = "failed"
             task.error = _truncate(error)
         else:

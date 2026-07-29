@@ -11,9 +11,21 @@ at the end of each test (deleting the Agent cascades to its
 Conversations/Messages; deleting the Run cascades to its RunTasks) — belt
 and braces on top of tests/conftest.py's `_isolated_test_db` fixture, which
 now truncates every app table before each test anyway (see its docstring).
+
+Layer 3 (append-and-supersede, see test_orchestrator_replan.py): a task that
+STALLS (repeated normalized error signature) or hits a "capability" failure
+now asks the orchestrator for a repair plan before giving up — an LLM call
+via get_llm_client() that didn't exist on those two code paths before. Any
+test here whose mocked failures deliberately stall or are capability-class
+must therefore ALSO monkeypatch get_llm_client (via _no_plan_llm_client
+below) so it stays hermetic and keeps its original "ends failed, not
+superseded" outcome — Layer 3's own tests cover the repair-plan-succeeds
+path. Tests that never stall (fixed by attempt 2, or use rotating distinct
+errors specifically so they don't repeat) are unaffected and unchanged.
 """
 
 import uuid
+from types import SimpleNamespace
 
 from sqlalchemy import select
 
@@ -26,6 +38,29 @@ from app.services.orchestrator import classify_failure, execute_run
 
 def _frame(event: dict) -> str:
     return _sse(event)
+
+
+def _no_plan_llm_client():
+    """Fake get_llm_client() whose repair-plan call always returns
+    {"tasks": []} (Layer 3's "no useful plan" outcome — see
+    parse_repair_plan). For tests below whose task stalls or hits a
+    capability failure but wants the PRE-Layer-3 terminal behaviour (ends
+    "failed", not "superseded") without a real network call — same
+    canned-completion shape as tests/test_playground.py's _FakeClient."""
+
+    class _FakeCompletions:
+        async def create(self, **kwargs):
+            return SimpleNamespace(
+                choices=[SimpleNamespace(message=SimpleNamespace(content='{"tasks": []}'))]
+            )
+
+    class _FakeChat:
+        completions = _FakeCompletions()
+
+    class _FakeClient:
+        chat = _FakeChat()
+
+    return _FakeClient()
 
 
 async def _make_agent(slug: str) -> uuid.UUID:
@@ -176,6 +211,10 @@ async def test_repeated_same_error_signature_stalls_and_gives_up(monkeypatch) ->
             )
 
         monkeypatch.setattr("app.services.orchestrator.stream_chat", fake_stream_chat)
+        # Layer 3: stalling now also asks for a repair plan before giving up
+        # (see module docstring) — keep this "gives up" test hermetic and on
+        # its original outcome by having that ask return "no useful plan".
+        monkeypatch.setattr("app.services.orchestrator.get_llm_client", _no_plan_llm_client)
 
         await execute_run(run_id)  # must not hang — this is the "not stuck" assertion
 
@@ -235,6 +274,11 @@ async def test_independent_branch_keeps_going_after_other_branch_fails(monkeypat
                 )
 
         monkeypatch.setattr("app.services.orchestrator.stream_chat", fake_stream_chat)
+        # "boom {uuid}" normalizes to the SAME signature every attempt (see
+        # _error_signature), so this branch stalls too — Layer 3 asks for a
+        # repair plan before giving up; keep this test hermetic/on its
+        # original outcome with a "no useful plan" response.
+        monkeypatch.setattr("app.services.orchestrator.get_llm_client", _no_plan_llm_client)
 
         await execute_run(run_id)
 
@@ -278,6 +322,10 @@ async def test_dependent_of_failed_task_is_skipped(monkeypatch) -> None:
             yield _frame({"type": "error", "message": f"boom {uuid.uuid4()}"})
 
         monkeypatch.setattr("app.services.orchestrator.stream_chat", fake_stream_chat)
+        # Same "boom {uuid}" stall as the branch-isolation test above —
+        # Layer 3 asks for a repair plan before giving up; keep this test
+        # hermetic/on its original outcome with a "no useful plan" response.
+        monkeypatch.setattr("app.services.orchestrator.get_llm_client", _no_plan_llm_client)
 
         await execute_run(run_id)
 
@@ -437,6 +485,13 @@ async def test_capability_failure_stops_without_llm_repair_turn(monkeypatch) -> 
             yield _frame({"type": "error", "message": "AuthenticationError: invalid api key provided"})
 
         monkeypatch.setattr("app.services.orchestrator.stream_chat", fake_stream_chat)
+        # Layer 3: a capability failure now also asks for a repair plan
+        # before giving up (see module docstring) — that's a SEPARATE LLM
+        # call from the agent's own turn (`calls["n"]` below only counts
+        # stream_chat calls, so it's unaffected), but must still be mocked
+        # for hermeticity and to keep this test on its original "ends
+        # failed" outcome.
+        monkeypatch.setattr("app.services.orchestrator.get_llm_client", _no_plan_llm_client)
 
         await execute_run(run_id)
 
