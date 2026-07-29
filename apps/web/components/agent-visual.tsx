@@ -11,6 +11,7 @@
 // redefining the hash.
 
 import { HUE_CLASSES, Icon, type Hue, type IconName } from "@/components/landing/icons";
+import { GLOW_HOVER, HUE_TONE } from "@/components/ui/glow";
 
 const HUES: Hue[] = ["blue", "violet", "cyan", "amber", "green", "red"];
 
@@ -94,9 +95,14 @@ export function AgentGlyph({
   const letterText = size === "sm" ? "text-[10px]" : "text-sm";
 
   return (
+    // Identity surface — this tile IS the agent's logo, so it gets the
+    // hover bloom (HUE_TONE + GLOW_HOVER, no resting halo). Only the sm/md
+    // tile branch: the "xs" branch above renders a bare glyph inside mission
+    // cards and graph nodes, where glow is reserved for task state and a
+    // hover bloom would compete with it.
     <span
       aria-hidden
-      className={`flex ${tileDim} shrink-0 items-center justify-center border font-mono font-medium ${c.tile} ${className}`}
+      className={`flex ${tileDim} shrink-0 items-center justify-center border font-mono font-medium ${c.tile} ${HUE_TONE[hue]} ${GLOW_HOVER} ${className}`}
     >
       {visual ? (
         <Icon name={visual.icon} className={`${iconDim} ${c.icon}`} />

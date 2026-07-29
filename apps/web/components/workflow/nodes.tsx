@@ -5,6 +5,7 @@ import { Handle, Position, type NodeProps } from "@xyflow/react";
 
 import { AGENT_VISUALS, AgentGlyph, hueForSlug } from "@/components/agent-visual";
 import { HUE_CLASSES, type Hue } from "@/components/landing/icons";
+import { TASK_STATUS_GLOW } from "@/components/ui/glow";
 
 import { agentDisplayName } from "./format";
 import { NODE_H, NODE_W } from "./layout";
@@ -82,6 +83,7 @@ export function NodeShell({
   meta,
   invalid = false,
   selected = false,
+  glow = "",
   children,
 }: {
   // "muted" (superseded tasks only) bypasses the Hue-keyed maps below
@@ -99,6 +101,12 @@ export function NodeShell({
   // defaults to false there and the ring falls through to HUE_RING exactly
   // as before this prop was added.
   selected?: boolean;
+  // Run-DAG-only, and the mirror image of `selected`: a status glow from
+  // TASK_STATUS_GLOW. BuilderNode never passes it — a draft step has no
+  // status, nothing has run, so there is no state for a glow to report.
+  // Rendered on a dedicated overlay child rather than on the shell itself,
+  // see the comment at that element.
+  glow?: string;
   children?: ReactNode;
 }) {
   const isMuted = hue === "muted";
@@ -117,6 +125,20 @@ export function NodeShell({
       className={`relative rounded-md border border-hairline bg-background p-2.5 text-sm ring-1 ${ringClass}`}
       title={invalid ? "Depends on a task not shown in this run" : undefined}
     >
+      {/* The glow rides its own absolutely-positioned overlay instead of the
+          shell above, for one hard reason: every ring-* utility on the shell
+          (ring-1, ring-2 ring-red-500/60, ring-accent) is box-shadow based
+          and LAYERED, while .af-glow-* is unlayered and therefore wins any
+          box-shadow tie — putting the glow on the shell would silently erase
+          the status ring, including the invalid-node red ring that three
+          Playwright assertions depend on. A sibling element shares no
+          box-shadow with the shell, so both render. inset-0 + the same
+          rounded-md keeps the halo aligned to the card's real corners, and
+          it never changes layout or the size React Flow measures. */}
+      {glow && (
+        <span aria-hidden className={`pointer-events-none absolute inset-0 rounded-md ${glow}`} />
+      )}
+
       <p className="truncate leading-snug">{title}</p>
 
       <span className="mt-1.5 flex w-fit items-center gap-1 rounded-full border border-hairline bg-white/[0.03] px-1.5 py-0.5 font-mono text-[10px] text-muted">
@@ -161,6 +183,9 @@ export function TaskNode({ data }: NodeProps<TaskFlowNode>) {
     <NodeShell
       hue={hue}
       invalid={invalid}
+      // Same map the board's TaskCard reads, so a task cannot glow green in
+      // one view and nothing in the other.
+      glow={TASK_STATUS_GLOW[task.status]}
       title={task.title}
       agentName={agentName}
       glyph={<AgentGlyph slug={task.agent_slug} name={agentName} size="xs" />}

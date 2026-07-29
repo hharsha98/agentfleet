@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
+import { GLOW_HOVER, HUE_TONE } from "@/components/ui/glow";
+
 // Shared top nav for every app-shell page (chat, documents, missions, …).
 // Mounted once by app/(app)/layout.tsx — NOT re-declared per page — so this
 // is the single source of truth for the app-shell header idiom (sticky,
@@ -41,12 +43,21 @@ export function AppNav({ userMenu }: { userMenu?: ReactNode }) {
   return (
     <header className="sticky top-0 z-40 border-b border-hairline bg-background/70 backdrop-blur">
       <div className="flex items-center gap-3 px-4 py-3 sm:gap-5 sm:px-6">
-        <Link
-          href="/"
-          className="shrink-0 cursor-pointer font-medium tracking-tight transition-opacity duration-200 hover:opacity-80"
-        >
-          AgentFleet
-        </Link>
+        {/* The wordmark is the one true logo in the app shell, so it gets
+            the accent hover bloom. The glow sits on this wrapper span, never
+            on the <Link> itself: a link is focusable, and .af-glow-* is
+            unlayered CSS that beats Tailwind's box-shadow-based ring-*
+            utilities — putting it on the anchor would pre-emptively break
+            any focus ring added there later. The span is inline-flex +
+            shrink-0 so it occupies exactly the box the Link used to. */}
+        <span className={`inline-flex shrink-0 rounded-md ${HUE_TONE.accent} ${GLOW_HOVER}`}>
+          <Link
+            href="/"
+            className="cursor-pointer font-medium tracking-tight transition-opacity duration-200 hover:opacity-80"
+          >
+            AgentFleet
+          </Link>
+        </span>
 
         {/* Simplest correct responsive treatment per the design brief: one
             horizontally-scrolling row at every width, rather than a

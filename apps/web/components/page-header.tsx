@@ -2,6 +2,7 @@ import { cloneElement, isValidElement, type ReactElement, type ReactNode } from 
 
 import { HUE_CLASSES, type Hue } from "@/components/landing/icons";
 import { Reveal } from "@/components/landing/reveal";
+import { GLOW_HOVER, HUE_TONE } from "@/components/ui/glow";
 
 // Shared page-header idiom for the ten (app) pages (UI-4b): a hue-tinted
 // icon tile paired with the page's own h1 and a short plain-language
@@ -42,9 +43,12 @@ export function PageHeader({
     <Reveal>
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-start gap-3">
+          {/* Same identity-surface treatment as landing/icons.tsx's
+              IconTile (this tile is a hand-rolled copy of it): a hue-correct
+              glow that exists only under the pointer, never at rest. */}
           <div
             aria-hidden="true"
-            className={`relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border ${c.tile}`}
+            className={`relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border ${c.tile} ${HUE_TONE[hue]} ${GLOW_HOVER}`}
           >
             <div
               aria-hidden="true"

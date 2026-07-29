@@ -4,6 +4,11 @@
 // duplicating the hue class map in five places. No icon package dependency —
 // every glyph below is a hand-inlined, Lucide-style 24x24 stroke path.
 
+// components/ui/glow.ts imports `Hue` back from this file, but only with
+// `import type` — erased at compile time — so this is a type-level cycle,
+// not a runtime one, and no module-init ordering problem exists.
+import { GLOW_HOVER, HUE_TONE } from "@/components/ui/glow";
+
 export type Hue = "blue" | "violet" | "cyan" | "amber" | "green" | "red";
 
 export const HUE_CLASSES: Record<
@@ -365,8 +370,13 @@ export function IconTile({
 }) {
   const c = HUE_CLASSES[hue];
   return (
+    // HUE_TONE + GLOW_HOVER, not HUE_GLOW: the tile is an identity surface,
+    // not a status readout, so it must not carry a resting halo — it lights
+    // up from behind only while the pointer is on it, in its own hue. This
+    // div is decorative and never focusable (callers put the tile inside the
+    // focusable card/link), so the unlayered glow can't eat a focus ring.
     <div
-      className={`relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border ${c.tile} ${className}`}
+      className={`relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border ${c.tile} ${HUE_TONE[hue]} ${GLOW_HOVER} ${className}`}
     >
       <div
         aria-hidden

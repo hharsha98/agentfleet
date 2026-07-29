@@ -10,6 +10,7 @@ import { EmptyState } from "@/components/empty-state";
 import { HUE_CLASSES, Icon, type Hue } from "@/components/landing/icons";
 import { Reveal } from "@/components/landing/reveal";
 import { MicButton } from "@/components/mic-button";
+import { TASK_STATUS_GLOW } from "@/components/ui/glow";
 import { agentDisplayName } from "@/components/workflow/format";
 import type { Task } from "@/components/workflow/types";
 import { apiFetch } from "@/lib/api";
@@ -116,6 +117,18 @@ const STATUS_HUE: Record<string, Hue> = {
   done_with_issues: "amber",
 };
 
+// Run status -> glow on the "Run status" stat tile. Only one entry, and
+// deliberately so: a run that is planning/running already announces itself
+// with StatCard's live `pulse` dot, and "done" / "failed" are unambiguous
+// words in the tile's own value. "done_with_issues" is the one outcome that
+// reads as success at a glance while quietly meaning "something failed or
+// was skipped along the way" — the amber ambient glow (same amber
+// RUN_BADGE/STATUS_HUE already give it) is what stops it slipping past.
+// Static lookup, no template strings, same reason as BOARD_GRID_COLS above.
+const RUN_GLOW: Record<string, string> = {
+  done_with_issues: "af-glow-amber",
+};
+
 function RocketIcon({ className }: { className?: string }) {
   return (
     <svg
@@ -170,14 +183,27 @@ function TaskCard({
 
   return (
     <Reveal delay={delay}>
+      {/* Glow means STATE, hover means border. The card lights up because of
+          what happened to the task (TASK_STATUS_GLOW), and answers the cursor
+          only with hover:border-accent/30. Glowing on hover instead would
+          bloom every card under a mouse sweep, and "this one failed" would
+          stop being distinguishable from "the cursor is here".
+
+          Safe to put the glow on this element specifically: it carries no
+          ring-* utility (Tailwind rings are box-shadow based and layered, so
+          an unlayered .af-glow-* silently eats one) and it is not focusable —
+          the only focusable child is the "Approve & run" button, which keeps
+          its own focus styles. */}
       <div
         draggable={draggable}
         onDragStart={draggable ? (e) => onDragStart(e, task) : undefined}
         onDragEnd={draggable ? onDragEnd : undefined}
         aria-grabbed={draggable ? isDragging : undefined}
         className={`rounded-md border border-hairline bg-background p-2.5 text-sm transition-colors duration-200 hover:border-accent/30 ${
-          draggable ? "cursor-grab active:cursor-grabbing" : ""
-        } ${isDragging ? "opacity-40" : ""}`}
+          TASK_STATUS_GLOW[task.status]
+        } ${draggable ? "cursor-grab active:cursor-grabbing" : ""} ${
+          isDragging ? "opacity-40" : ""
+        }`}
       >
         <p className="leading-snug">{task.title}</p>
 
@@ -591,6 +617,10 @@ export default function MissionsPage() {
           value={detail ? detail.status.replace("_", " ") : "—"}
           pulse={!!detail}
           hue={detail ? (STATUS_HUE[detail.status] ?? "blue") : "blue"}
+          // StatCard forwards className onto its Reveal root — a plain,
+          // non-focusable div with the tile's own rounded-lg, so the glow
+          // lands on the right box and collides with no ring-* utility.
+          className={detail ? (RUN_GLOW[detail.status] ?? "") : ""}
           delay={40}
         />
         <StatCard

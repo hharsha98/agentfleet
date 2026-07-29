@@ -203,6 +203,49 @@ body {
     inset 0 0 8px color-mix(in srgb, var(--glow, var(--accent)) 10%, transparent);
 }
 
+/* Hue carrier WITHOUT the ambient paint. Each .af-glow-<hue> above does two
+   jobs at once (publish --glow, AND paint a resting shadow). That pairing is
+   right for a STATE — something genuinely happened, so it glows whether or
+   not you point at it — and wrong for a brand tile, where nothing has
+   happened and the glow should exist only under the cursor. .af-tone-<hue>
+   publishes the hue and nothing else, so pairing it with .af-glow-hover
+   yields a hue-correct glow that blooms on hover and leaves no resting halo.
+   Static literals only, same reason as the ladder above. */
+.af-tone-blue {
+  --glow: var(--hue-blue);
+}
+.af-tone-violet {
+  --glow: var(--hue-violet);
+}
+.af-tone-cyan {
+  --glow: var(--hue-cyan);
+}
+.af-tone-amber {
+  --glow: var(--hue-amber);
+}
+.af-tone-green {
+  --glow: var(--hue-green);
+}
+.af-tone-red {
+  --glow: var(--hue-red);
+}
+.af-tone-accent {
+  --glow: var(--accent);
+}
+
+/* Carried here rather than on .af-glow-hover so the escalation of a
+   genuinely-stateful .af-glow-* element stays instant (its shadow already
+   means something) while a tone-only brand tile fades in and out. */
+.af-tone-blue,
+.af-tone-violet,
+.af-tone-cyan,
+.af-tone-amber,
+.af-tone-green,
+.af-tone-red,
+.af-tone-accent {
+  transition: box-shadow var(--dur-ui) var(--ease-ui);
+}
+
 /* Arrival bloom: overshoots, then lands exactly on the ambient recipe at
    100%, so no fill-mode is needed — the element falls back onto its own
    .af-glow-* box-shadow seamlessly, and later hover states still work
