@@ -6,10 +6,12 @@ import { useEffect, useMemo, useState } from "react";
 import { Panel } from "@/components/dash/panel";
 import { StatCard } from "@/components/dash/stat-card";
 import { EmptyState } from "@/components/empty-state";
+import { HowItWorks, type ExplainerStep } from "@/components/explainer";
 import { Icon } from "@/components/landing/icons";
 import { Reveal } from "@/components/landing/reveal";
 import { MicButton } from "@/components/mic-button";
 import { PageHeader } from "@/components/page-header";
+import { Term } from "@/components/term";
 import { apiFetch } from "@/lib/api";
 
 function FlaskIcon({ className }: { className?: string }) {
@@ -256,9 +258,14 @@ export default function EvalsPage() {
       />
       {note && <p className="mt-3 font-mono text-xs text-muted">{note}</p>}
 
-      <div className="mt-6">
-        <label className="mb-1.5 block font-mono text-xs text-muted">agent</label>
+      <HowItWorks title="How it works" className="mt-6" delay={0} steps={EVAL_STEPS} />
+
+      <div className="mt-4">
+        <label htmlFor="eval-agent" className="mb-1.5 block font-mono text-xs text-muted">
+          agent
+        </label>
         <select
+          id="eval-agent"
           value={agentId}
           onChange={(e) => setAgentId(e.target.value)}
           className={`${inputClass} sm:max-w-sm`}
@@ -270,7 +277,34 @@ export default function EvalsPage() {
             </option>
           ))}
         </select>
+        {/* The whole page below is gated on this select. Without a line saying
+            so, an unselected Evals page reads as broken rather than empty —
+            which is exactly the wrong first impression for the screen whose
+            job is to make behaviour legible. */}
+        <p className="mt-2 max-w-xl text-xs leading-relaxed text-muted">
+          A test suite belongs to one agent. Everything below — cases, run history, results — is
+          for the agent picked here; switch it and the page reloads for that one.
+        </p>
       </div>
+
+      {!agentId && (
+        <p className="mt-4 max-w-xl text-sm text-muted">
+          {agents.length === 0 ? (
+            <>
+              Nothing to test yet. Build an agent on{" "}
+              <Link
+                href="/agents"
+                className="cursor-pointer text-accent transition-opacity duration-200 hover:opacity-80"
+              >
+                the agent builder
+              </Link>{" "}
+              first, then come back and give it a suite.
+            </>
+          ) : (
+            "Pick an agent above to see its cases, its run history, and its last result."
+          )}
+        </p>
+      )}
 
       {agentId && (
         <>
@@ -303,6 +337,7 @@ export default function EvalsPage() {
           <div className="mt-4 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
             <Panel
               title="Eval cases"
+              description="This agent's saved test suite. Run evals replays every case against the current prompt and marks each one pass or fail."
               action={
                 <div className="flex gap-2">
                   {!formOpen && (
@@ -332,47 +367,102 @@ export default function EvalsPage() {
                   }}
                   className="mb-3 space-y-3 rounded-lg border border-hairline p-4"
                 >
-                  <div className="relative">
-                    <textarea
-                      value={form.input}
-                      onChange={(e) => setForm((f) => ({ ...f, input: e.target.value }))}
-                      placeholder="Input the agent will receive"
-                      rows={3}
-                      required
-                      className={inputClass}
-                    />
-                    <MicButton
-                      className="absolute bottom-2 right-2 py-1"
-                      onTranscript={(t) =>
-                        setForm((f) => ({ ...f, input: f.input ? f.input + " " + t : t }))
-                      }
-                    />
+                  <p className="text-xs leading-relaxed text-muted">
+                    A <Term k="golden_case">golden case</Term> is one input plus the answer you
+                    already know is good. Say what the reply must contain, what it must never
+                    contain, or hand the judgement to a second model.
+                  </p>
+
+                  <div>
+                    <label
+                      htmlFor="case-input"
+                      className="mb-1.5 block font-mono text-xs text-muted"
+                    >
+                      input
+                    </label>
+                    <div className="relative">
+                      <textarea
+                        id="case-input"
+                        value={form.input}
+                        onChange={(e) => setForm((f) => ({ ...f, input: e.target.value }))}
+                        placeholder="What the user asks this agent"
+                        rows={3}
+                        required
+                        className={inputClass}
+                      />
+                      <MicButton
+                        className="absolute bottom-2 right-2 py-1"
+                        onTranscript={(t) =>
+                          setForm((f) => ({ ...f, input: f.input ? f.input + " " + t : t }))
+                        }
+                      />
+                    </div>
                   </div>
+
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <input
-                      value={form.expected_contains}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, expected_contains: e.target.value }))
-                      }
-                      placeholder="expected substrings, comma separated"
-                      className={inputClass}
-                    />
-                    <input
-                      value={form.forbidden_contains}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, forbidden_contains: e.target.value }))
-                      }
-                      placeholder="forbidden substrings, comma separated"
-                      className={inputClass}
-                    />
+                    <div>
+                      <label
+                        htmlFor="case-expected"
+                        className="mb-1.5 block font-mono text-xs text-muted"
+                      >
+                        must contain
+                      </label>
+                      <input
+                        id="case-expected"
+                        value={form.expected_contains}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, expected_contains: e.target.value }))
+                        }
+                        placeholder="refund, 30 days"
+                        className={inputClass}
+                      />
+                      <p className="mt-1 text-xs text-muted">
+                        Comma-separated. The case fails if any of these is missing from the reply.
+                      </p>
+                    </div>
+                    <div>
+                      <label
+                        htmlFor="case-forbidden"
+                        className="mb-1.5 block font-mono text-xs text-muted"
+                      >
+                        must not contain
+                      </label>
+                      <input
+                        id="case-forbidden"
+                        value={form.forbidden_contains}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, forbidden_contains: e.target.value }))
+                        }
+                        placeholder="guarantee, definitely"
+                        className={inputClass}
+                      />
+                      <p className="mt-1 text-xs text-muted">
+                        Comma-separated. The case fails if any of these shows up.
+                      </p>
+                    </div>
                   </div>
-                  <textarea
-                    value={form.judge_rubric}
-                    onChange={(e) => setForm((f) => ({ ...f, judge_rubric: e.target.value }))}
-                    placeholder="optional: LLM-judge rubric (leave blank to skip judging)"
-                    rows={2}
-                    className={inputClass}
-                  />
+
+                  <div>
+                    <label
+                      htmlFor="case-rubric"
+                      className="mb-1.5 block font-mono text-xs text-muted"
+                    >
+                      judge rubric — optional
+                    </label>
+                    <textarea
+                      id="case-rubric"
+                      value={form.judge_rubric}
+                      onChange={(e) => setForm((f) => ({ ...f, judge_rubric: e.target.value }))}
+                      placeholder="Names the 30-day window and does not promise a refund outright."
+                      rows={2}
+                      className={inputClass}
+                    />
+                    <p className="mt-1 text-xs leading-relaxed text-muted">
+                      Reach for a <Term k="judge_rubric">judge rubric</Term>{" "}
+                      when &ldquo;correct&rdquo; is a judgement call rather than a literal match.
+                      Leave it blank and the case is only checked against the two lists above.
+                    </p>
+                  </div>
                   {caseError && <p className="font-mono text-xs text-muted">⚠ {caseError}</p>}
                   <div className="flex gap-2">
                     <button
@@ -503,7 +593,11 @@ export default function EvalsPage() {
 
           {latestRun && (
             <div className="mt-4">
-              <Panel title="Latest run detail" delay={0}>
+              <Panel
+                title="Latest run detail"
+                description="Case-by-case results from the run you just triggered. Each row shows which checks passed; open its reply to read what the agent actually said."
+                delay={0}
+              >
                 <div className="flex items-baseline gap-3 rounded-lg border border-hairline p-4">
                   <span
                     className={`font-mono text-2xl font-medium ${
@@ -572,15 +666,41 @@ export default function EvalsPage() {
           has its own page, which the landing page's "Guardrails" pillar links
           to — this pointer keeps the path discoverable from Evals. */}
       <p className="mt-4 text-sm text-muted">
-        Looking for injection screening and PII masking?{" "}
+        Evals check whether this agent is <em>right</em>. To see what gets caught when text tries
+        to hijack it — an <Term k="injection_flag">injection flag</Term> — or when a reply carries
+        personal data,{" "}
         <Link
           href="/guardrails"
           className="cursor-pointer text-accent transition-opacity duration-200 hover:opacity-80"
         >
-          Open the Guardrails sandbox
+          open the Guardrails sandbox
         </Link>
         .
       </p>
     </main>
   );
 }
+
+// Three beats, in the order a newcomer actually meets them: write a case, run
+// the suite, then let CI run it for you. The third is the one that explains
+// why any of this is worth the typing.
+const EVAL_STEPS: ExplainerStep[] = [
+  {
+    hue: "red",
+    title: "Write a golden case",
+    description:
+      "Save an input together with the answer you already know is good — as substrings the reply must or must not contain, or as a rubric a second model grades against.",
+  },
+  {
+    hue: "red",
+    title: "Run the suite",
+    description:
+      "Every case is replayed against the agent's current prompt, model, and tools. You get a pass rate, the failing cases, and the reply each one produced.",
+  },
+  {
+    hue: "red",
+    title: "Let CI hold the line",
+    description:
+      "Point your pipeline at the same suite and a prompt change that quietly breaks behaviour stops being something you find out about in production.",
+  },
+];

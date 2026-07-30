@@ -6,10 +6,12 @@ import { AgentGlyph } from "@/components/agent-visual";
 import { Panel } from "@/components/dash/panel";
 import { StatCard } from "@/components/dash/stat-card";
 import { EmptyState } from "@/components/empty-state";
+import { HowItWorks, type ExplainerStep } from "@/components/explainer";
 import { Icon } from "@/components/landing/icons";
 import { Reveal } from "@/components/landing/reveal";
 import { MicButton } from "@/components/mic-button";
 import { PageHeader } from "@/components/page-header";
+import { Term } from "@/components/term";
 import { apiFetch } from "@/lib/api";
 
 function RobotIcon({ className }: { className?: string }) {
@@ -476,6 +478,8 @@ export default function AgentsPage() {
         />
       </div>
 
+      <HowItWorks title="How it works" className="mt-6" delay={20} steps={AGENT_STEPS} />
+
       <Panel
         title="Agent builder"
         description="Prompt, model, and tools — publish a version when it's ready to ship."
@@ -548,26 +552,55 @@ export default function AgentsPage() {
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
-              <input
-                value={form.model}
-                onChange={(e) => setForm((f) => ({ ...f, model: e.target.value }))}
-                placeholder="server default"
-                className={inputClass}
-              />
-              <input
-                type="number"
-                step={0.1}
-                min={0}
-                max={2}
-                value={form.temperature}
-                onChange={(e) => setForm((f) => ({ ...f, temperature: e.target.value }))}
-                placeholder="Temperature"
-                className={inputClass}
-              />
+              <div>
+                <label
+                  htmlFor="agent-model"
+                  className="mb-1.5 block font-mono text-xs text-muted"
+                >
+                  model
+                </label>
+                <input
+                  id="agent-model"
+                  value={form.model}
+                  onChange={(e) => setForm((f) => ({ ...f, model: e.target.value }))}
+                  placeholder="server default"
+                  className={inputClass}
+                />
+                <p className="mt-1 text-xs text-muted">
+                  Leave blank to follow whatever the server is configured to use.
+                </p>
+              </div>
+              <div>
+                <label
+                  htmlFor="agent-temperature"
+                  className="mb-1.5 block font-mono text-xs text-muted"
+                >
+                  temperature
+                </label>
+                <input
+                  id="agent-temperature"
+                  type="number"
+                  step={0.1}
+                  min={0}
+                  max={2}
+                  value={form.temperature}
+                  onChange={(e) => setForm((f) => ({ ...f, temperature: e.target.value }))}
+                  placeholder="server default"
+                  className={inputClass}
+                />
+                <p className="mt-1 text-xs leading-relaxed text-muted">
+                  Keep <Term k="temperature">temperature</Term> near 0 for extraction and
+                  classification; raise it for drafting.
+                </p>
+              </div>
             </div>
 
             <div>
-              <p className="mb-2 font-mono text-xs text-muted">tools</p>
+              <p className="mb-1 font-mono text-xs text-muted">tools</p>
+              <p className="mb-2 max-w-2xl text-xs leading-relaxed text-muted">
+                Capabilities this agent can reach for on its own, mid-answer. Tick only what it
+                needs — every extra tool is one more thing it can reach for at the wrong moment.
+              </p>
               <div className="flex flex-wrap gap-3">
                 {toolNames.map((name) => (
                   <label key={name} className="flex items-center gap-1.5 text-sm">
@@ -586,7 +619,17 @@ export default function AgentsPage() {
             </div>
 
             <div>
-              <p className="mb-2 font-mono text-xs text-muted">mcp servers</p>
+              <p className="mb-1 font-mono text-xs text-muted">mcp servers</p>
+              <p className="mb-2 max-w-2xl text-xs leading-relaxed text-muted">
+                {/* The {" "} after </Term> is load-bearing: when the text node
+                    that follows contains an HTML entity, the JSX transform drops
+                    that node's leading space and the sentence renders as
+                    "MCP serverand". */}
+                Optional. Point the agent at an <Term k="mcp_server">MCP server</Term>{" "}
+                and it picks up that server&apos;s tools with no code change and no redeploy. The
+                name is the label you&apos;ll see on the agent&apos;s card; the URL is the
+                server&apos;s endpoint.
+              </p>
               <div className="space-y-2">
                 {form.mcp_servers.map((server, i) => (
                   <div key={i} className="flex gap-2">
@@ -651,6 +694,21 @@ export default function AgentsPage() {
         className="mt-6"
         delay={80}
       >
+        {/* One legend for the three buttons on every card, rather than the
+            same sentence repeated once per agent. Before this, all three were
+            bare words with nothing anywhere saying what they did. */}
+        {agents.length > 0 && (
+          <p className="mb-3 max-w-3xl text-xs leading-relaxed text-muted">
+            Every card carries three actions.{" "}
+            <span className="text-foreground">API keys</span> mints a token so your own code can
+            call that agent over HTTP. <span className="text-foreground">Red-team</span> throws
+            jailbreak and prompt-injection attempts at it and scores how many it refuses —{" "}
+            <Term k="red_team">red-teaming</Term> is worth doing before you publish, not after.{" "}
+            <span className="text-foreground">Versions</span> is where you freeze a numbered{" "}
+            <Term k="version">version</Term> and <Term k="rollback">roll back</Term> to an earlier
+            one.
+          </p>
+        )}
         <ul className="grid gap-3 lg:grid-cols-2">
           {agents.map((a, i) => (
             <li key={a.id}>
@@ -853,6 +911,14 @@ export default function AgentsPage() {
 
               {versionsOpenId === a.id && (
                 <div className="mt-3 space-y-3 rounded-md border border-hairline p-3">
+                  <p className="text-xs leading-relaxed text-muted">
+                    <Term k="publish">Publishing</Term>{" "}
+                    freezes this agent&apos;s current prompt, model, and tools as a numbered
+                    snapshot behind its API keys. Callers keep
+                    getting the published version, so editing the agent changes nothing for them
+                    until you publish again — and rolling back just points them at an earlier
+                    snapshot. Nothing is deleted either way.
+                  </p>
                   <div className="flex gap-2">
                     <input
                       value={publishNote[a.id] ?? ""}
@@ -920,3 +986,34 @@ export default function AgentsPage() {
     </main>
   );
 }
+
+// Four beats rather than the usual three, because "publish" and "red-team"
+// are separate decisions and collapsing them hid the one that matters: you
+// attack the agent before it ships, not after. HowItWorks wraps the fourth
+// card onto a second row, which is the documented behaviour for 4+ steps.
+const AGENT_STEPS: ExplainerStep[] = [
+  {
+    hue: "amber",
+    title: "Describe the agent",
+    description:
+      "Name it, then write the system prompt. That prompt is the whole job description — what this agent does, how it answers, and what it should refuse.",
+  },
+  {
+    hue: "amber",
+    title: "Give it tools",
+    description:
+      "Tick the built-in tools it may call, or point it at an MCP server to borrow tools from outside. Either way it gains them without a code change.",
+  },
+  {
+    hue: "amber",
+    title: "Publish a version",
+    description:
+      "Publishing freezes the current prompt, model, and tools as a numbered snapshot behind an API key. Your later edits stay invisible to callers until you publish again.",
+  },
+  {
+    hue: "amber",
+    title: "Red-team it before it ships",
+    description:
+      "Run the jailbreak and injection suite and read the score. If something bad does get out, roll back to the last version that behaved.",
+  },
+];
