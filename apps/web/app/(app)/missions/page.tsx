@@ -7,13 +7,16 @@ import { AgentGlyph } from "@/components/agent-visual";
 import { Panel } from "@/components/dash/panel";
 import { StatCard } from "@/components/dash/stat-card";
 import { EmptyState } from "@/components/empty-state";
+import { HowItWorks, type ExplainerStep } from "@/components/explainer";
 import { HUE_CLASSES, Icon, type Hue } from "@/components/landing/icons";
 import { Reveal } from "@/components/landing/reveal";
 import { MicButton } from "@/components/mic-button";
+import { Term } from "@/components/term";
 import { TASK_STATUS_GLOW } from "@/components/ui/glow";
 import { agentDisplayName } from "@/components/workflow/format";
 import type { Task } from "@/components/workflow/types";
 import { apiFetch } from "@/lib/api";
+import type { GlossaryKey } from "@/lib/glossary";
 
 // Lazy + never server-rendered: React Flow touches the DOM during layout,
 // and this keeps its chunk out of every other route's bundle. `ssr: false`
@@ -69,6 +72,36 @@ const RETRY_TARGET: Partial<Record<Task["status"], Task["status"]>> = {
   done: "todo",
 };
 
+// One sentence per status, for the legend below the run badge. The board
+// only draws a column once something is in it (see boardColumns), so a
+// reader meets "Replanned" or "Skipped" for the first time MID-RUN, with a
+// new column appearing beside cards they were already reading and nothing on
+// screen saying what it means. The legend names all seven states every time,
+// whichever columns happen to exist right now.
+//
+// Keyed by Task["status"] rather than written as a parallel array so a new
+// status cannot be added to the board without TypeScript demanding a
+// sentence for it here too.
+const STATUS_HINT: Record<Task["status"], string> = {
+  todo: "Queued. Either its turn hasn't come or it is still waiting on another task.",
+  in_progress: "An agent is working on it right now.",
+  review: "Parked for you. Nothing that depends on it runs until you approve.",
+  done: "Finished. Open “result” on the card to read what came back.",
+  failed: "The agent retried, then gave up. The card says what went wrong.",
+  superseded: "The orchestrator wrote a repair plan and moved the work to a new step. Not a failure.",
+  skipped: "Never ran and never will — something it depended on failed first.",
+};
+
+// The two statuses whose column label is also a glossary entry. The other
+// five explain themselves in the sentence beside them; these two are jargon
+// the app invented ("Replanned" is not a word anyone arrives already
+// knowing), so their labels get the dotted underline and the full
+// definition on click.
+const STATUS_TERM: Partial<Record<Task["status"], GlossaryKey>> = {
+  superseded: "superseded",
+  skipped: "skipped",
+};
+
 const HUE_DOT: Record<Hue, string> = {
   blue: "bg-hue-blue",
   violet: "bg-hue-violet",
@@ -104,6 +137,17 @@ const RUN_BADGE: Record<string, string> = {
   // Everything terminal, but something failed or was skipped along the way —
   // amber-ish because it's neither a clean success nor an outright failure.
   done_with_issues: "border-amber-400/40 text-amber-300",
+};
+
+// The two run statuses that are compound words nobody can guess from the
+// badge alone — the board prints them as "done with issues" and "awaiting
+// approval", which read like ordinary English but each name a specific
+// orchestrator outcome. Both already have a glossary entry, so the badge
+// becomes a <Term> for exactly these two and stays plain text for
+// planning/running/done/failed, which say what they mean.
+const RUN_STATUS_TERM: Partial<Record<string, GlossaryKey>> = {
+  done_with_issues: "done_with_issues",
+  awaiting_approval: "awaiting_approval",
 };
 
 // Stat-row hue per run status (Chunk D2) — same status vocabulary as
@@ -207,14 +251,48 @@ function TaskCard({
       >
         <p className="leading-snug">{task.title}</p>
 
-        <span className="mt-1.5 flex w-fit items-center gap-1 rounded-full border border-hairline bg-white/[0.03] px-1.5 py-0.5 font-mono text-[10px] text-muted">
-          <AgentGlyph
-            slug={task.agent_slug}
-            name={agentDisplayName(task.agent_slug)}
-            size="xs"
-          />
-          {agentDisplayName(task.agent_slug)}
-        </span>
+        {/* The card's own step number, beside the agent it runs on. It is
+            here because the board already TALKS in ordinals and never showed
+            one: "Replaced by step 7" below, "→ step 7" on the graph node,
+            and the depends_on ordinals behind "Waiting on N tasks" all name
+            a number that appeared nowhere on screen, so following the
+            pointer meant counting cards and hoping. Printed verbatim (no +1)
+            — it has to be the same integer superseded_by holds. */}
+        <div className="mt-1.5 flex flex-wrap items-center gap-1">
+          <span className="flex w-fit items-center gap-1 rounded-full border border-hairline bg-white/[0.03] px-1.5 py-0.5 font-mono text-[10px] text-muted">
+            <AgentGlyph
+              slug={task.agent_slug}
+              name={agentDisplayName(task.agent_slug)}
+              size="xs"
+            />
+            {agentDisplayName(task.agent_slug)}
+          </span>
+          <span className="rounded-full border border-hairline px-1.5 py-0.5 font-mono text-[10px] text-muted">
+            Step {task.ordinal}
+          </span>
+        </div>
+
+        {/* The drag gesture, said out loud on the cards that have one. Until
+            now the ONLY hint that a card could be dragged was the cursor
+            turning into a grab hand while you happened to be over it, and
+            the only feedback for an illegal drop was an error banner after
+            the fact — so the whole re-queue path was invisible to anyone who
+            didn't try dragging on a hunch. Rendered off the same
+            RETRY_TARGET map that decides `draggable`, so the hint can never
+            appear on a card that would reject the drop.
+
+            Two wordings because review ≠ done/failed: a card in "Needs
+            approval" has not run yet, and dragging it out clears
+            needs_approval (see handleDrop's optimistic update) rather than
+            re-running anything. */}
+        {draggable && (
+          <p className="mt-1.5 flex items-center gap-1 font-mono text-[9px] text-muted">
+            <span aria-hidden="true">⠿</span>
+            {task.status === "review"
+              ? "Drag to To do to run it without approving"
+              : "Drag to To do to run it again"}
+          </p>
+        )}
 
         {/* Only "todo" is actually waiting on something that might still
             complete — a "skipped" task's blocking dependency has already
@@ -325,21 +403,64 @@ function TaskCard({
           </details>
         )}
 
-        {task.error && (
-          <>
-            <p className="mt-2 font-mono text-[10px] text-red-400">⚠ {task.error}</p>
-            <p className="mt-0.5 font-mono text-[9px] text-muted">Drag to To do to retry</p>
-          </>
-        )}
+        {/* The "Drag to To do to retry" line that used to sit under this
+            error moved up to the draggable-card hint above — it now shows on
+            every card that can be re-queued, not only on the ones that
+            happened to record an error string. */}
+        {task.error && <p className="mt-2 font-mono text-[10px] text-red-400">⚠ {task.error}</p>}
 
         {(task.tokens_in > 0 || task.tokens_out > 0) && (
           <p className="mt-2 border-t border-hairline pt-1.5 font-mono text-[10px] text-muted">
-            ↑{task.tokens_in} ↓{task.tokens_out} tok
+            ↑{task.tokens_in} ↓{task.tokens_out}{" "}
+            <Term k="tokens">tok</Term>
             {task.latency_ms != null && ` · ${task.latency_ms}ms`}
           </p>
         )}
       </div>
     </Reveal>
+  );
+}
+
+// Always-visible key to the seven task states, sitting between the run badge
+// and the board itself. Reads COLUMNS so the order, the labels and the dot
+// colours are the same objects the columns are built from — the legend
+// cannot drift from the board it explains.
+//
+// Rendered above the grid and OUTSIDE the board/graph branch on purpose: the
+// graph nodes carry the identical seven statuses (STATUS_LABEL in
+// components/workflow/nodes.tsx), so switching views should not take the
+// definitions away.
+function StatusLegend() {
+  return (
+    <div className="mt-3 rounded-lg border border-hairline p-3">
+      <p className="font-mono text-[10px] uppercase tracking-wide text-muted">Status legend</p>
+      <dl className="mt-2 grid grid-cols-1 gap-x-5 gap-y-1.5 sm:grid-cols-2 xl:grid-cols-3">
+        {COLUMNS.map((col) => {
+          const termKey = STATUS_TERM[col.key];
+          return (
+            <div key={col.key} className="flex items-start gap-1.5 text-[11px] leading-snug">
+              <span
+                aria-hidden="true"
+                className={`mt-1 h-1.5 w-1.5 shrink-0 rounded-full ${dotClassFor(col.hue)}`}
+              />
+              <dt className="shrink-0 text-foreground">
+                {termKey ? <Term k={termKey}>{col.label}</Term> : col.label}
+              </dt>
+              <dd className="text-muted">{STATUS_HINT[col.key]}</dd>
+            </div>
+          );
+        })}
+      </dl>
+      <p className="mt-2.5 border-t border-hairline pt-2 text-[11px] leading-snug text-muted">
+        Replanned and Skipped only get a column once a task lands in one, so the board can grow
+        a column part-way through a run. Every card carries its own{" "}
+        <Term k="ordinal">step number</Term>{" "}
+        — that is the number a &quot;Replaced by step 7&quot; line points at. Graph draws these
+        same tasks as a{" "}
+        <Term k="dag">dependency map</Term>{" "}
+        instead of columns: which step waits on which.
+      </p>
+    </div>
   );
 }
 
@@ -529,6 +650,9 @@ export default function MissionsPage() {
   }
 
   const tasks = detail?.tasks ?? [];
+  // Undefined for every status that reads plainly on its own (planning,
+  // running, done, failed) — the badge stays plain text in that case.
+  const runStatusTerm = detail ? RUN_STATUS_TERM[detail.status] : undefined;
 
   // Chunk D2 stat row — derived from the already-fetched runs/detail state,
   // no new endpoints. Task-status breakdown and token totals only mean
@@ -576,8 +700,12 @@ export default function MissionsPage() {
           <Icon name="workflow" className={`relative h-5 w-5 ${HUE_CLASSES.violet.icon}`} />
         </div>
         <p className="max-w-2xl pt-2 text-sm text-muted">
-          Give the fleet a goal. The orchestrator splits it into tasks, assigns agents, and
-          runs them on this live board — pausing for your approval where it matters.
+          Give the fleet a goal. The{" "}
+          <Term k="orchestrator">orchestrator</Term>{" "}
+          splits it into{" "}
+          <Term k="task">tasks</Term>
+          , assigns agents, and runs them on this live board — pausing for your approval where
+          it matters.
         </p>
       </Reveal>
 
@@ -614,7 +742,12 @@ export default function MissionsPage() {
         />
         <StatCard
           label="Mission status"
-          value={detail ? detail.status.replace("_", " ") : "—"}
+          // replaceAll for the same reason as the board badge: replace()
+          // takes only the first underscore, so this tile read "done
+          // with_issues". No <Term> here — StatCard renders `value` inside a
+          // `truncate` paragraph, which would clip the tooltip away
+          // entirely; the badge on the board carries the definition.
+          value={detail ? detail.status.replaceAll("_", " ") : "—"}
           pulse={!!detail}
           hue={detail ? (STATUS_HUE[detail.status] ?? "blue") : "blue"}
           // StatCard forwards className onto its Reveal root — a plain,
@@ -672,6 +805,13 @@ export default function MissionsPage() {
 
         <Panel
           title="Board"
+          // Panel.description is typed `string`, so this cannot carry a
+          // <Term> — which is fine: it is the one sentence that has to be
+          // readable before anyone knows there is a glossary. It names the
+          // gesture, the three statuses it starts from, and the single legal
+          // destination, because a drop anywhere else only ever announces
+          // itself as a red error banner after the fact.
+          description="Cards in Done, Failed and Needs approval can be dragged back to To do to run that task again — To do is the only column that accepts a drop."
           delay={80}
           className="lg:min-h-[420px]"
           action={
@@ -717,10 +857,23 @@ export default function MissionsPage() {
                     RUN_BADGE[detail.status] ?? "border-hairline text-muted"
                   }`}
                 >
-                  {detail.status.replace("_", " ")}
+                  {/* replaceAll, not replace: replace() with a string
+                      pattern swaps only the FIRST match, so this badge read
+                      "done with_issues" — the one status a reader is most
+                      likely to stop and squint at. The <Term> is deliberately
+                      INSIDE the badge and outside the truncating goal line
+                      beside it: a `truncate` ancestor clips the tooltip
+                      entirely. */}
+                  {runStatusTerm ? (
+                    <Term k={runStatusTerm}>{detail.status.replaceAll("_", " ")}</Term>
+                  ) : (
+                    detail.status.replaceAll("_", " ")
+                  )}
                 </span>
                 <p className="truncate text-sm text-muted">{detail.goal}</p>
               </div>
+
+              <StatusLegend />
 
               {dndError && (
                 <p
@@ -821,6 +974,33 @@ export default function MissionsPage() {
           )}
         </Panel>
       </div>
+
+      {/* Same three-card explainer every other screen in the app ends with
+          (agents, evals, guardrails, voice, chat all call HowItWorks) —
+          missions was the one page that launched real work and never said
+          how the screen was meant to be driven. */}
+      <HowItWorks title="How a mission works" className="mt-6" delay={20} steps={MISSION_STEPS} />
     </main>
   );
 }
+
+const MISSION_STEPS: ExplainerStep[] = [
+  {
+    hue: "violet",
+    title: "Say what you want done",
+    description:
+      "Type the goal and press Launch. The orchestrator writes the plan — it decides how many steps there are, what each one does, and which agent is best suited to it.",
+  },
+  {
+    hue: "violet",
+    title: "Watch it run",
+    description:
+      "Cards move left to right across the board as agents pick them up. Each one shows its step number, its agent, what it produced, and what it cost. Switch to Graph for the same tasks drawn as a dependency map.",
+  },
+  {
+    hue: "violet",
+    title: "Step in where it matters",
+    description:
+      "Approve anything parked in Needs approval, and drag a Done, Failed or Needs approval card back to To do to put that step back in the queue.",
+  },
+];

@@ -278,7 +278,15 @@ test("an example from the workflows page opens a multi-step builder", async ({ p
   // row above the list, so once the workflow card is deleted `.last()`
   // re-resolves onto that row and the assertion never passes. `div.af-hover-nav`
   // is the workflow card itself (the example entries are <button>s, not divs).
-  const card = page.locator("div.af-hover-nav", { hasText: exampleName });
+  // hasNotText excludes the seeded demo dataset, which ships a workflow named
+  // "[demo] Competitor teardown" — a plain hasText substring-matches that too,
+  // so the strict-mode locator resolves to several cards. Without this, anyone
+  // who has run scripts/seed_demo sees this test fail for reasons that have
+  // nothing to do with the code under test.
+  const card = page
+    .locator("div.af-hover-nav")
+    .filter({ hasText: exampleName })
+    .filter({ hasNotText: "[demo]" });
   await card.getByRole("button", { name: "Delete" }).click();
   await expect(card).toHaveCount(0);
 });
