@@ -1,5 +1,6 @@
 import { ChatUI, type AgentInfo } from "@/components/chat-ui";
 import { Icon } from "@/components/landing/icons";
+import { Term } from "@/components/term";
 import { apiFetchServer } from "@/lib/api";
 
 export default async function ChatPage() {
@@ -27,9 +28,14 @@ export default async function ChatPage() {
           >
             <Icon name="chat" className="h-3.5 w-3.5 text-hue-blue" />
           </span>
-          <p className="truncate text-sm text-muted">
-            Talk to any agent. Tool calls appear live as cards, big outputs
-            open as artifacts, and every reply shows its token cost.
+          {/* No `truncate` here any more, and that is not a style tweak: it
+              sets overflow:hidden, which clipped the Term tooltip against
+              the paragraph's own box so the definition opened invisibly.
+              The line was shortened to compensate — it still sits on one row
+              at every width the old sentence did. */}
+          <p className="text-sm text-muted">
+            Talk to any agent. Watch its <Term k="tool_call">tool calls</Term>{" "}
+            and open its <Term k="artifact">artifacts</Term> as it works.
           </p>
         </div>
         <span className="shrink-0 font-mono text-xs text-muted">

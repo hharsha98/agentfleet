@@ -10,6 +10,7 @@ import { EmptyState } from "@/components/empty-state";
 import { Icon } from "@/components/landing/icons";
 import { Reveal } from "@/components/landing/reveal";
 import { PageHeader } from "@/components/page-header";
+import { Term } from "@/components/term";
 import { apiFetch } from "@/lib/api";
 import { WORKFLOW_EXAMPLES, type WorkflowExample } from "@/lib/workflow-examples";
 
@@ -150,6 +151,19 @@ export default function WorkflowsPage() {
       </PageHeader>
       {note && <p className="mt-3 font-mono text-xs text-muted">{note}</p>}
 
+      {/* A <p>, and a sibling — not a <div>, and not a wrapper. See the note
+          above the examples Panel below: e2e/workflows.spec.ts finds a
+          workflow card with page.locator("div", { hasText: name }).last(),
+          which quietly resolves to the wrong element the moment a new div
+          encloses the cards. */}
+      <p className="mt-4 max-w-3xl text-sm leading-relaxed text-muted">
+        A workflow is the saved graph — the <Term k="step">steps</Term>{" "}
+        and the arrows saying what waits for what. Saving one runs nothing. Press Run and you get
+        a <Term k="mission">mission</Term>: that single execution, with its own tasks, results,
+        and cost, watched on the mission board. The workflow itself stays put, ready to run again
+        tomorrow.
+      </p>
+
       <div className="mt-6 grid max-w-md grid-cols-2 gap-3">
         <StatCard
           label="Workflows"
@@ -198,7 +212,7 @@ export default function WorkflowsPage() {
 
       <Panel
         title="Your workflows"
-        description="Hand-built agent graphs you can run as a mission."
+        description="Saved graphs, not runs. Opening one shows the template; running it starts a fresh mission every time."
         className="mt-6"
         delay={80}
       >

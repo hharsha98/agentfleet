@@ -6,9 +6,55 @@ import type { ReactNode } from "react";
 import { AgentBoard, AgentBoardOverlay } from "@/components/agent-board";
 import { AgentGlyph } from "@/components/agent-visual";
 import { ArtifactPanel } from "@/components/artifact-panel";
+import { HowItWorks, type ExplainerStep } from "@/components/explainer";
 import { MicButton } from "@/components/mic-button";
+import { Term } from "@/components/term";
 import { apiFetch } from "@/lib/api";
 import { parseMessageParts, type Artifact } from "@/lib/artifacts";
+
+// The empty-state explainer, in the same three-card shape /agents, /evals,
+// /guardrails and /voice already use. Descriptions are plain strings because
+// that is what ExplainerStep takes — the words that needed a glossary
+// definition live in the paragraph rendered underneath instead.
+//
+// Step 1's "they don't share history" is literal: selectAgent() below clears
+// conversationId and messages, so switching agent opens a new conversation
+// server-side too.
+const CHAT_STEPS: ExplainerStep[] = [
+  {
+    hue: "blue",
+    title: "Pick an agent",
+    description:
+      "Each card below is its own prompt, model, and set of tools. Switching agent starts a fresh conversation — they don't share history.",
+  },
+  {
+    hue: "blue",
+    title: "Ask in plain English",
+    description:
+      "It answers from the model, and reaches for a tool when the question needs one — searching the documents you uploaded, running a web search, reading a page.",
+  },
+  {
+    hue: "blue",
+    title: "Watch what it did",
+    description:
+      "Every tool it ran shows up as a card while it works, and anything long enough to be awkward inline arrives as a chip you can open.",
+  },
+];
+
+// Concrete first messages. The third is deliberately a code request: it is
+// the shortest reliable way to see an artifact chip appear, which is the one
+// affordance on this screen nothing else explains by example.
+const CHAT_STARTERS: { text: string; shows: string }[] = [
+  { text: "What can you do, and which tools do you have?", shows: "the agent's own answer" },
+  {
+    text: "Search my uploaded documents and tell me what's in them.",
+    shows: "a tool call card",
+  },
+  {
+    text: "Write a short Python function that removes duplicates from a list.",
+    shows: "an artifact chip",
+  },
+];
 
 function ChartGlyph() {
   return (
@@ -233,8 +279,51 @@ export function ChatUI({ agents }: { agents: AgentInfo[] }) {
       <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto py-4">
         {messages.length === 0 && (
           <div>
-            <p className="mb-4 text-sm text-muted">
-              {agent ? "Ask anything" : "Pick an agent to start"}
+            {/* Everything in this block disappears the moment the first
+                message lands — it is the empty state, not chrome. Before it
+                existed the window opened on a bare agent grid and the words
+                "Ask anything", which tells a newcomer neither what these
+                agents can reach nor what the cards and chips in a reply are
+                going to mean. */}
+            <HowItWorks title="How a conversation here works" steps={CHAT_STEPS} />
+            <p className="mt-3 text-xs leading-relaxed text-muted">
+              A <Term k="tool_call">tool call</Term>{" "}
+              is the agent doing something instead of describing it — expand the card to read
+              exactly what came back. An <Term k="artifact">artifact</Term>{" "}
+              is output big enough to deserve its own panel: code, a chart, a document. It arrives
+              as a chip you click, so it opens beside the conversation instead of scrolling past
+              you. The line under each reply is what that one turn cost in{" "}
+              <Term k="tokens">tokens</Term>, time, and money.
+            </p>
+
+            <div className="mt-5 rounded-lg border border-hairline p-4">
+              <p className="text-sm font-medium text-foreground">Not sure what to ask?</p>
+              <p className="mt-0.5 text-xs text-muted">
+                These drop into the message box rather than sending — edit one before you press
+                Send.
+              </p>
+              <div className="mt-3 flex flex-col gap-1.5">
+                {CHAT_STARTERS.map((starter) => (
+                  <button
+                    key={starter.text}
+                    type="button"
+                    onClick={() => {
+                      setInput(starter.text);
+                      inputRef.current?.focus();
+                    }}
+                    className="cursor-pointer rounded-lg border border-hairline px-3 py-2 text-left text-sm text-muted transition-colors duration-200 hover:border-accent/40 hover:bg-accent/15 hover:text-foreground"
+                  >
+                    {starter.text}
+                    <span className="ml-2 font-mono text-[10px] text-muted">{starter.shows}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <p className="mt-5 mb-4 text-sm text-muted">
+              {agent
+                ? `Ask ${agent.name} anything, or switch agent below`
+                : "Pick an agent to start"}
             </p>
             <AgentBoard
               agents={agents}

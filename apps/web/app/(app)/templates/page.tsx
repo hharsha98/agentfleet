@@ -9,6 +9,7 @@ import { EmptyState } from "@/components/empty-state";
 import { Icon } from "@/components/landing/icons";
 import { Reveal } from "@/components/landing/reveal";
 import { PageHeader } from "@/components/page-header";
+import { Term } from "@/components/term";
 import { apiFetch } from "@/lib/api";
 
 function BlocksIcon({ className }: { className?: string }) {
@@ -143,10 +144,29 @@ export default function TemplatesPage() {
 
       <Panel
         title="Gallery"
-        description="Starter agents you can install with one click."
+        description="Install copies a template into your fleet as your own agent — the copy is yours to change, and the template it came from never moves."
         className="mt-6"
         delay={80}
       >
+        {/* One legend above the grid rather than the same sentence repeated on
+            every card — same idiom as the three-action legend on
+            agents/page.tsx. "Install" is the one word on this page that does
+            something irreversible-sounding and explains itself nowhere. */}
+        {templates.length > 0 && (
+          <p className="mb-3 max-w-3xl text-xs leading-relaxed text-muted">
+            {/* The {" "} after </span> is the same load-bearing fix the
+                Term call sites need: the JSXText that follows spans lines
+                AND contains &apos;, so the transform eats its leading space
+                and the line renders as "Install agentcreates". */}
+            <span className="text-foreground">Install agent</span>{" "}
+            creates a new agent in your fleet carrying this template&apos;s prompt and tools, on
+            your server&apos;s default model. It is a copy: rewrite the prompt, add or drop
+            tools, or{" "}
+            <Term k="publish">publish</Term> it behind an API key, and the template in this
+            gallery stays exactly as it is. Each template installs once — a second install is
+            refused because the copy already holds that name.
+          </p>
+        )}
         <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
           {templates.map((t, i) => {
             const state = installed[t.slug] ?? { status: "idle" as const };
@@ -213,7 +233,8 @@ export default function TemplatesPage() {
                 <EmptyState
                   glyph={<BlocksIcon className="h-7 w-7" />}
                   title="No templates available"
-                  description="The template gallery is empty — check back once the backend seeds starter agents."
+                  description="The gallery is empty until the backend seeds its starter agents. You don't have to wait for it — an agent is a name, a prompt, a model, and a set of tools, and you can write one yourself."
+                  action={{ href: "/agents", label: "Build an agent from scratch" }}
                 />
               </div>
             )}

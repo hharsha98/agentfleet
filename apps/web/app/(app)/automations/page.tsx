@@ -9,6 +9,7 @@ import { Icon, IconTile } from "@/components/landing/icons";
 import { Reveal } from "@/components/landing/reveal";
 import { MicButton } from "@/components/mic-button";
 import { PageHeader } from "@/components/page-header";
+import { Term } from "@/components/term";
 import { apiFetch } from "@/lib/api";
 
 function ClockIcon({ className }: { className?: string }) {
@@ -81,6 +82,21 @@ type WebhookCreated = Webhook & { trigger_path: string; secret: string };
 const inputClass =
   "w-full rounded-md border border-hairline bg-transparent px-3 py-2 text-sm outline-none transition-colors duration-200 placeholder:text-muted focus:border-accent focus-visible:ring-2 focus-visible:ring-accent/30 disabled:opacity-50";
 
+// Worked cron examples, in the same spirit as the PRESETS on
+// guardrails/page.tsx. A greyed-out "0 9 * * *" in the placeholder is only
+// legible to someone who already reads cron — which is exactly the reader
+// who doesn't need it. Clicking one fills the field, so the five columns can
+// be read off against a sentence that says what they mean.
+//
+// Every time here is UTC: schedule_due() in apps/api/app/services/
+// scheduler.py normalises to UTC before handing the expression to croniter.
+const CRON_PRESETS: { label: string; cron: string }[] = [
+  { label: "Every day at 09:00", cron: "0 9 * * *" },
+  { label: "Weekdays at 08:30", cron: "30 8 * * 1-5" },
+  { label: "Every hour, on the hour", cron: "0 * * * *" },
+  { label: "Mondays at 07:00", cron: "0 7 * * 1" },
+];
+
 export default function AutomationsPage() {
   const [schedules, setSchedules] = useState<ScheduledRun[]>([]);
   // X-Total-Count from GET /schedules and /webhooks (Chunk D2 stat row) —
@@ -104,6 +120,9 @@ export default function AutomationsPage() {
   const [whDeleteBusy, setWhDeleteBusy] = useState<Record<string, boolean>>({});
   const [justCreated, setJustCreated] = useState<WebhookCreated | null>(null);
   const [copied, setCopied] = useState(false);
+  // Tracked separately from `copied` so the secret button and the curl button
+  // don't both flip to "Copied" when only one was pressed.
+  const [curlCopied, setCurlCopied] = useState(false);
 
   async function refresh() {
     try {
@@ -205,6 +224,7 @@ export default function AutomationsPage() {
         const created: WebhookCreated = await res.json();
         setJustCreated(created);
         setCopied(false);
+        setCurlCopied(false);
         setWhName("");
         setWhGoal("");
         refreshWebhooks();
@@ -244,6 +264,15 @@ export default function AutomationsPage() {
       setCopied(true);
     } catch {
       // clipboard access denied — the mono box still shows the secret to copy manually
+    }
+  }
+
+  async function copyCurl(command: string) {
+    try {
+      await navigator.clipboard.writeText(command);
+      setCurlCopied(true);
+    } catch {
+      // clipboard access denied — the <pre> below still shows the full command
     }
   }
 
@@ -315,9 +344,10 @@ export default function AutomationsPage() {
             <IconTile icon="clock" hue="violet" />
             <div>
               <p className="text-sm font-medium">Schedules</p>
-              <p className="mt-0.5 text-xs text-muted">
+              <p className="mt-0.5 text-xs leading-relaxed text-muted">
                 A cron expression fires a goal automatically on a recurring interval — no
-                external system needed.
+                external system needed. Each firing starts its own{" "}
+                <Term k="mission">mission</Term>, exactly as if you had typed the goal yourself.
               </p>
             </div>
           </div>
@@ -325,9 +355,10 @@ export default function AutomationsPage() {
             <IconTile icon="plug" hue="cyan" />
             <div>
               <p className="text-sm font-medium">Webhooks</p>
-              <p className="mt-0.5 text-xs text-muted">
+              <p className="mt-0.5 text-xs leading-relaxed text-muted">
                 An external system POSTs to a per-webhook URL with its secret to trigger a goal
-                on demand.
+                on demand. Whatever it sends can be dropped into the goal text, so one webhook
+                handles every ticket rather than one per ticket.
               </p>
             </div>
           </div>
@@ -379,6 +410,22 @@ export default function AutomationsPage() {
               <p className="mt-1.5 font-mono text-[11px] text-muted">
                 cron: min hour day month weekday — e.g. <code>0 9 * * *</code> = daily 09:00 UTC
               </p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {CRON_PRESETS.map((preset) => (
+                  <button
+                    // type="button" is load-bearing: the default inside a
+                    // <form> is submit, so a preset click would fire
+                    // createSchedule() with a half-filled form.
+                    type="button"
+                    key={preset.cron}
+                    onClick={() => setCron(preset.cron)}
+                    className="cursor-pointer rounded-lg border border-hairline px-2.5 py-1 text-left text-[11px] text-muted transition-colors duration-200 hover:border-accent/40 hover:bg-accent/15 hover:text-foreground"
+                  >
+                    <span className="text-foreground">{preset.label}</span>
+                    <span className="ml-2 font-mono text-[10px] text-muted">{preset.cron}</span>
+                  </button>
+                ))}
+              </div>
             </div>
 
             {formError && <p className="font-mono text-xs text-muted">⚠ {formError}</p>}
@@ -522,6 +569,18 @@ export default function AutomationsPage() {
               <p className="font-mono text-[11px] text-muted">
                 Trigger URL: <code>{justCreated.trigger_path}</code>
               </p>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs text-muted">
+                  Paste this into a terminal to fire it once and check the wiring.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => copyCurl(curlExample(justCreated))}
+                  className="shrink-0 cursor-pointer rounded-md border border-hairline px-3 py-1 text-xs text-muted transition-colors duration-200 hover:text-foreground"
+                >
+                  {curlCopied ? "Copied" : "Copy curl"}
+                </button>
+              </div>
               <pre className="overflow-x-auto rounded-md border border-hairline bg-transparent px-3 py-2 font-mono text-[11px] text-muted">
                 {curlExample(justCreated)}
               </pre>

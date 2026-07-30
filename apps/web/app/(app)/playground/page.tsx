@@ -9,6 +9,7 @@ import { Icon } from "@/components/landing/icons";
 import { Reveal } from "@/components/landing/reveal";
 import { MicButton } from "@/components/mic-button";
 import { PageHeader } from "@/components/page-header";
+import { Term } from "@/components/term";
 import { apiFetch } from "@/lib/api";
 
 const inputClass =
@@ -305,6 +306,15 @@ export default function PlaygroundPage() {
         className="mt-6"
         delay={40}
       >
+        <p className="mb-4 max-w-3xl text-xs leading-relaxed text-muted">
+          Two models get the identical prompt, so the only thing that differs in the two answers
+          is the model. That is what makes the question &ldquo;is the cheaper one good enough for
+          this job?&rdquo; answerable instead of a hunch — and the same setup catches a{" "}
+          <Term k="temperature">temperature</Term>{" "}
+          that is too high long before it reaches a real agent. Write the message, put a model in
+          each panel, press Run both; the two calls go out at the same time and neither waits on
+          the other.
+        </p>
         <div className="space-y-3">
           <div>
             <label className="mb-1.5 block font-mono text-xs text-muted">system prompt</label>
@@ -375,11 +385,24 @@ export default function PlaygroundPage() {
             onLoadAgent={(agentId) => loadFromAgent("b", agentId)}
           />
         </div>
+
+        {/* The two inputs in each panel are an unlabelled pair and the footer
+            is four unlabelled numbers. One legend under both panels beats
+            repeating it inside VariantPanel twice. */}
+        <p className="mt-3 max-w-3xl text-xs leading-relaxed text-muted">
+          In each panel the left box is the model id — start typing to see the ones your server
+          exposes — and the right box is that variant&apos;s{" "}
+          <Term k="temperature">temperature</Term>. The footer under an answer reads ↑{" "}
+          <Term k="tokens">tokens</Term>{" "}
+          in, ↓ tokens out, then how long that one call took and what it cost. Those are figures
+          for that single call, not a running total — nothing here is billed to a budget or shows
+          up on the usage page.
+        </p>
       </Panel>
 
       <Panel
         title="Recent experiments"
-        description="Click one to reload its prompt, variants, and outputs."
+        description="Saving keeps both prompts, both models and temperatures, both answers, and both usage lines. Click one to load the whole comparison back."
         className="mt-4"
         delay={80}
       >

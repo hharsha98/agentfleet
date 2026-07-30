@@ -9,6 +9,7 @@ import { EmptyState } from "@/components/empty-state";
 import { Icon } from "@/components/landing/icons";
 import { Reveal } from "@/components/landing/reveal";
 import { PageHeader } from "@/components/page-header";
+import { Term } from "@/components/term";
 import { apiFetch } from "@/lib/api";
 
 type Doc = {
@@ -179,8 +180,60 @@ export default function DocumentsPage() {
         />
       </div>
 
+      {/* Explainer first, upload second — deliberately. Reading "what happens
+          to this file and who reads it afterwards" before picking a file is
+          the order that answers a newcomer's actual question; the reverse
+          asks them to act and explains later. Purely a source reorder within
+          the same grid: e2e/documents.spec.ts addresses the file input and
+          the Upload button by role/type, not by position. */}
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        <Panel title="Upload a document" description="Chunked and embedded locally on ingest." delay={0}>
+        <Panel
+          title="How agents use this"
+          description="The search_documents tool, honestly explained."
+          delay={0}
+        >
+          <div className="flex items-start gap-3">
+            <div
+              aria-hidden="true"
+              className="relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-hue-cyan/10 border-hue-cyan/25"
+            >
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute -inset-2 rounded-full bg-hue-cyan/20 blur-lg"
+              />
+              <Icon name="search" className="relative h-4.5 w-4.5 text-hue-cyan" />
+            </div>
+            <p className="text-sm leading-relaxed text-muted">
+              {/* Every {" "} after a </Term> below is load-bearing — see the
+                  note in agents/page.tsx: when the following JSXText spans
+                  lines the transform can drop its leading space, and the
+                  sentence renders as "chunkswith". */}
+              Every agent can make a <Term k="tool_call">tool call</Term>{" "}
+              to <code className="font-mono text-xs text-foreground">search_documents</code> — it
+              runs a semantic search over these <Term k="embedding">embeddings</Term>{" "}
+              and returns the five closest <Term k="chunk">chunks</Term>{" "}
+              with a relevance score and the file each came from, which the agent cites in its
+              reply. No document is used unless the agent&apos;s own reasoning decides to search.
+            </p>
+          </div>
+          {uploadsByDay.length > 1 && (
+            <div className="mt-4">
+              <p className="mb-1.5 text-xs text-muted">Uploads by day (loaded documents)</p>
+              <BarChart
+                data={uploadsByDay}
+                hue="cyan"
+                title="Documents uploaded per day"
+                height={72}
+              />
+            </div>
+          )}
+        </Panel>
+
+        <Panel
+          title="Upload a document"
+          description="Chunked and embedded locally on ingest — nothing is sent to a model provider."
+          delay={40}
+        >
           <div className="flex items-center gap-3 rounded-lg border border-hairline p-4 transition-colors duration-200 focus-within:border-accent/50">
             <input
               ref={fileRef}
@@ -196,43 +249,11 @@ export default function DocumentsPage() {
               {busy ? "Ingesting…" : "Upload"}
             </button>
           </div>
+          <p className="mt-2 text-xs leading-relaxed text-muted">
+            Pick a .txt, .md, or .pdf and press Upload. The first one takes longer than the rest —
+            that upload downloads the local embedding model.
+          </p>
           {note && <p className="mt-3 font-mono text-xs text-muted">{note}</p>}
-        </Panel>
-
-        <Panel
-          title="How agents use this"
-          description="The search_documents tool, honestly explained."
-          delay={40}
-        >
-          <div className="flex items-start gap-3">
-            <div
-              aria-hidden="true"
-              className="relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-hue-cyan/10 border-hue-cyan/25"
-            >
-              <div
-                aria-hidden="true"
-                className="pointer-events-none absolute -inset-2 rounded-full bg-hue-cyan/20 blur-lg"
-              />
-              <Icon name="search" className="relative h-4.5 w-4.5 text-hue-cyan" />
-            </div>
-            <p className="text-sm text-muted">
-              Every agent can call <code className="font-mono text-xs text-foreground">search_documents</code> —
-              it runs a semantic search over these embeddings and returns the closest chunks with a
-              relevance score, which the agent cites in its reply. No document is used unless the
-              agent&apos;s own reasoning decides to search.
-            </p>
-          </div>
-          {uploadsByDay.length > 1 && (
-            <div className="mt-4">
-              <p className="mb-1.5 text-xs text-muted">Uploads by day (loaded documents)</p>
-              <BarChart
-                data={uploadsByDay}
-                hue="cyan"
-                title="Documents uploaded per day"
-                height={72}
-              />
-            </div>
-          )}
         </Panel>
       </div>
 

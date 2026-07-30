@@ -172,7 +172,9 @@ export default function GuardrailsPage() {
           {guardrailResult && (
             <div className="mt-4 space-y-3">
               <div>
-                <p className="mb-1.5 font-mono text-xs text-muted">injection flags</p>
+                <p className="mb-1.5 font-mono text-xs text-muted">
+                  <Term k="injection_flag">injection flags</Term>
+                </p>
                 {guardrailResult.injection_flags.length === 0 ? (
                   <span className="rounded-full border border-emerald-400/40 px-2.5 py-0.5 font-mono text-[10px] text-emerald-300">
                     clean

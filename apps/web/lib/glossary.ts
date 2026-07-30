@@ -69,6 +69,15 @@ export const GLOSSARY = {
 
   tokens: "The chunks of text models are billed in, roughly word-pieces. ↑ is what went to the model — your prompt plus retrieved context and history — and ↓ is what it generated back. ↑ is usually much the bigger half, and the cheaper one.",
 
+  // --- Knowledge base --------------------------------------------------
+  // Both from apps/api/app/services/ingest.py: CHUNK_SIZE = 1000,
+  // CHUNK_OVERLAP = 150, EMBED_MODEL = "BAAI/bge-small-en-v1.5" run through
+  // fastembed on CPU. search_documents (apps/api/app/tools.py) returns the
+  // five nearest chunks by cosine distance, each with its source filename.
+  chunk: "A slice of an uploaded document — about 1,000 characters, overlapping its neighbours by 150 so a sentence that straddles the boundary still lands whole in one of them. Search returns chunks, not whole files, which is why an agent can point at one passage instead of a document.",
+
+  embedding: "A list of numbers standing in for a chunk's meaning, so \"cancel my order\" can match \"refund request\" with no word in common. Yours are computed on this machine by a small local model — no API cost, and the text never leaves the box.",
+
   // --- Testing and safety ---------------------------------------------
   golden_case: "A test case saved together with the answer you already know is good. Golden cases are how you find out that a prompt tweak quietly broke behaviour that used to work.",
 

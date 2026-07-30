@@ -8,6 +8,7 @@ import { StatCard } from "@/components/dash/stat-card";
 import { Icon } from "@/components/landing/icons";
 import { Reveal } from "@/components/landing/reveal";
 import { PageHeader } from "@/components/page-header";
+import { Term } from "@/components/term";
 import { apiFetch } from "@/lib/api";
 
 type Agent = {
@@ -316,6 +317,16 @@ export default function UsagePage() {
       {/* Per-agent table */}
       <div className="mt-4">
         <Panel title="Per agent (last 7 days)" delay={40}>
+          {/* Sits OUTSIDE the overflow-x-auto wrapper below on purpose: that
+              wrapper computes overflow-y to auto as well, which would clip
+              the Term tooltip against a short table. */}
+          <p className="mb-3 max-w-3xl text-xs leading-relaxed text-muted">
+            <Term k="tokens">Tokens</Term>{" "}
+            here is ↑ in plus ↓ out added together — the prompt the agent was handed and the reply
+            it wrote back, counted as one number. Cost is what those tokens actually billed at that
+            model&apos;s rate, so a chatty cheap model and a terse expensive one are comparable on
+            this column and not on the last.
+          </p>
           <div className="overflow-x-auto rounded-lg border border-hairline">
             <table className="w-full text-left text-sm">
               <thead>
@@ -361,9 +372,18 @@ export default function UsagePage() {
       <div className="mt-4">
         <Panel
           title="Budgets"
-          description="Daily caps checked before each reply — a violation on either the agent or the global budget stops the turn."
+          description="Daily caps, checked before every reply. At the cap the turn stops — the agent answers with the budget message instead of calling the model."
           delay={80}
         >
+          <p className="mb-3 max-w-3xl text-xs leading-relaxed text-muted">
+            Leave a box blank for no cap. Before each reply the backend adds up the{" "}
+            <Term k="tokens">tokens</Term>{" "}
+            and dollars that agent has already spent since midnight UTC and checks them against
+            two rows: the agent&apos;s own, then <span className="text-foreground">Global</span>.
+            If either is already at or past its number the turn never reaches the model, so an
+            agent stuck in a loop costs you the reply it was on and nothing after it. The tally
+            resets at midnight UTC.
+          </p>
           <div className="space-y-2">
             {rows.map((row, i) => (
               <Reveal
