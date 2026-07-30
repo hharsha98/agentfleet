@@ -549,11 +549,32 @@ body {
   animation: core-ping 4s ease-out infinite;
 }
 
+/* The nav overflow menu opening (components/app-nav.tsx). Short and small
+   on purpose: the panel is anchored under its trigger, so a 4px drop plus
+   a fade is enough to say "this came from the button" without making a
+   frequently-used control feel slow. Lands exactly on the panel's resting
+   appearance, so no fill-mode is needed. */
+@keyframes menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.animate-menu-in {
+  animation: menu-in 140ms var(--ease-ui) 1;
+}
+
 /* Single disable block for every animation utility on the page — original
    (blink-caret, pulse-soft) plus all UI-3 additions and the orbital hero. */
 @media (prefers-reduced-motion: reduce) {
   .animate-blink-caret,
   .animate-pulse-soft,
+  .animate-menu-in,
   .animate-dash-draw,
   .animate-dash-draw-once,
   .animate-slide-card,
@@ -580,6 +601,15 @@ body {
   .animate-glow-in,
   .animate-glow-breathe {
     animation: none;
+  }
+
+  /* The nav overflow menu's ▾ is the one piece of its open/close motion
+     that is a TRANSITION rather than a keyframe animation, so the list
+     above can't reach it. It keeps its rotate-180 (which is state, not
+     decoration — it says the menu is open); only the tween is removed.
+     Unlayered, so it beats Tailwind's transition-transform utility. */
+  .af-menu-chevron {
+    transition: none;
   }
 
   /* Static "fully lit" graph: solid edges instead of traveling dashes. */

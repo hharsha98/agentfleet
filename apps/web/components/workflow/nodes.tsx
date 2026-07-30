@@ -6,6 +6,7 @@ import { Handle, Position, type NodeProps } from "@xyflow/react";
 
 import { AGENT_VISUALS, AgentGlyph, hueForSlug } from "@/components/agent-visual";
 import { HUE_CLASSES, type Hue } from "@/components/landing/icons";
+import { Term } from "@/components/term";
 import { TASK_STATUS_GLOW } from "@/components/ui/glow";
 import { WAVE_EXPLAINER } from "@/lib/glossary";
 
@@ -133,6 +134,7 @@ export function NodeShell({
   title,
   agentName,
   meta,
+  ordinal,
   invalid = false,
   invalidReason,
   selected = false,
@@ -149,6 +151,16 @@ export function NodeShell({
   title: string;
   agentName: string;
   meta: ReactNode;
+  // Run-DAG-only, like `glow` below. The board's TaskCard grew a "Step N"
+  // pill (missions/page.tsx) because the app TALKS in ordinals — "→ step 7"
+  // on a superseded node, the depends_on numbers behind "Waiting on N
+  // tasks" — while no card or node ever printed one, so following the
+  // pointer meant counting cards and hoping. The graph node had the same
+  // gap and now closes it the same way, with the same markup, so the two
+  // views of one task can't disagree. Printed verbatim (no +1): it has to
+  // be the same integer superseded_by holds. BuilderNode never passes it —
+  // a draft graph has no run and therefore no ordinals, only waves.
+  ordinal?: number;
   invalid?: boolean;
   // What to say in the hover tooltip when `invalid` is true. The default
   // below ("Depends on a task not shown in this run") is RUN-graph copy: it
@@ -203,10 +215,23 @@ export function NodeShell({
 
       <p className="truncate leading-snug">{title}</p>
 
-      <span className="mt-1.5 flex w-fit items-center gap-1 rounded-full border border-hairline bg-white/[0.03] px-1.5 py-0.5 font-mono text-[10px] text-muted">
-        {glyph}
-        {agentName}
-      </span>
+      {/* Agent chip + step number on one wrapping row — byte-identical
+          treatment to the board's TaskCard (missions/page.tsx), so a task
+          looks the same whichever view you are in. flex-wrap rather than a
+          fixed row because NODE_W is only 210px: a long agent name pushes
+          the pill to a second line instead of overflowing the card, and
+          NODE_H is a MIN height, so React Flow measures the taller box. */}
+      <div className="mt-1.5 flex flex-wrap items-center gap-1">
+        <span className="flex w-fit items-center gap-1 rounded-full border border-hairline bg-white/[0.03] px-1.5 py-0.5 font-mono text-[10px] text-muted">
+          {glyph}
+          {agentName}
+        </span>
+        {ordinal != null && (
+          <span className="rounded-full border border-hairline px-1.5 py-0.5 font-mono text-[10px] text-muted">
+            Step {ordinal}
+          </span>
+        )}
+      </div>
 
       <span className="mt-1.5 flex items-center gap-1.5 font-mono text-[10px] text-muted">
         <span aria-hidden className={`h-1.5 w-1.5 shrink-0 rounded-full ${dotClass}`} />
@@ -250,14 +275,23 @@ export function TaskNode({ data }: NodeProps<TaskFlowNode>) {
       glow={TASK_STATUS_GLOW[task.status]}
       title={task.title}
       agentName={agentName}
+      ordinal={task.ordinal}
       glyph={<AgentGlyph slug={task.agent_slug} name={agentName} size="xs" />}
       meta={
         hasMeta ? (
-          // Byte-identical format to missions/page.tsx:217's meta line.
+          // Byte-identical format to missions/page.tsx's meta line, down to
+          // the <Term> around "tok": the board explains what a token is on
+          // click/focus, and this line said the same three characters with
+          // no explanation at all. NodeShell's root has no overflow-hidden
+          // (the only clip in this component is `truncate` on the title, a
+          // SIBLING of the meta line), so the tooltip is free to escape the
+          // card — it is bounded only by React Flow's own pane, exactly
+          // like the board's is bounded by the viewport.
           <>
             {STATUS_LABEL[task.status]}
             {healNote}
-            {supersededNote} · ↑{task.tokens_in} ↓{task.tokens_out} tok
+            {supersededNote} · ↑{task.tokens_in} ↓{task.tokens_out}{" "}
+            <Term k="tokens">tok</Term>
             {task.latency_ms != null && ` · ${task.latency_ms}ms`}
           </>
         ) : (
