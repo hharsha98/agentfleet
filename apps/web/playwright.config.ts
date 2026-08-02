@@ -6,7 +6,7 @@
 //   tries to build or start anything on its own. Before running `npm run
 //   e2e` (or `e2e:fast`), make sure:
 //     - API:       http://localhost:8000  (apps/api — uv run uvicorn app.main:app --port 8000)
-//     - Web:       http://localhost:3002  (apps/web — npm run dev, pinned to 3002)
+//     - Web:       http://localhost:3010  (apps/web — npm run dev, pinned to 3010)
 //     - LLM proxy: http://localhost:3001  (only required for the "llm" project)
 //
 // Two projects, split by whether a test needs the LLM proxy:
@@ -35,7 +35,7 @@ export default defineConfig({
   // signed-out assertions.
   globalSetup: "./e2e/auth.setup.ts",
   use: {
-    baseURL: "http://localhost:3002",
+    baseURL: "http://localhost:3010",
     trace: "retain-on-failure",
     storageState: "./e2e/.auth/state.json",
   },

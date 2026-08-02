@@ -70,8 +70,10 @@ class Settings(BaseSettings):
     langfuse_host: str = "https://cloud.langfuse.com"
 
     # Comma-separated list of origins allowed to call the API (CORS). Env:
-    # CORS_ORIGINS. Default matches the web app's local dev port.
-    cors_origins: str = "http://localhost:3002"
+    # CORS_ORIGINS. Default matches the web app's local dev port (3010). 3002 is
+    # kept because another tool on this machine now claims it, so the web app
+    # may still be started there.
+    cors_origins: str = "http://localhost:3010,http://localhost:3002"
 
     # Voice agent (Phase 10 N): Vapi bundles browser mic capture, STT, TTS,
     # and telephony behind one web SDK. Blank public key -> GET

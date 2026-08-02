@@ -4,7 +4,7 @@ Prerequisites — the dev stack must already be running (this config never
 starts it for you):
 
 - API on http://localhost:8000 (`cd apps/api && uv run uvicorn app.main:app --port 8000`) — auth-enforced (Phase 12 B1): every `/api/v1/*` route except `/health`, `/api/v1/hooks/*`, and `/api/v1/public/*` requires a Bearer JWT.
-- Web on http://localhost:3002 (`cd apps/web && npm run dev`)
+- Web on http://localhost:3010 (`cd apps/web && npm run dev`) — must match `baseURL` in `playwright.config.ts`
 - LLM proxy on http://localhost:3001 — only needed for the `llm` project
 - Repo root `.env` must have `AUTH_SECRET` set — `auth.setup.ts` reads it directly from that file (never logged/printed).
 

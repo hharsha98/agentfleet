@@ -28,6 +28,7 @@ out/
 .DS_Store
 .idea/
 .vscode/
+.cursor/claude-imports/
 
 # Local data
 docker/volumes/
