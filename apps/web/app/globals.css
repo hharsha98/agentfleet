@@ -115,6 +115,19 @@ body {
      so the whole app settles at the same rate. */
   --ease-ui: cubic-bezier(0.4, 0, 0.2, 1);
   --dur-ui: 150ms;
+
+  /* AppNav's rendered height (components/app-nav.tsx's <header>): a single
+     row (py-3 + its icon-height content + the 1px bottom hairline) that
+     never wraps to two lines at any width the app is used at — measured,
+     not guessed. The one consumer today is app/(app)/chat/page.tsx, which
+     needs a real (not `min-h-*`) height for its own root so ChatUI's
+     message pane can scroll internally instead of the whole document
+     scrolling past the composer (see that file's comment for why this
+     couldn't just be `flex-1` like every other app page). Chat's own
+     `h-[calc(100dvh-var(--app-nav-h,59px))]` repeats 59px as a literal
+     fallback, so a missing var degrades instead of producing an invalid
+     calc(). If AppNav's header row ever changes height, update both. */
+  --app-nav-h: 59px;
 }
 
 /* Everything below is deliberately UNLAYERED plain CSS (not inside
@@ -168,9 +181,19 @@ body {
   position: fixed;
   inset: 0;
   z-index: -1;
+  /* UI-7 follow-up: 14% alpha / 560px of vertical spread read as
+     essentially gone by the time any panel content starts (measured — see
+     the chat/missions UX pass that flagged this). Nudged to 20%/640px, the
+     same restrained move as the --surface-1 bump above (a proportional
+     increase, not a redesign): still low-alpha "something is behind this
+     shell", now carrying far enough to still be visible where the goal
+     input / stat cards sit on missions, instead of only existing behind
+     the nav bar. Panels themselves (bg-surface-1, opaque) still fully
+     occlude it — this only ever shows in the gaps between them, so it
+     can't compete with real content. */
   background: radial-gradient(
-    1100px 560px at 50% -12%,
-    color-mix(in srgb, var(--accent) 14%, transparent),
+    1100px 640px at 50% -12%,
+    color-mix(in srgb, var(--accent) 20%, transparent),
     transparent 70%
   );
 }

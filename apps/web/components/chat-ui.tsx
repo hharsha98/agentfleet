@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
-import { AgentBoard, AgentBoardOverlay } from "@/components/agent-board";
+import { AgentBoardOverlay, AgentPickerList } from "@/components/agent-board";
 import { AgentGlyph } from "@/components/agent-visual";
 import { ArtifactPanel } from "@/components/artifact-panel";
 import { HowItWorks, type ExplainerStep } from "@/components/explainer";
@@ -242,9 +242,9 @@ export function ChatUI({ agents }: { agents: AgentInfo[] }) {
   }
 
   return (
-    <div className="flex w-full flex-1 overflow-hidden">
+    <div className="flex w-full flex-1 min-h-0 overflow-hidden">
       <div
-        className={`flex min-w-0 flex-1 flex-col px-4 ${
+        className={`flex min-w-0 flex-1 min-h-0 flex-col px-4 ${
           activeArtifact ? "" : "mx-auto max-w-3xl"
         }`}
       >
@@ -276,7 +276,7 @@ export function ChatUI({ agents }: { agents: AgentInfo[] }) {
         </div>
       )}
 
-      <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto py-4">
+      <div ref={scrollRef} className="flex-1 min-h-0 space-y-4 overflow-y-auto py-4">
         {messages.length === 0 && (
           <div>
             {/* Everything in this block disappears the moment the first
@@ -284,17 +284,30 @@ export function ChatUI({ agents }: { agents: AgentInfo[] }) {
                 existed the window opened on a bare agent grid and the words
                 "Ask anything", which tells a newcomer neither what these
                 agents can reach nor what the cards and chips in a reply are
-                going to mean. */}
-            <HowItWorks title="How a conversation here works" steps={CHAT_STEPS} />
-            <p className="mt-3 text-xs leading-relaxed text-muted">
-              A <Term k="tool_call">tool call</Term>{" "}
-              is the agent doing something instead of describing it — expand the card to read
-              exactly what came back. An <Term k="artifact">artifact</Term>{" "}
-              is output big enough to deserve its own panel: code, a chart, a document. It arrives
-              as a chip you click, so it opens beside the conversation instead of scrolling past
-              you. The line under each reply is what that one turn cost in{" "}
-              <Term k="tokens">tokens</Term>, time, and money.
-            </p>
+                going to mean.
+
+                The agent grid itself no longer lives here — 17 cards used to
+                sit between this block and the composer, pushing Send off
+                the bottom of the screen on load (see the right rail's
+                AgentPickerList and the "browse all agents" line below,
+                which is all that's left of picking an agent from the main
+                column). */}
+            <HowItWorks title="How a conversation here works" steps={CHAT_STEPS}>
+              {/* Was a second, always-visible paragraph directly under this
+                  card saying much the same thing as the three steps above
+                  it — a "collapsed" explainer that wasn't actually
+                  collapsed. Folded inside <details> here so closed really
+                  means closed; none of the copy was cut. */}
+              <p className="mt-4 text-xs leading-relaxed text-muted">
+                A <Term k="tool_call">tool call</Term>{" "}
+                is the agent doing something instead of describing it — expand the card to read
+                exactly what came back. An <Term k="artifact">artifact</Term>{" "}
+                is output big enough to deserve its own panel: code, a chart, a document. It
+                arrives as a chip you click, so it opens beside the conversation instead of
+                scrolling past you. The line under each reply is what that one turn cost in{" "}
+                <Term k="tokens">tokens</Term>, time, and money.
+              </p>
+            </HowItWorks>
 
             <div className="mt-5 rounded-lg border border-hairline p-4">
               <p className="text-sm font-medium text-foreground">Not sure what to ask?</p>
@@ -321,18 +334,26 @@ export function ChatUI({ agents }: { agents: AgentInfo[] }) {
             </div>
 
             <p className="mt-5 mb-4 text-sm text-muted">
-              {agent
-                ? `Ask ${agent.name} anything, or switch agent below`
-                : "Pick an agent to start"}
+              {agent ? (
+                <>
+                  Ask {agent.name} anything — or{" "}
+                  <button
+                    type="button"
+                    onClick={() => setBoardOpen(true)}
+                    className="cursor-pointer font-medium text-accent transition-opacity duration-200 hover:opacity-80"
+                  >
+                    browse all {agents.length} agents
+                  </button>
+                  {/* lg+ already has the full picker in the right rail
+                      (ConversationInfoRail below) — this line is the only
+                      way to reach it below that breakpoint, so it stays
+                      visible at every width rather than lg:hidden. */}
+                  .
+                </>
+              ) : (
+                "Pick an agent to start"
+              )}
             </p>
-            <AgentBoard
-              agents={agents}
-              selectedId={agent?.id}
-              onSelect={(a) => {
-                selectAgent(a);
-                inputRef.current?.focus();
-              }}
-            />
           </div>
         )}
         {messages.map((m, i) => (
@@ -450,37 +471,70 @@ export function ChatUI({ agents }: { agents: AgentInfo[] }) {
       )}
       {/* Chunk D3 right rail — lg+ only, and only when the artifact panel
           isn't already occupying that space. Pure read of state ChatUI
-          already tracks (agent, messages); no new fetches, no touch to the
-          streaming/SSE loop above. */}
-      {!activeArtifact && <ConversationInfoRail agent={agent} messageCount={messages.length} />}
+          already tracks (agent, messages, agents); no new fetches, no touch
+          to the streaming/SSE loop above. */}
+      {!activeArtifact && (
+        <ConversationInfoRail
+          agent={agent}
+          agents={agents}
+          messageCount={messages.length}
+          onSelectAgent={(a) => {
+            selectAgent(a);
+            inputRef.current?.focus();
+          }}
+        />
+      )}
     </div>
   );
 }
 
 function ConversationInfoRail({
   agent,
+  agents,
   messageCount,
+  onSelectAgent,
 }: {
   agent: AgentInfo | null;
+  agents: AgentInfo[];
   messageCount: number;
+  onSelectAgent: (a: AgentInfo) => void;
 }) {
   return (
-    <aside className="hidden w-64 shrink-0 flex-col gap-4 border-l border-hairline px-4 py-4 lg:flex">
-      <p className="font-mono text-xs uppercase tracking-wide text-muted">Conversation</p>
-      <dl className="space-y-3 text-sm">
-        <div className="flex items-center justify-between gap-2">
-          <dt className="text-muted">Active agent</dt>
-          <dd className="truncate font-medium">{agent?.name ?? "—"}</dd>
+    <aside className="hidden w-64 shrink-0 min-h-0 flex-col gap-4 border-l border-hairline px-4 py-4 lg:flex">
+      <div className="shrink-0">
+        <p className="font-mono text-xs uppercase tracking-wide text-muted">Conversation</p>
+        <dl className="mt-3 space-y-3 text-sm">
+          <div className="flex items-center justify-between gap-2">
+            <dt className="text-muted">Active agent</dt>
+            <dd className="truncate font-medium">{agent?.name ?? "—"}</dd>
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <dt className="text-muted">Model</dt>
+            <dd className="truncate font-mono text-xs text-muted">{agent?.model ?? "—"}</dd>
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <dt className="text-muted">Messages</dt>
+            <dd className="font-mono">{messageCount}</dd>
+          </div>
+        </dl>
+      </div>
+      {/* The picker only lives here before a conversation starts. Once
+          messages.length > 0 the chip row above the transcript (and its own
+          "All agents" trigger) is the quick-switch surface instead — having
+          both on screen at once would mean two different buttons sharing an
+          agent's name, which is as confusing for a mouse as it is for a
+          screen reader announcing role+name. This is also, not
+          coincidentally, exactly the window where this rail would otherwise
+          sit empty below the info block above: real content standing in for
+          dead space, not decoration. */}
+      {messageCount === 0 && (
+        <div className="flex min-h-0 flex-1 flex-col gap-2 border-t border-hairline pt-4">
+          <p className="shrink-0 font-mono text-xs uppercase tracking-wide text-muted">
+            Switch agent
+          </p>
+          <AgentPickerList agents={agents} selectedId={agent?.id} onSelect={onSelectAgent} />
         </div>
-        <div className="flex items-center justify-between gap-2">
-          <dt className="text-muted">Model</dt>
-          <dd className="truncate font-mono text-xs text-muted">{agent?.model ?? "—"}</dd>
-        </div>
-        <div className="flex items-center justify-between gap-2">
-          <dt className="text-muted">Messages</dt>
-          <dd className="font-mono">{messageCount}</dd>
-        </div>
-      </dl>
+      )}
     </aside>
   );
 }

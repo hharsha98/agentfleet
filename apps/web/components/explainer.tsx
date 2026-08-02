@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import { HUE_CLASSES, type Hue } from "@/components/landing/icons";
 import { Reveal } from "@/components/landing/reveal";
 import { HUE_CARD_BORDER } from "@/components/ui/glow";
@@ -66,6 +68,7 @@ export function HowItWorks({
   delay = 0,
   className = "",
   hue,
+  children,
 }: {
   title: string;
   steps: ExplainerStep[];
@@ -78,6 +81,13 @@ export function HowItWorks({
   // untouched — a step can legitimately carry a different hue than the
   // page's identity color.
   hue?: Hue;
+  // Optional extra prose rendered under the step grid, still inside the
+  // closed-by-default <details> — for a page whose explainer needs one more
+  // paragraph of nuance (chat's tool_call/artifact/tokens gloss) that used
+  // to sit directly below this component, always visible, defeating the
+  // point of the collapsed state. Every existing caller omits this, so it
+  // is a pure widening, not a breaking change.
+  children?: ReactNode;
 }) {
   const gridCols = steps.length >= 4 ? "sm:grid-cols-2 lg:grid-cols-4" : "sm:grid-cols-3";
 
@@ -109,6 +119,7 @@ export function HowItWorks({
             />
           ))}
         </div>
+        {children}
       </details>
     </Reveal>
   );

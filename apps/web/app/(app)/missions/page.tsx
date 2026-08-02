@@ -1066,11 +1066,39 @@ export default function MissionsPage() {
           ) : selected ? (
             <p className="pt-24 text-center text-sm text-muted">Loading mission…</p>
           ) : (
-            <EmptyState
-              glyph={<RocketIcon className="h-7 w-7" />}
-              title="No mission running"
-              description="Launch a goal above — tasks appear here as a live board, agent by agent."
-            />
+            <div>
+              <EmptyState
+                glyph={<RocketIcon className="h-7 w-7" />}
+                title="No mission running"
+                description="Launch a goal above — tasks appear here as a live board, agent by agent."
+              />
+              {/* A composed idle state instead of a message alone in a big
+                  empty rectangle: the same five columns COLUMNS defines for
+                  the live board (see the constant above), shown empty and
+                  muted, so the shape of "what happens next" is legible
+                  before anything has run. Real structure the board already
+                  uses — not invented counts or fabricated activity. Sliced
+                  to 5: "superseded"/"skipped" are the two COLUMNS entries
+                  the live board itself only draws once non-empty (see
+                  boardColumns above), so a preview that showed all 7 would
+                  promise two columns idle-state visitors will rarely see. */}
+              <div className="mt-6 grid grid-cols-2 gap-3 opacity-50 sm:grid-cols-5">
+                {COLUMNS.slice(0, 5).map((col) => (
+                  <div
+                    key={col.key}
+                    className="rounded-md border border-dashed border-hairline px-2 py-2.5 text-center"
+                  >
+                    <span
+                      aria-hidden="true"
+                      // Slice(0, 5) never reaches "superseded" (index 5), the
+                      // only entry typed "muted" — safe to assume Hue here.
+                      className={`inline-block h-1.5 w-1.5 rounded-full ${HUE_DOT[col.hue as Hue]}`}
+                    />
+                    <span className="ml-1.5 font-mono text-[10px] text-muted">{col.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
         </Panel>
       </div>
