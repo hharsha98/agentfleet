@@ -96,7 +96,12 @@ def tool_specs_for_agent(agent_tools: list, mcp_specs: list[dict]) -> list[dict]
 
 
 def _build_graph(
-    model, mcp_toolbox: McpToolbox, tool_log: list[dict], findings_texts: list[str], checkpointer
+    model,
+    mcp_toolbox: McpToolbox,
+    tool_log: list[dict],
+    findings_texts: list[str],
+    checkpointer,
+    user_id: uuid.UUID | None = None,
 ):
     """Compile a fresh StateGraph for one chat turn. The model and
     mcp_toolbox are per-request (bound to this agent's config and this
@@ -134,7 +139,7 @@ def _build_graph(
             if name.startswith("mcp_"):
                 result = await mcp_toolbox.call(name, args)
             else:
-                result = await run_tool(name, args)
+                result = await run_tool(name, args, user_id=user_id)
             guarded, flags = wrap_tool_output(result)
             if flags:
                 writer({"sse_type": "guardrail", "tool": name, "flags": flags})
@@ -281,7 +286,9 @@ async def stream_chat_graph(conversation_id: uuid.UUID, user_text: str) -> Async
                 model = model.bind_tools(tool_specs)
 
             checkpointer = await get_checkpointer()
-            graph = _build_graph(model, mcp_toolbox, tool_log, findings_texts, checkpointer)
+            graph = _build_graph(
+                model, mcp_toolbox, tool_log, findings_texts, checkpointer, conversation.user_id
+            )
             # THREAD-ID TRAP: this runtime already loads the full
             # conversation history from the messages table and re-seeds it
             # as `lc_messages` on every turn (see above). LangGraph's

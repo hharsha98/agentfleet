@@ -73,7 +73,7 @@ async def test_pydantic_runtime_happy_path_streams_tokens_and_done(monkeypatch) 
     emits. build_pydantic_agent is swapped for one wired to pydantic_ai's
     offline TestModel so this never touches a network or the LLM proxy."""
 
-    def _fake_build(agent_row, base_url, api_key):
+    def _fake_build(agent_row, base_url, api_key, user_id=None):
         return PydanticAgent(
             TestModel(custom_output_text="Paris is the capital of France."),
             system_prompt=agent_row.system_prompt,
@@ -111,7 +111,7 @@ async def test_pydantic_runtime_provider_error_yields_error_event_not_exception(
     turn must end with a sanitized `error` SSE frame, never an unhandled
     exception reaching the ASGI layer."""
 
-    def _raise_build(agent_row, base_url, api_key):
+    def _raise_build(agent_row, base_url, api_key, user_id=None):
         raise ModelHTTPError(status_code=500, model_name=agent_row.model, body={"error": "boom"})
 
     monkeypatch.setattr(pydantic_runtime, "build_pydantic_agent", _raise_build)

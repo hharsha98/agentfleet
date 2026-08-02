@@ -276,7 +276,9 @@ async def stream_chat(
                             if c["name"].startswith("mcp_"):
                                 result = await mcp_toolbox.call(c["name"], args)
                             else:
-                                result = await run_tool(c["name"], args)
+                                result = await run_tool(
+                                    c["name"], args, user_id=conversation.user_id
+                                )
                             result, guardrail_hits = wrap_tool_output(result)
                             if guardrail_hits:
                                 yield _sse(

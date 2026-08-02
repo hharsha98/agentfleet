@@ -141,6 +141,13 @@ class UsageTodayOut(BaseModel):
     tokens: int
     cost_usd: float
     messages: int
+    # Count of today's assistant messages whose model app.costs doesn't
+    # recognize (app.costs.is_priced() is False) -- cost_usd above is an
+    # UNDER-count by whatever those messages actually cost, so the frontend
+    # surfaces this as an explicit caveat rather than a silent gap. See
+    # app/costs.py's module docstring for why "unpriced" and "free" are
+    # deliberately different things.
+    unpriced_messages: int
 
 
 class UsagePerAgentOut(BaseModel):

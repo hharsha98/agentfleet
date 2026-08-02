@@ -21,6 +21,11 @@ type UsageToday = {
   tokens: number;
   cost_usd: number;
   messages: number;
+  // Count of today's assistant messages whose model app/costs.py doesn't
+  // recognize -- cost_usd above under-counts by whatever those messages
+  // actually cost, so the UI surfaces this instead of a bare (misleadingly
+  // confident-looking) dollar figure.
+  unpriced_messages: number;
 };
 
 type UsagePerAgent = {
@@ -112,6 +117,11 @@ export default function UsagePage() {
   }
 
   useEffect(() => {
+    // refreshAll() is async and only calls setState (via the four refresh*
+    // helpers above) after their own `await apiFetch(...)` resolves —
+    // nothing is set synchronously here, so this is the fetch-on-mount
+    // idiom, not a cascading render.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     refreshAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -242,7 +252,9 @@ export default function UsagePage() {
         description="Every token, call, and cent — metered per agent and per day. Set budgets so an agent can never overspend."
       >
         {summary && (
-          <span className="font-mono text-xs text-muted">{fmtUsd(summary.today.cost_usd)} today</span>
+          <span className="font-mono text-xs text-muted">
+            {fmtUsd(summary.today.cost_usd)} modeled today
+          </span>
         )}
       </PageHeader>
       {note && <p className="mt-3 font-mono text-xs text-muted">{note}</p>}
@@ -250,9 +262,15 @@ export default function UsagePage() {
       {/* Stat row */}
       <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
         <StatCard
-          label="Cost today"
+          label="Modeled cost (list price)"
           value={summary ? fmtUsd(summary.today.cost_usd) : "—"}
-          sub={summary ? `${fmtInt(summary.today.messages)} messages` : undefined}
+          sub={
+            summary
+              ? summary.today.unpriced_messages > 0
+                ? `${fmtInt(summary.today.messages)} messages \u00b7 ${fmtInt(summary.today.unpriced_messages)} from unpriced models`
+                : `${fmtInt(summary.today.messages)} messages`
+              : undefined
+          }
           icon={<Icon name="gauge" />}
           hue="blue"
           pulse

@@ -13,6 +13,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import current_user
+from app.costs import is_priced
 from app.db import get_session
 from app.models import Agent, Conversation, Message, User
 from app.schemas import UsageDailyOut, UsagePerAgentOut, UsageSummaryOut, UsageTodayOut
@@ -46,8 +47,28 @@ async def summary(
             .where(Message.created_at >= today_start)
         )
     ).one()
+
+    # Per-model message counts for today, so we can report how many of
+    # today's messages came from a model app.costs doesn't recognize --
+    # those rows' cost_usd is a real $0 in the sum above, but for the WRONG
+    # reason (unknown, not free), so the frontend needs to know it happened.
+    model_counts_today = (
+        await session.execute(
+            select(Message.model, func.count(Message.id))
+            .where(Message.role == "assistant")
+            .where(Message.created_at >= today_start)
+            .group_by(Message.model)
+        )
+    ).all()
+    unpriced_messages_today = sum(
+        count for model, count in model_counts_today if not is_priced(model)
+    )
+
     today = UsageTodayOut(
-        tokens=int(today_row[0]), cost_usd=float(today_row[1]), messages=int(today_row[2])
+        tokens=int(today_row[0]),
+        cost_usd=float(today_row[1]),
+        messages=int(today_row[2]),
+        unpriced_messages=unpriced_messages_today,
     )
 
     week_start = datetime.now(timezone.utc) - timedelta(days=7)

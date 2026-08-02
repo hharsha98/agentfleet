@@ -10,6 +10,7 @@ import ipaddress
 import json
 import re
 import socket
+import uuid
 from datetime import date, datetime
 from decimal import Decimal
 from urllib.parse import urlparse
@@ -23,6 +24,7 @@ from app.config import get_settings
 from app.db import SessionLocal
 from app.db import engine as _app_engine
 from app.models import Chunk, Document
+from app.ownership import visibility_clause_for_id
 
 # ── web_search: pluggable provider with SearXNG fallback ────────────────────
 #
@@ -140,7 +142,31 @@ async def web_search(query: str, max_results: int = 5) -> str:
     return json.dumps(results, ensure_ascii=False)
 
 
-async def search_documents(query: str, max_results: int = 5) -> str:
+async def search_documents(
+    query: str, max_results: int = 5, user_id: uuid.UUID | None = None
+) -> str:
+    """Semantic search over uploaded document chunks.
+
+    `user_id` is the calling conversation's owner, threaded through from
+    run_tool (see its three call sites: services/graph_runtime.py,
+    services/chat.py, services/pydantic_runtime.py — all three load
+    `conversation` and pass `conversation.user_id`). Without this filter,
+    ANY agent's search_documents call could retrieve ANY user's uploaded
+    document chunks — the cross-tenant leak this parameter fixes.
+
+    Applies the exact same visibility rule every other resource-listing
+    route uses (see app/ownership.py): a Document is visible if it's owned
+    by `user_id` OR has no owner at all (user_id IS NULL — legacy/global
+    data, preserved exactly as ownership.py already treats it elsewhere,
+    not tightened here).
+
+    `user_id=None` (no caller identity — a scheduled run, a webhook-
+    triggered run, or the public API-key invoke path used by mcp/server.py,
+    none of which have a logged-in user attached to their conversation)
+    resolves to "only unowned documents are visible" via that same clause
+    (see visibility_clause_for_id's docstring) — never another user's
+    private uploads, and never silently unfiltered.
+    """
     # Lazy import: the embedding model only loads when a doc search happens.
     from app.services.ingest import embed_texts
 
@@ -151,6 +177,7 @@ async def search_documents(query: str, max_results: int = 5) -> str:
             await session.execute(
                 select(Chunk.text, Chunk.ordinal, Document.filename, distance.label("dist"))
                 .join(Document, Chunk.document_id == Document.id)
+                .where(visibility_clause_for_id(Document, user_id))
                 .order_by(distance)
                 .limit(max_results)
             )
@@ -569,10 +596,24 @@ def specs_for(names: list) -> list[dict]:
     return [TOOLS[n]["spec"] for n in names if n in TOOLS]
 
 
-async def run_tool(name: str, arguments: dict) -> str:
+async def run_tool(name: str, arguments: dict, *, user_id: uuid.UUID | None = None) -> str:
+    """Dispatch a model-requested tool call.
+
+    `user_id` is the caller's identity (the chat turn's Conversation.user_id
+    — see the three call sites in services/graph_runtime.py, services/
+    chat.py, services/pydantic_runtime.py), optional with a None default so
+    existing callers/tests that never pass it are unaffected. `arguments`
+    comes straight from the model, so we never blanket-forward **kwargs
+    plus user_id into every tool's run() — a model-supplied argument name
+    could collide with it. Only search_documents needs caller identity (for
+    its ownership filter; see its docstring), so injection is explicit and
+    scoped to that one tool.
+    """
     if name not in TOOLS:
         return f"Unknown tool: {name}"
     try:
+        if name == "search_documents":
+            return await TOOLS[name]["run"](**arguments, user_id=user_id)
         return await TOOLS[name]["run"](**arguments)
     except Exception as exc:  # tool failures go back to the model, not the user
         return f"Tool error: {type(exc).__name__}"

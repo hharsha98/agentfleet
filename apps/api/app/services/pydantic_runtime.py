@@ -52,26 +52,41 @@ def _sse(data: dict) -> str:
     return f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
-def _make_tool_wrapper(name: str):
+def _make_tool_wrapper(name: str, user_id: uuid.UUID | None = None):
     """Thin async wrapper around an app.tools function: same (query,
     max_results) signature both wrappable tools share, delegating the real
     work to run_tool() so behavior (incl. its try/except-to-string
     fallback) stays exactly what graph_runtime and chat.py already use.
-    `name` is captured by closure, not a default arg, so it never leaks
-    into the JSON schema Pydantic AI builds from the function signature.
+    `name` and `user_id` are captured by closure, not default args, so
+    neither leaks into the JSON schema Pydantic AI builds from the function
+    signature. `user_id` (the conversation's owner) is forwarded to every
+    call regardless of tool name — run_tool itself only actually applies it
+    to search_documents (see run_tool's docstring), so this stays a no-op
+    for web_search.
     """
 
     async def _tool(query: str, max_results: int = 5) -> str:
-        return await run_tool(name, {"query": query, "max_results": max_results})
+        return await run_tool(
+            name, {"query": query, "max_results": max_results}, user_id=user_id
+        )
 
     _tool.__name__ = name
     return _tool
 
 
-def build_pydantic_agent(agent_row: Agent, base_url: str, api_key: str) -> PydanticAgent:
+def build_pydantic_agent(
+    agent_row: Agent, base_url: str, api_key: str, user_id: uuid.UUID | None = None
+) -> PydanticAgent:
     """Assemble a Pydantic AI Agent configured from the DB row: same model
     and system_prompt an agent would use under graph_runtime, plus whichever
-    of WRAPPABLE_TOOLS the row opted into via its `tools` column."""
+    of WRAPPABLE_TOOLS the row opted into via its `tools` column.
+
+    `user_id` is the calling conversation's owner (see stream_chat_pydantic
+    below), threaded into each wrapped tool so search_documents can apply
+    its per-user ownership filter (app/tools.py) — the fix for the
+    cross-tenant RAG leak. Optional/defaulted so this stays a drop-in
+    signature for anything that doesn't need it.
+    """
     model = OpenAIChatModel(
         agent_row.model,
         provider=OpenAIProvider(base_url=base_url, api_key=api_key or "x"),
@@ -80,7 +95,9 @@ def build_pydantic_agent(agent_row: Agent, base_url: str, api_key: str) -> Pydan
     for name in WRAPPABLE_TOOLS:
         if name in (agent_row.tools or []):
             description = TOOLS[name]["spec"]["function"]["description"]
-            pai_agent.tool_plain(name=name, description=description)(_make_tool_wrapper(name))
+            pai_agent.tool_plain(name=name, description=description)(
+                _make_tool_wrapper(name, user_id)
+            )
     return pai_agent
 
 
@@ -142,7 +159,9 @@ async def stream_chat_pydantic(conversation_id: uuid.UUID, user_text: str) -> As
         interrupted: BaseException | None = None
 
         try:
-            pai_agent = build_pydantic_agent(agent, settings.free_llm_base_url, settings.free_llm_key)
+            pai_agent = build_pydantic_agent(
+                agent, settings.free_llm_base_url, settings.free_llm_key, conversation.user_id
+            )
             # Streaming path: the installed pydantic-ai-slim (2.11.0)
             # supports run_stream + stream_text(delta=True) cleanly against
             # our OpenAI-compatible proxy (verified live), so we stream real

@@ -25,6 +25,85 @@ from app.services.chat import stream_chat
 
 logger = logging.getLogger(__name__)
 
+# Accepted spellings for a judge's `pass` verdict, case-insensitive and
+# whitespace-stripped for strings. Anything not in one of these sets (a
+# stray float, a list, an unrecognized word, missing/null) is NOT a verdict
+# we can trust — judge() must fail closed rather than guess.
+_TRUTHY_VERDICTS = {"true", "yes", "pass", "1"}
+_FALSY_VERDICTS = {"false", "no", "fail", "0"}
+
+
+def _coerce_verdict(value: object) -> bool | None:
+    """Normalize a judge's raw `pass` field into a real bool, or None if it
+    can't be confidently interpreted (the caller must then fail closed).
+
+    This is the fix for the inverted-gate bug: `bool(parsed.get("pass"))`
+    treated ANY truthy value — including the JSON string "false" — as a
+    pass, because `bool("false") == True` in Python. Real booleans are
+    accepted as-is; the common string/int spellings a less disciplined
+    model might emit ("true"/"false", "yes"/"no", "pass"/"fail", 1/0) are
+    normalized explicitly; everything else returns None.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):  # bool is a subclass of int, already handled above
+        if value == 1:
+            return True
+        if value == 0:
+            return False
+        return None
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in _TRUTHY_VERDICTS:
+            return True
+        if normalized in _FALSY_VERDICTS:
+            return False
+    return None
+
+
+def _first_json_object(text: str) -> str | None:
+    """Return the first balanced {...} object in `text`, scanning forward
+    from the first '{' and tracking brace depth — or None if no balanced
+    object exists.
+
+    Fixes the `text.rfind("}")` bug: taking the LAST '}' in the response
+    overshoots whenever the model appends prose containing its own brace
+    AFTER the JSON object (e.g. `{"pass": true} (rubric said {strict})`),
+    which fed json.loads a trailing-garbage string and turned a CORRECT
+    verdict into a parse failure.
+
+    Braces inside JSON string literals must not affect depth (a naive
+    counter breaks on `{"reason": "use {curly} braces"}`), so this tracks
+    whether the scan is inside a string literal and honours backslash
+    escapes there.
+    """
+    start = text.find("{")
+    if start == -1:
+        return None
+    depth = 0
+    in_string = False
+    escaped = False
+    for i in range(start, len(text)):
+        ch = text[i]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+            continue
+        if ch == '"':
+            in_string = True
+        elif ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start : i + 1]
+    return None
+
+
 JUDGE_PROMPT = """You are grading an AI agent's reply against a rubric. Be strict but fair.
 
 Rubric: {rubric}
@@ -85,11 +164,14 @@ async def judge(rubric: str, input_text: str, reply: str, model: str) -> tuple[b
             temperature=0,
         )
         text = response.choices[0].message.content or ""
-        start, end = text.find("{"), text.rfind("}")
-        if start == -1 or end == -1:
+        obj_text = _first_json_object(text)
+        if obj_text is None:
             return False, "judge error: no JSON object in response"
-        parsed = json.loads(text[start : end + 1])
-        return bool(parsed.get("pass")), str(parsed.get("reason") or "")[:300]
+        parsed = json.loads(obj_text)
+        verdict = _coerce_verdict(parsed.get("pass"))
+        if verdict is None:
+            return False, f"judge error: unparseable verdict {parsed.get('pass')!r}"
+        return verdict, str(parsed.get("reason") or "")[:300]
     except Exception as exc:
         logger.warning("judge call failed", exc_info=True)
         return False, f"judge error: {type(exc).__name__}"

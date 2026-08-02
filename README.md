@@ -3,7 +3,7 @@
 **A self-hostable multi-agent operations platform** — chat with a fleet of tool-using agents, hand the orchestrator a goal and watch it execute as a live task DAG, and run the whole thing with production-grade evals, cost governance, and guardrails.
 
 ![CI](https://github.com/hharsha98/agentfleet/actions/workflows/evals.yml/badge.svg)
-![Tests](https://img.shields.io/badge/tests-31%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-184%20API%20%2B%2026%20E2E-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Self-hosted](https://img.shields.io/badge/deploy-self--hosted-informational)
 
@@ -101,7 +101,7 @@ Most agent demos stop at "it can call a tool." AgentFleet treats an agent like a
 
 **Frontend** — Next.js 16 (App Router, Turbopack) · TypeScript · Tailwind v4 (hand-rolled dark design system) · Auth.js v5 (Google OAuth)
 
-**Infra** — Docker + one-command Docker Compose · Kubernetes manifests ([k8s/](k8s/README.md)) · GitHub Actions CI (tests against a live pgvector service) · 36 passing tests
+**Infra** — Docker + one-command Docker Compose · Kubernetes manifests ([k8s/](k8s/README.md)) · GitHub Actions CI (tests against a live pgvector service) · **184 API tests + 26 Playwright E2E**, plus lint and typecheck gates
 
 ## Quick start (local)
 
