@@ -122,14 +122,15 @@ cp .env.example .env          # fill in your keys
 docker compose -f docker/compose.yaml up -d
 cd apps/api && uv sync && uv run uvicorn app.main:app --reload
 cd apps/web && npm install && npm run dev
-# open http://localhost:3010
+# open http://localhost:3002
 ```
 
-Dev mode serves the web app on **3010** (3000 and 3002 are both taken on this
-machine); the Docker quick-start above stays on 3002 because compose publishes
-that port itself. Whichever you use, the Google OAuth callback URI has to match
-— register `http://localhost:<port>/api/auth/callback/google` in the Google
-console, or sign-in fails with `redirect_uri_mismatch`.
+Both paths serve the web app on **3002** (3000 is taken on this machine). If you
+move that port, the Google OAuth callback URI has to move with it — register
+`http://localhost:<port>/api/auth/callback/google` in the Google console, or
+sign-in fails with `redirect_uri_mismatch`. `CORS_ORIGINS` in
+`apps/api/app/config.py` already lists both 3002 and 3010 so the API keeps
+answering either way.
 
 K8s manifests for a local kind/k3d/minikube cluster live in [k8s/](k8s/README.md).
 

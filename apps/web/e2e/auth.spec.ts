@@ -26,6 +26,6 @@ test("signed-out visitors are redirected off gated pages, and the API 401s witho
   // 3. The token mint route self-guards: with no session cookie (this
   // test's `request` fixture inherits the empty storageState set above),
   // it must 401 rather than mint a token for nobody.
-  const tokenRes = await request.get("http://localhost:3010/api/token");
+  const tokenRes = await request.get("http://localhost:3002/api/token");
   expect(tokenRes.status()).toBe(401);
 });
