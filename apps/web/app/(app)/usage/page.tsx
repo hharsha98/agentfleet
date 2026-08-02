@@ -301,6 +301,7 @@ export default function UsagePage() {
             </div>
           }
           delay={0}
+          hue="blue"
         >
           <BarChart
             data={chartData}
@@ -316,7 +317,7 @@ export default function UsagePage() {
 
       {/* Per-agent table */}
       <div className="mt-4">
-        <Panel title="Per agent (last 7 days)" delay={40}>
+        <Panel title="Per agent (last 7 days)" delay={40} hue="blue">
           {/* Sits OUTSIDE the overflow-x-auto wrapper below on purpose: that
               wrapper computes overflow-y to auto as well, which would clip
               the Term tooltip against a short table. */}
@@ -372,8 +373,9 @@ export default function UsagePage() {
       <div className="mt-4">
         <Panel
           title="Budgets"
-          description="Daily caps, checked before every reply. At the cap the turn stops — the agent answers with the budget message instead of calling the model."
+          description="Daily caps — once hit, the agent replies with a budget message instead of calling the model."
           delay={80}
+          hue="blue"
         >
           <p className="mb-3 max-w-3xl text-xs leading-relaxed text-muted">
             Leave a box blank for no cap. Before each reply the backend adds up the{" "}

@@ -305,6 +305,7 @@ export default function PlaygroundPage() {
         description="Run one prompt against two models side by side — compare answers, speed, and cost."
         className="mt-6"
         delay={40}
+        hue="cyan"
       >
         <p className="mb-4 max-w-3xl text-xs leading-relaxed text-muted">
           Two models get the identical prompt, so the only thing that differs in the two answers
@@ -402,9 +403,10 @@ export default function PlaygroundPage() {
 
       <Panel
         title="Recent experiments"
-        description="Saving keeps both prompts, both models and temperatures, both answers, and both usage lines. Click one to load the whole comparison back."
+        description="Saved comparisons — click one to reload both prompts, answers, and costs."
         className="mt-4"
         delay={80}
+        hue="cyan"
       >
         <ul className="space-y-2">
           {experiments.map((e, i) => (

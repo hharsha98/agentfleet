@@ -69,6 +69,27 @@ export const HUE_TONE: Record<GlowTone, string> = {
 export const GLOW_HOVER = "af-glow-hover";
 
 /**
+ * Per-page identity tint (UI-7) for Panel and HowItWorks: swaps their
+ * shared .af-card's neutral white top-edge highlight for the page's own
+ * hue, so a page's panels read as visually distinct from the next page's
+ * without touching border-color's siblings (background, shadow). No
+ * "accent" entry here — accent is reserved for CTAs/active states/chart
+ * fills (see --accent's definition in app/globals.css), not page identity,
+ * and every page already has one of these six hues from its own PageHeader
+ * call. Recipes live in app/globals.css as .af-card-<hue>; this map only
+ * says which class name a given hue gets, same division of labour as
+ * HUE_GLOW/HUE_TONE above.
+ */
+export const HUE_CARD_BORDER: Record<Hue, string> = {
+  blue: "af-card-blue",
+  violet: "af-card-violet",
+  cyan: "af-card-cyan",
+  amber: "af-card-amber",
+  green: "af-card-green",
+  red: "af-card-red",
+};
+
+/**
  * Task status -> glow, the ONE place the board (missions/page.tsx TaskCard)
  * and the run DAG (workflow/nodes.tsx TaskNode) agree about it. Both files
  * already carry "keep these in sync" comments over their duplicated status

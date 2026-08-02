@@ -35,10 +35,18 @@ export function StatCard({
       })
     : icon;
 
+  // Every call site that has no number yet passes the literal em-dash as
+  // `value` (18 of them, e.g. missions/usage/templates pages) rather than
+  // a loading/empty prop of their own. Detecting that sentinel here — not
+  // adding a new prop — is what keeps the public API unchanged while
+  // letting the placeholder read as "nothing to show yet" instead of a
+  // broken number: quieter weight/color, no jumbo mono treatment.
+  const isPlaceholder = value === "—";
+
   return (
     // No hover styling, deliberately — same reasoning as Panel: a stat tile
     // displays a number, it does not go anywhere when clicked.
-    <Reveal delay={delay} className={`rounded-lg border border-hairline p-4 ${className}`}>
+    <Reveal delay={delay} className={`af-card bg-surface-1 p-4 ${className}`}>
       <div className="flex items-start justify-between gap-2">
         <p className="text-xs text-muted">{label}</p>
         {pulse ? (
@@ -61,7 +69,15 @@ export function StatCard({
           </div>
         ) : null}
       </div>
-      <p className="mt-1 truncate font-mono text-2xl font-medium sm:text-3xl">{value}</p>
+      <p
+        className={`mt-1 truncate font-mono ${
+          isPlaceholder
+            ? "text-xl font-normal text-muted/70"
+            : "text-2xl font-medium sm:text-3xl"
+        }`}
+      >
+        {value}
+      </p>
       {sub && <p className="mt-1 text-xs text-muted">{sub}</p>}
     </Reveal>
   );

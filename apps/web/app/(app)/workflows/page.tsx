@@ -190,6 +190,7 @@ export default function WorkflowsPage() {
         description="Opens a finished workflow you can read, edit, or run — the quickest way to see how steps and waves fit together."
         className="mt-6"
         delay={60}
+        hue="cyan"
       >
         <div className="grid gap-3 sm:grid-cols-2">
           {WORKFLOW_EXAMPLES.map((example) => (
@@ -215,6 +216,7 @@ export default function WorkflowsPage() {
         description="Saved graphs, not runs. Opening one shows the template; running it starts a fresh mission every time."
         className="mt-6"
         delay={80}
+        hue="cyan"
       >
         <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
           {workflows.map((w, i) => (

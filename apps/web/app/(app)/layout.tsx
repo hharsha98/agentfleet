@@ -19,6 +19,16 @@ import { UserMenu } from "@/components/user-menu";
 export default function AppShellLayout({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-full flex-1 flex-col">
+      {/* Ambient ground (UI-7) — a SIBLING of <AppNav/> and {children}, never
+          an ancestor wrapping either: e2e/workflows.spec.ts locates cards via
+          page.locator("div", { hasText: name }).last(), which silently
+          resolves to the wrong element the moment a card (or the page
+          content around it) gains a new ancestor div. .af-app-ground is
+          fixed + negative z-index (see app/globals.css), so its position in
+          the DOM doesn't matter for layout — only that it paints behind
+          everything else, which the negative z-index guarantees regardless
+          of where in this flex column it's mounted. */}
+      <div aria-hidden="true" className="af-app-ground pointer-events-none" />
       <AppNav userMenu={<UserMenu />} />
       {children}
     </div>

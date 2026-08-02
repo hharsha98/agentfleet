@@ -478,7 +478,13 @@ export default function AgentsPage() {
         />
       </div>
 
-      <HowItWorks title="How it works" className="mt-6" delay={20} steps={AGENT_STEPS} />
+      <HowItWorks
+        title="How it works"
+        className="mt-6"
+        delay={20}
+        steps={AGENT_STEPS}
+        hue="amber"
+      />
 
       <Panel
         title="Agent builder"
@@ -493,6 +499,7 @@ export default function AgentsPage() {
         }
         className="mt-6"
         delay={40}
+        hue="amber"
       >
         {formOpen ? (
           <form
@@ -693,6 +700,7 @@ export default function AgentsPage() {
         description="Built-in and custom agents in your fleet."
         className="mt-6"
         delay={80}
+        hue="amber"
       >
         {/* One legend for the three buttons on every card, rather than the
             same sentence repeated once per agent. Before this, all three were

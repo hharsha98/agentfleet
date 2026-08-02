@@ -1,6 +1,8 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { GLOW_HOVER } from "@/components/ui/glow";
+
 // Shared "nothing here yet" block — pure presentation, no data logic, so it
 // can be dropped into any page's already-working fetch/loading flow without
 // touching that flow. Server component: no hooks, no interactivity.
@@ -30,14 +32,19 @@ export function EmptyState({
     | { onClick: () => void; label: string; disabled?: boolean };
 }) {
   return (
-    <div className="flex flex-col items-center gap-3 py-12 text-center">
+    <div className="flex flex-col items-center gap-3 py-16 text-center">
+      {/* Identity-surface glyph, same idiom as landing/icons.tsx's IconTile:
+          HUE_TONE + GLOW_HOVER carries the accent hue with no resting halo,
+          so the badge reads as a filled, designed surface — not just an
+          outline — without a permanent glow competing with real state
+          glows elsewhere on the page. */}
       <span
         aria-hidden="true"
-        className="flex h-12 w-12 items-center justify-center rounded-full border border-hairline text-muted"
+        className={`af-tone-accent flex h-14 w-14 items-center justify-center rounded-full border border-hairline bg-surface-1 text-muted ${GLOW_HOVER}`}
       >
         {glyph}
       </span>
-      <p className="text-sm font-medium text-foreground">{title}</p>
+      <p className="mt-1 text-base font-semibold tracking-tight text-foreground">{title}</p>
       <p className="max-w-xs text-sm text-muted">{description}</p>
       {action &&
         ("href" in action ? (

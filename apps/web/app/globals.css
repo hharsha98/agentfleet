@@ -89,9 +89,20 @@ body {
    the border box, so it cannot occlude an outer shadow). */
 :root {
   /* Surface elevation ladder. --surface-0 is the page background itself;
-     each step up is a nominally "closer to the light" plane. */
+     each step up is a nominally "closer to the light" plane.
+
+     --surface-1 was #111114 (only ~7-10 RGB points off --surface-0), which
+     read as barely-there in screenshots — cards were nearly indistinguishable
+     from the page. Nudged up to sit roughly midway to --surface-2 instead,
+     which stays comfortably below it (monotonic ladder preserved) while
+     roughly doubling the perceived separation from the page background.
+     Only 4 consumers exist today (all via bg-surface-1: components/dash/
+     panel.tsx, components/dash/stat-card.tsx, components/explainer.tsx,
+     components/empty-state.tsx's badge circle) — checked before changing,
+     and all four are exactly the "major panels" this was meant to fix.
+     --surface-2/-3 have no consumers yet, so left untouched. */
   --surface-0: #0a0a0a;
-  --surface-1: #111114;
+  --surface-1: #17171d;
   --surface-2: #1a1a1f;
   --surface-3: #222228;
 
@@ -116,9 +127,17 @@ body {
    class on the same element will override focus-visible:ring-*. Put the
    glow on a wrapper, not on the focusable element itself. */
 
-/* Base card chrome: border + radius + the standard state transition. */
+/* Base card chrome: border + radius + the standard state transition.
+   border-top-color is brighter than the other three sides — a cheap
+   "light catching the top edge" cue that reads as glass/depth without a
+   box-shadow (which would be silently overridden: an .af-glow-* class on
+   the same element sets box-shadow too, unlayered, and file order would let
+   it win — see StatCard's RUN_GLOW usage in missions/page.tsx, the one spot
+   .af-card and .af-glow-* already land on the same element). border-color is
+   per-side here on purpose so this survives that case untouched. */
 .af-card {
   border: 1px solid var(--hairline);
+  border-top-color: rgba(255, 255, 255, 0.18);
   border-radius: 0.5rem;
   transition:
     box-shadow var(--dur-ui) var(--ease-ui),
@@ -130,6 +149,60 @@ body {
   background-color: color-mix(in srgb, var(--surface-1) 70%, transparent);
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+}
+
+/* --- App-shell ambient ground (UI-7) ------------------------------------
+   The landing page has an atmosphere (blueprint grid, gradients, an
+   orbital) for backdrop-filter to blur; the 13 signed-in (app) pages sat on
+   flat --surface-0 with nothing behind them, which is why an earlier
+   .af-glass attempt on those pages composited darker than a flat fill —
+   blurring flat black just produces flat black. This gives the app shell a
+   single, very low-alpha radial glow anchored above the viewport: fixed
+   (never repaints on scroll — one composited layer, cheap for 13
+   data-heavy pages), and mounted as a SIBLING of <AppNav/> and {children}
+   in app/(app)/layout.tsx via negative z-index rather than an extra
+   ancestor element (e2e/workflows.spec.ts's card locator resolves to the
+   wrong element the moment a card gains a new wrapping div). No animation,
+   so nothing to add to the prefers-reduced-motion block below. */
+.af-app-ground {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: radial-gradient(
+    1100px 560px at 50% -12%,
+    color-mix(in srgb, var(--accent) 14%, transparent),
+    transparent 70%
+  );
+}
+
+/* Per-page identity tint (UI-7): swaps .af-card's neutral white top-edge
+   highlight for the page's own hue. Same "later unlayered rule wins on a
+   specificity tie" mechanism .af-card's own border-top-color override
+   already depends on (see the comment above it) — these six live right
+   after .af-card in source order for exactly that reason, and a Tailwind
+   border-t-hue-* utility placed on the same element would have silently
+   lost to .af-card's unlayered declaration the same way an .af-glow-* box-
+   shadow silently wins over ring-*. Border-color only: no background, no
+   shadow, so this can never be mistaken for the .af-glow-* state ladder —
+   Panel and HowItWorks are containers, not state indicators, and stay that
+   way with or without a hue. */
+.af-card-blue {
+  border-top-color: color-mix(in srgb, var(--hue-blue) 55%, transparent);
+}
+.af-card-violet {
+  border-top-color: color-mix(in srgb, var(--hue-violet) 55%, transparent);
+}
+.af-card-cyan {
+  border-top-color: color-mix(in srgb, var(--hue-cyan) 55%, transparent);
+}
+.af-card-amber {
+  border-top-color: color-mix(in srgb, var(--hue-amber) 55%, transparent);
+}
+.af-card-green {
+  border-top-color: color-mix(in srgb, var(--hue-green) 55%, transparent);
+}
+.af-card-red {
+  border-top-color: color-mix(in srgb, var(--hue-red) 55%, transparent);
 }
 
 /* --- Glow ladder ------------------------------------------------------

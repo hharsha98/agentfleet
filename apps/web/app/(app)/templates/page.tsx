@@ -147,6 +147,7 @@ export default function TemplatesPage() {
         description="Install copies a template into your fleet as your own agent — the copy is yours to change, and the template it came from never moves."
         className="mt-6"
         delay={80}
+        hue="green"
       >
         {/* One legend above the grid rather than the same sentence repeated on
             every card — same idiom as the three-action legend on

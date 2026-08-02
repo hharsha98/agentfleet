@@ -165,6 +165,7 @@ export default function VoicePage() {
         className="mt-6"
         delay={80}
         steps={VOICE_STEPS}
+        hue="green"
       />
     </main>
   );

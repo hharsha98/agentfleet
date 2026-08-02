@@ -1,5 +1,6 @@
-import { Panel } from "@/components/dash/panel";
 import { HUE_CLASSES, type Hue } from "@/components/landing/icons";
+import { Reveal } from "@/components/landing/reveal";
+import { HUE_CARD_BORDER } from "@/components/ui/glow";
 
 // Shared explainer primitives (Stage 6). Before this file the numbered
 // explainer card existed as FOUR byte-identical private copies —
@@ -9,8 +10,8 @@ import { HUE_CLASSES, type Hue } from "@/components/landing/icons";
 // duplication. They never diverged, so this extraction is a pure lift: the
 // markup below is character-for-character what all four rendered.
 //
-// Server-compatible (no hooks); Panel's Reveal is the only client boundary,
-// so this drops into server and "use client" pages alike.
+// Server-compatible (no hooks); Reveal is the only client boundary, so this
+// drops into server and "use client" pages alike.
 
 // One numbered card: a hue-tinted number tile, a title, a line of prose.
 export function NumberedCard({
@@ -43,37 +44,72 @@ export type ExplainerStep = {
   hue?: Hue;
 };
 
-// The whole "how does this screen work?" block in one call: a Panel wrapping
-// a responsive row of NumberedCards, numbered from the array order so adding
-// or reordering a step never leaves a stale hand-written `n={2}` behind.
+// The whole "how does this screen work?" block in one call: a responsive
+// row of NumberedCards, numbered from the array order so adding or
+// reordering a step never leaves a stale hand-written `n={2}` behind.
 //
-// The grid is `sm:grid-cols-3` because every existing explainer has exactly
-// three steps; four+ steps wrap to a second row rather than getting narrower,
-// which is the right failure mode for a paragraph-per-card layout.
+// Collapsed by default behind a native <details>/<summary> — on /agents this
+// explainer used to sit ~700px ABOVE the actual product, so a first-time
+// viewer saw a manual instead of a tool. <details> needs no client JS, no
+// useState, and is keyboard/screen-reader accessible for free, so this stays
+// a server component exactly like the Panel-based version it replaces (no
+// "use client", no state-in-effect). None of the per-step copy is deleted —
+// only demoted behind the closed state.
+//
+// Card-count-aware grid: every explainer has 3 steps EXCEPT agents/page.tsx's
+// AGENT_STEPS, which has 4 — in a fixed 3-column grid that 4th card sat alone
+// with a full row of empty space beside it. 4+ steps switch to a 2x4 grid so
+// every row stays full; 3 steps keep the original single row.
 export function HowItWorks({
   title,
   steps,
   delay = 0,
   className = "",
+  hue,
 }: {
   title: string;
   steps: ExplainerStep[];
   delay?: number;
   className?: string;
+  // Per-page identity tint (UI-7) — same optional prop, same af-card-<hue>
+  // class, as Panel above; this explainer shares the identical af-card
+  // bg-surface-1 chrome, so it gets the identical treatment. Independent of
+  // each step's own `hue` (NumberedCard's number tile), which is left
+  // untouched — a step can legitimately carry a different hue than the
+  // page's identity color.
+  hue?: Hue;
 }) {
+  const gridCols = steps.length >= 4 ? "sm:grid-cols-2 lg:grid-cols-4" : "sm:grid-cols-3";
+
   return (
-    <Panel title={title} className={className} delay={delay}>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        {steps.map((step, i) => (
-          <NumberedCard
-            key={step.title}
-            n={i + 1}
-            hue={step.hue ?? "blue"}
-            title={step.title}
-            description={step.description}
-          />
-        ))}
-      </div>
-    </Panel>
+    <Reveal
+      delay={delay}
+      className={`af-card bg-surface-1 p-4 sm:p-5 ${hue ? HUE_CARD_BORDER[hue] : ""} ${className}`}
+    >
+      <details className="group">
+        <summary
+          className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent [&::-webkit-details-marker]:hidden"
+        >
+          <span className="text-base font-semibold tracking-tight">{title}</span>
+          <span
+            aria-hidden="true"
+            className="af-menu-chevron shrink-0 text-xs text-muted transition-transform duration-200 group-open:rotate-180"
+          >
+            ▾
+          </span>
+        </summary>
+        <div className={`mt-4 grid grid-cols-1 gap-4 ${gridCols}`}>
+          {steps.map((step, i) => (
+            <NumberedCard
+              key={step.title}
+              n={i + 1}
+              hue={step.hue ?? "blue"}
+              title={step.title}
+              description={step.description}
+            />
+          ))}
+        </div>
+      </details>
+    </Reveal>
   );
 }

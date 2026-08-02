@@ -52,6 +52,11 @@ export const GLOSSARY = {
 
   awaiting_approval: "The mission has stopped at a checkpoint and is waiting on you. Nothing else runs until you approve that task — which is the point of putting one there.",
 
+  // The mission board's drag-to-retry rule (missions/page.tsx's RETRY_TARGET
+  // map) — every legal move lands on "todo", so this is worded around that
+  // one destination rather than a general drag-and-drop explainer.
+  requeue: "Cards in Done, Failed, or Needs approval can be dragged back to To do to run that task again — To do is the only column that accepts a drop.",
+
   // Layer 3 of orchestrator.py's self-healing: append-and-supersede.
   superseded: "A task got stuck, so the orchestrator wrote a repair plan and appended replacement steps rather than retrying the same losing approach. The old task points at whatever replaced it, so its dependents wait for the replacement instead of being skipped. Shown as \"Replanned\" — it is not a failure.",
 

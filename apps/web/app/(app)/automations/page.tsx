@@ -338,7 +338,7 @@ export default function AutomationsPage() {
         />
       </div>
 
-      <Panel title="How triggers work" className="mt-6" delay={160}>
+      <Panel title="How triggers work" className="mt-6" delay={160} hue="violet">
         <div className="flex flex-col gap-4 sm:flex-row">
           <div className="flex items-start gap-3 sm:flex-1">
             <IconTile icon="clock" hue="violet" />
@@ -366,7 +366,12 @@ export default function AutomationsPage() {
       </Panel>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
-        <Panel title="Schedules" description="Run a goal on a cron schedule." delay={200}>
+        <Panel
+          title="Schedules"
+          description="Run a goal on a cron schedule."
+          delay={200}
+          hue="violet"
+        >
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -501,7 +506,12 @@ export default function AutomationsPage() {
           </ul>
         </Panel>
 
-        <Panel title="Webhooks" description="Trigger a goal from an external system." delay={240}>
+        <Panel
+          title="Webhooks"
+          description="Trigger a goal from an external system."
+          delay={240}
+          hue="violet"
+        >
           <form
             onSubmit={(e) => {
               e.preventDefault();

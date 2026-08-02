@@ -173,6 +173,21 @@ const RUN_GLOW: Record<string, string> = {
   done_with_issues: "af-glow-amber",
 };
 
+// Fleet-wide status order for the "Fleet status" stat tile's breakdown
+// (Problem 2 of the UI-7 pass) — same status vocabulary as RUN_BADGE/
+// STATUS_HUE above, just ordered active -> needs-you -> terminal so the
+// summary sentence reads in the order you'd actually care about it. Drives
+// only the no-mission-selected view; once a mission is selected the tile
+// goes back to that one run's own status, unchanged from before.
+const FLEET_STATUS_ORDER = [
+  "planning",
+  "running",
+  "awaiting_approval",
+  "done_with_issues",
+  "done",
+  "failed",
+] as const;
+
 function RocketIcon({ className }: { className?: string }) {
   return (
     <svg
@@ -488,7 +503,14 @@ export default function MissionsPage() {
 
   async function refreshRuns() {
     try {
-      const res = await apiFetch("/api/v1/runs");
+      // limit=200 (the API's max — apps/api/app/routes/runs.py caps `le=200`)
+      // instead of the default page size of 20: the fleet-wide stat row below
+      // (Chunk UI-7) reads status breakdowns straight out of `runs`, and at
+      // the default page size that would silently undercount once a fleet
+      // passed 20 missions. Still just the one existing endpoint — no new
+      // route, no per-run detail fetch — and the Missions picker panel
+      // benefits too (it no longer hides anything beyond the first 20).
+      const res = await apiFetch("/api/v1/runs?limit=200");
       if (res.ok) {
         setRuns(await res.json());
         const total = res.headers.get("X-Total-Count");
@@ -656,8 +678,9 @@ export default function MissionsPage() {
 
   // Chunk D2 stat row — derived from the already-fetched runs/detail state,
   // no new endpoints. Task-status breakdown and token totals only mean
-  // anything once a run is selected, so they read "—"/"No tasks yet" until
-  // then rather than showing misleading zeros.
+  // anything once a run is selected (they need per-task data the /runs LIST
+  // endpoint never returns — see fleet-wide comment below), so their cards
+  // only render once `detail` exists at all (see the stat row JSX).
   const taskStatusSummary = COLUMNS.map((c) => ({
     label: c.label,
     count: tasks.filter((t) => t.status === c.key).length,
@@ -678,6 +701,30 @@ export default function MissionsPage() {
   const tokensIn = tasks.reduce((sum, t) => sum + t.tokens_in, 0);
   const tokensOut = tasks.reduce((sum, t) => sum + t.tokens_out, 0);
   const tokensTotal = tokensIn + tokensOut;
+
+  // Fleet-wide stat row (Problem 2, UI-7): what shows in the "Fleet status"
+  // tile before any mission is selected. Built entirely from `runs` — the
+  // same array already driving the Missions picker panel to the left, now
+  // fetched at limit=200 (see refreshRuns) so it genuinely covers the whole
+  // fleet rather than just the most recent page. Deliberately does NOT
+  // attempt a fleet-wide task count or token total: GET /api/v1/runs never
+  // returns `tasks` (only GET /api/v1/runs/{id} does — see
+  // apps/api/app/routes/runs.py's list_runs vs get_run), so those two
+  // numbers are only ever real once a specific mission is selected. Rather
+  // than invent them or fetch every run's detail just to populate an idle
+  // stat tile, the Tasks/Tokens cards simply don't render until `detail`
+  // exists (see the stat row JSX) — fewer honest cards beats a placeholder.
+  const activeMissions = runs.filter(
+    (r) => r.status === "planning" || r.status === "running",
+  ).length;
+  const awaitingApprovalCount = runs.filter((r) => r.status === "awaiting_approval").length;
+  const fleetStatusSummary = FLEET_STATUS_ORDER.map((status) => ({
+    status,
+    count: runs.filter((r) => r.status === status).length,
+  }))
+    .filter((s) => s.count > 0)
+    .map((s) => `${s.count} ${s.status.replaceAll("_", " ")}`)
+    .join(" · ");
 
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 py-6 sm:px-6 sm:py-8">
@@ -732,7 +779,13 @@ export default function MissionsPage() {
         </button>
       </form>
 
-      <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      {/* Fleet-wide (no mission selected) shows 2 cards, not 4 — the other
+          two (Tasks, Tokens spent) need per-task data the /runs LIST
+          endpoint doesn't return (see the fleet-stat comment above), so
+          they simply don't render rather than sitting there reading "—".
+          sm:grid-cols-4 only kicks in once a mission is selected and all
+          four cards are real. */}
+      <div className={`mt-6 grid grid-cols-2 gap-3 ${detail ? "sm:grid-cols-4" : ""}`}>
         <StatCard
           label="Missions"
           value={totalRuns ?? runs.length}
@@ -741,41 +794,72 @@ export default function MissionsPage() {
           hue="blue"
         />
         <StatCard
-          label="Mission status"
+          // Label itself names the scope switch: "Fleet status" (an
+          // aggregate across every mission) before anything is picked,
+          // "Mission status" (that one run's own status) after.
+          label={detail ? "Mission status" : "Fleet status"}
           // replaceAll for the same reason as the board badge: replace()
           // takes only the first underscore, so this tile read "done
           // with_issues". No <Term> here — StatCard renders `value` inside a
           // `truncate` paragraph, which would clip the tooltip away
           // entirely; the badge on the board carries the definition.
-          value={detail ? detail.status.replaceAll("_", " ") : "—"}
-          pulse={!!detail}
-          hue={detail ? (STATUS_HUE[detail.status] ?? "blue") : "blue"}
+          value={
+            detail
+              ? detail.status.replaceAll("_", " ")
+              : runs.length === 0
+                ? "No missions"
+                : `${activeMissions} active`
+          }
+          // Fleet-wide, the breakdown ("2 running · 1 awaiting approval ·
+          // 5 done") goes in `sub` instead of `value` — StatCard's value
+          // paragraph truncates, which would silently hide most of a
+          // multi-part sentence like that.
+          sub={detail ? undefined : fleetStatusSummary || undefined}
+          pulse={detail ? true : activeMissions > 0}
+          hue={
+            detail
+              ? (STATUS_HUE[detail.status] ?? "blue")
+              : awaitingApprovalCount > 0
+                ? "amber"
+                : "blue"
+          }
           // StatCard forwards className onto its Reveal root — a plain,
           // non-focusable div with the tile's own rounded-lg, so the glow
           // lands on the right box and collides with no ring-* utility.
+          // Fleet-wide never carries it: RUN_GLOW is about one specific
+          // run's ambiguous "done_with_issues" status, not an aggregate.
           className={detail ? (RUN_GLOW[detail.status] ?? "") : ""}
           delay={40}
         />
-        <StatCard
-          label="Tasks"
-          value={detail ? tasks.length : "—"}
-          sub={detail ? taskStatusSummary || "No tasks yet" : "Select a mission"}
-          icon={<Icon name="list-checks" />}
-          hue="violet"
-          delay={80}
-        />
-        <StatCard
-          label="Tokens spent"
-          value={detail ? tokensTotal.toLocaleString() : "—"}
-          sub={detail && tokensTotal > 0 ? `↑${tokensIn} ↓${tokensOut}` : undefined}
-          icon={<Icon name="activity" />}
-          hue="cyan"
-          delay={120}
-        />
+        {detail && (
+          <>
+            <StatCard
+              label="Tasks"
+              value={tasks.length}
+              sub={taskStatusSummary || "No tasks yet"}
+              icon={<Icon name="list-checks" />}
+              hue="violet"
+              delay={80}
+            />
+            <StatCard
+              label="Tokens spent"
+              value={tokensTotal.toLocaleString()}
+              sub={tokensTotal > 0 ? `↑${tokensIn} ↓${tokensOut}` : undefined}
+              icon={<Icon name="activity" />}
+              hue="cyan"
+              delay={120}
+            />
+          </>
+        )}
       </div>
 
-      <div className="mt-6 grid gap-4 lg:grid-cols-[280px_1fr]">
-        <Panel title="Missions" description="Pick a mission to view its board" delay={40}>
+      <div className="mt-6 grid items-start gap-4 lg:grid-cols-[320px_1fr]">
+        <Panel
+          title="Missions"
+          description="Pick a mission to view its board"
+          delay={40}
+          hue="violet"
+        >
           <div className="flex gap-2 overflow-x-auto pb-1 lg:flex-col lg:gap-1.5 lg:overflow-visible lg:pb-0">
             {runs.map((r) => (
               <button
@@ -784,17 +868,30 @@ export default function MissionsPage() {
                   setSelected(r.id);
                   setDetail(null);
                 }}
-                title={r.goal}
-                className={`flex max-w-[240px] min-w-0 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1 text-xs transition-colors duration-200 lg:w-full lg:max-w-none lg:shrink lg:justify-start lg:whitespace-normal lg:rounded-md lg:px-3 lg:py-2 ${
+                title={`${r.goal} — ${r.status.replaceAll("_", " ")}`}
+                className={`flex max-w-[240px] min-w-0 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1 text-xs transition-colors duration-200 lg:w-full lg:max-w-none lg:shrink lg:items-start lg:justify-start lg:whitespace-normal lg:rounded-md lg:px-3 lg:py-2 ${
                   r.id === selected
                     ? "border-accent bg-accent/15 text-foreground"
                     : "border-hairline text-muted hover:text-foreground"
                 }`}
               >
                 <span
-                  className={`h-1.5 w-1.5 shrink-0 rounded-full ${HUE_DOT[STATUS_HUE[r.status] ?? "blue"]}`}
+                  aria-hidden="true"
+                  className={`h-1.5 w-1.5 shrink-0 rounded-full lg:mt-1.5 ${HUE_DOT[STATUS_HUE[r.status] ?? "blue"]}`}
                 />
-                <span className="truncate">{r.goal}</span>
+                {/* Mobile keeps the old single-line chip (truncate); desktop
+                    gets the room this panel was widened for — two lines
+                    instead of one, plus the status word the dot alone never
+                    said out loud (the title="" attribute above covers mobile,
+                    where there's no room for a second line). */}
+                <span className="min-w-0 flex-1 text-left">
+                  <span className="block truncate lg:line-clamp-2 lg:whitespace-normal">
+                    {r.goal}
+                  </span>
+                  <span className="mt-0.5 hidden font-mono text-[10px] text-muted lg:block">
+                    {r.status.replaceAll("_", " ")}
+                  </span>
+                </span>
               </button>
             ))}
             {runs.length === 0 && (
@@ -805,15 +902,18 @@ export default function MissionsPage() {
 
         <Panel
           title="Board"
-          // Panel.description is typed `string`, so this cannot carry a
-          // <Term> — which is fine: it is the one sentence that has to be
-          // readable before anyone knows there is a glossary. It names the
-          // gesture, the three statuses it starts from, and the single legal
-          // destination, because a drop anywhere else only ever announces
-          // itself as a red error banner after the fact.
-          description="Cards in Done, Failed and Needs approval can be dragged back to To do to run that task again — To do is the only column that accepts a drop."
+          // Short version stays readable before anyone knows there's a
+          // glossary; the full rule (which three statuses, why To do is the
+          // only legal drop) lives behind the Term click instead of sitting
+          // here as two lines of body copy. Panel.description now accepts
+          // ReactNode specifically so this JSX can carry the <Term>.
+          description={
+            <>
+              Drag a card back to <Term k="requeue">To do</Term> to run it again.
+            </>
+          }
           delay={80}
-          className="lg:min-h-[420px]"
+          hue="violet"
           action={
             <div
               role="tablist"
@@ -979,7 +1079,13 @@ export default function MissionsPage() {
           (agents, evals, guardrails, voice, chat all call HowItWorks) —
           missions was the one page that launched real work and never said
           how the screen was meant to be driven. */}
-      <HowItWorks title="How a mission works" className="mt-6" delay={20} steps={MISSION_STEPS} />
+      <HowItWorks
+        title="How a mission works"
+        className="mt-6"
+        delay={20}
+        steps={MISSION_STEPS}
+        hue="violet"
+      />
     </main>
   );
 }

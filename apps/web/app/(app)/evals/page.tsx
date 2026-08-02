@@ -258,7 +258,7 @@ export default function EvalsPage() {
       />
       {note && <p className="mt-3 font-mono text-xs text-muted">{note}</p>}
 
-      <HowItWorks title="How it works" className="mt-6" delay={0} steps={EVAL_STEPS} />
+      <HowItWorks title="How it works" className="mt-6" delay={0} steps={EVAL_STEPS} hue="red" />
 
       <div className="mt-4">
         <label htmlFor="eval-agent" className="mb-1.5 block font-mono text-xs text-muted">
@@ -337,7 +337,7 @@ export default function EvalsPage() {
           <div className="mt-4 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
             <Panel
               title="Eval cases"
-              description="This agent's saved test suite. Run evals replays every case against the current prompt and marks each one pass or fail."
+              description="This agent's saved test cases — click Run evals to check them against the current prompt."
               action={
                 <div className="flex gap-2">
                   {!formOpen && (
@@ -358,6 +358,7 @@ export default function EvalsPage() {
                 </div>
               }
               delay={0}
+              hue="red"
             >
               {formOpen && (
                 <form
@@ -551,6 +552,7 @@ export default function EvalsPage() {
               title="Run history"
               description="Every recorded run for this agent, newest first."
               delay={40}
+              hue="red"
             >
               {runTimeline.length === 0 ? (
                 <p className="py-8 text-center text-sm text-muted">No runs recorded yet.</p>
@@ -595,8 +597,9 @@ export default function EvalsPage() {
             <div className="mt-4">
               <Panel
                 title="Latest run detail"
-                description="Case-by-case results from the run you just triggered. Each row shows which checks passed; open its reply to read what the agent actually said."
+                description="Results from the run you just triggered — open a row's reply to see what the agent said."
                 delay={0}
+                hue="red"
               >
                 <div className="flex items-baseline gap-3 rounded-lg border border-hairline p-4">
                   <span

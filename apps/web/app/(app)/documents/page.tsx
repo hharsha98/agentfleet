@@ -191,6 +191,7 @@ export default function DocumentsPage() {
           title="How agents use this"
           description="The search_documents tool, honestly explained."
           delay={0}
+          hue="cyan"
         >
           <div className="flex items-start gap-3">
             <div
@@ -233,6 +234,7 @@ export default function DocumentsPage() {
           title="Upload a document"
           description="Chunked and embedded locally on ingest — nothing is sent to a model provider."
           delay={40}
+          hue="cyan"
         >
           <div className="flex items-center gap-3 rounded-lg border border-hairline p-4 transition-colors duration-200 focus-within:border-accent/50">
             <input
@@ -271,6 +273,7 @@ export default function DocumentsPage() {
             ) : undefined
           }
           delay={80}
+          hue="cyan"
         >
           <ul className="space-y-2">
             {filteredDocs.map((d, i) => (

@@ -123,13 +123,15 @@ export default function GuardrailsPage() {
         className="mt-6"
         delay={0}
         steps={GUARDRAIL_STEPS}
+        hue="red"
       />
 
       <div className="mt-4">
         <Panel
           title="Guardrails sandbox"
-          description="Paste any text — retrieved content, a user message — to check for prompt-injection phrases and personal data. Or start from one of the examples."
+          description="Paste text or pick an example to check for injection attempts and personal data."
           delay={40}
+          hue="red"
         >
           <div className="mb-3 flex flex-wrap gap-2">
             {PRESETS.map((preset) => (
