@@ -154,6 +154,11 @@ export default function AutomationsPage() {
   }
 
   useEffect(() => {
+    // Both refresh() and refreshWebhooks() are async and only setState after
+    // their own `await apiFetch(...)` resolves — nothing is set
+    // synchronously here, so this is the fetch-on-mount idiom, not a
+    // cascading render.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     refresh();
     refreshWebhooks();
   }, []);

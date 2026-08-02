@@ -522,6 +522,10 @@ export default function MissionsPage() {
   }
 
   useEffect(() => {
+    // refreshRuns() is async and only calls setState after `await
+    // apiFetch(...)` resolves — nothing is set synchronously in this effect
+    // body, so this is the fetch-on-mount idiom, not a cascading render.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     refreshRuns();
   }, []);
 

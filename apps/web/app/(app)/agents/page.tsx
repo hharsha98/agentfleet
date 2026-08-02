@@ -179,6 +179,11 @@ export default function AgentsPage() {
   }
 
   useEffect(() => {
+    // refresh() is async and only calls its setState calls after `await
+    // apiFetch(...)` resolves — nothing is set synchronously inside this
+    // effect body, so this is the ordinary fetch-on-mount idiom, not the
+    // cascading-render pattern the rule guards against.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     refresh();
   }, []);
 

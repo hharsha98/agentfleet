@@ -137,6 +137,10 @@ export default function EvalsPage() {
   }
 
   useEffect(() => {
+    // refreshAgents() is async and only calls setState after `await
+    // apiFetch(...)` resolves — nothing is set synchronously in this effect
+    // body, so this is the fetch-on-mount idiom, not a cascading render.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     refreshAgents();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -161,18 +165,39 @@ export default function EvalsPage() {
     }
   }
 
-  useEffect(() => {
+  // This one is a genuinely different shape from the other set-state-in-effect
+  // sites in this file: these setState calls are NOT behind an `await`, they
+  // run synchronously whenever `agentId` changes. That used to live in a
+  // `useEffect(..., [agentId])`, which is one render late — switching agents
+  // would commit with the *previous* agent's latestRun/formOpen/caseError
+  // still on screen for a frame before the effect caught up and reset them.
+  // Comparing against a tracked previous value and adjusting state during
+  // render (guarded, so it can't loop) is the fix React's docs recommend for
+  // exactly this — "Adjusting state when a prop changes":
+  // https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes
+  const [prevAgentId, setPrevAgentId] = useState(agentId);
+  if (agentId !== prevAgentId) {
+    setPrevAgentId(agentId);
     setLatestRun(null);
     setFormOpen(false);
     setCaseError(null);
-    if (agentId) {
-      refreshCases();
-      refreshRuns();
-    } else {
+    if (!agentId) {
       setCases([]);
       setRecentRuns([]);
       setTotalCases(null);
       setTotalRuns(null);
+    }
+  }
+
+  useEffect(() => {
+    if (agentId) {
+      // refreshCases()/refreshRuns() are async and only setState after their
+      // own `await apiFetch(...)` resolves — nothing is set synchronously
+      // here, so this is the fetch-on-dependency-change idiom, not a
+      // cascading render.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      refreshCases();
+      refreshRuns();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agentId]);

@@ -27,6 +27,14 @@ export function useReveal<T extends HTMLElement>(threshold = 0.15, revealDelay =
     if (!el) return;
 
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      // This must run in an effect, not render or a lazy useState
+      // initialiser: `window` doesn't exist during SSR, and reading
+      // matchMedia during render would make the server render visible=false
+      // while the client's first render (post-hydration) computes true —
+      // a hydration mismatch. Running it here means the flip to visible
+      // happens synchronously right after mount, which is what "reveal
+      // immediately, no animation" requires for reduced-motion users.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setVisible(true);
       return;
     }
