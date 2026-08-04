@@ -112,7 +112,7 @@ export default function UsagePage() {
       await Promise.all([refreshSummary(), refreshDaily(), refreshBudgets(), refreshAgents()]);
       setNote(null);
     } catch {
-      setNote("API offline — start the backend and reload.");
+      setNote("API offline — it may be waking up from sleep (~10-20s on the hosted demo) or not running locally. Reload in a moment.");
     }
   }
 

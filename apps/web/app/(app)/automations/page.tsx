@@ -133,10 +133,10 @@ export default function AutomationsPage() {
         setTotalSchedules(total ? Number(total) : null);
         setNote(null);
       } else {
-        setNote("API offline — start the backend and reload.");
+        setNote("API offline — it may be waking up from sleep (~10-20s on the hosted demo) or not running locally. Reload in a moment.");
       }
     } catch {
-      setNote("API offline — start the backend and reload.");
+      setNote("API offline — it may be waking up from sleep (~10-20s on the hosted demo) or not running locally. Reload in a moment.");
     }
   }
 

@@ -575,7 +575,7 @@ export default function WorkflowBuilder({ workflowId }: { workflowId: string }) 
         <EmptyState
           glyph={<Icon name="workflow" className="h-7 w-7" />}
           title="Couldn't load this workflow"
-          description="API offline — start the backend and reload."
+          description="API offline — it may be waking up from sleep (~10-20s on the hosted demo) or not running locally. Reload in a moment."
           action={{ href: "/workflows", label: "Back to workflows" }}
         />
       </main>

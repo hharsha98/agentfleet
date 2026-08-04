@@ -95,7 +95,9 @@ export default function GuardrailsPage() {
         setGuardrailError(body.detail ?? `Scan failed (${res.status})`);
       }
     } catch {
-      setGuardrailError("API offline — start the backend and reload.");
+      setGuardrailError(
+        "API offline — it may be waking up from sleep (~10-20s on the hosted demo) or not running locally. Reload in a moment.",
+      );
     } finally {
       setGuardrailBusy(false);
     }

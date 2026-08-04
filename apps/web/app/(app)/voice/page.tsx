@@ -67,7 +67,7 @@ export default function VoicePage() {
         if (!cancelled) setConfig(body);
       })
       .catch(() => {
-        if (!cancelled) setNote("API offline — start the backend and reload.");
+        if (!cancelled) setNote("API offline — it may be waking up from sleep (~10-20s on the hosted demo) or not running locally. Reload in a moment.");
       });
     return () => {
       cancelled = true;
