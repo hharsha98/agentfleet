@@ -152,6 +152,12 @@ All LLM calls go through one OpenAI-compatible provider abstraction (ADR-005 in 
 
 ## Roadmap
 
+> **Picking up work with no context?** [`docs/ROADMAP.md`](docs/ROADMAP.md) is the
+> self-contained handoff: what is next and why, the exact bugs with file and line,
+> the verification commands, and — importantly — **which checks a given environment
+> can actually run**. The test suite needs a live Postgres, so a cloud VM without
+> Docker cannot run it; that is a missing dependency, not a regression.
+
 **Shipped:**
 - [x] P1 Foundation — repo, compose stack, schema, auth, design tokens
 - [x] P2 + P2b — agent runtime, streaming chat, tools (web search, tool-call cards, agentic-loop salvage)
