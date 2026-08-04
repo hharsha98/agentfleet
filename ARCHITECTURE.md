@@ -43,6 +43,7 @@ Short, honest records of the trade-offs behind AgentFleet. Format: context → d
 **Decision (2026-07-11):** Build the complete prototype locally (Docker Compose, later kind/K8s manifests). Cloud deployment happens on demand: AWS first when interviews are scheduled (~$100 credit ≈ the interview window), GCP after (~3 months free tier). Terraform/GCP configs are prepared in advance so going live is a ~1-hour task.
 **Why:** Cloud credits are a scarce resource for a student; burning them before anyone is watching buys nothing. Containerized, provider-agnostic services make the cloud switch a configuration change.
 **Trade-off:** No always-on public URL until interview season — mitigated by a polished demo video and one-command local setup.
+**Status (2026-08-03) — one claim withdrawn, and the decision superseded.** "Terraform/GCP configs are prepared in advance so going live is a ~1-hour task" was **not true**: there are zero `.tf` files in the repo, and `infra/terraform/` is an empty directory git does not track — it does not exist in a clone at all. The deferral itself was defensible (credits genuinely are scarce for a student), but describing unwritten configs as "prepared in advance" turned a reasonable trade-off into an overclaim, and this record is the right place to say so rather than the wrong place to quietly fix it. Superseded by **ADR-012** (GCP Cloud Run + Terraform + Workload Identity Federation), which replaces "AWS first, GCP after" with one cloud built properly and the other documented as a mapping table — because half-built infrastructure on a second cloud reads worse than none.
 
 ## ADR-008: Local embeddings (fastembed) for document RAG
 
@@ -55,6 +56,7 @@ Short, honest records of the trade-offs behind AgentFleet. Format: context → d
 **Decision:** On AWS, Redis runs as a container alongside the worker instead of ElastiCache.
 **Why:** ElastiCache's smallest node adds ~€11/month for a demo deployment; our Redis holds only queues and pub/sub (ephemeral, rebuildable).
 **Trade-off:** No HA, data lost on restart — fine for queues, wrong for anything durable (which lives in Postgres).
+**Status (2026-08-03) — superseded, and worth reading as a caution.** This records an AWS Fargate sidecar decision for a deployment **that never existed** — no task definition, no IaC, no artifacts of any kind. Written as forward planning, it reads in retrospect as a decision made about a running system, which is the failure mode an ADR is supposed to prevent. Superseded by **ADR-012**: the deployment target is GCP Cloud Run, and the managed-cache question recurs there as Memorystore. The *reasoning* holds and is reused verbatim — queue state is ephemeral and rebuildable, so paying ~$40/month for a managed cache buys HA and private networking this workload does not need. In ADR-012 that conclusion is expressed as code: a `memorystore` Terraform module that exists and defaults to **off**, which is a stronger artifact than either omitting it or leaving it running.
 
 ## Second runtime: Pydantic AI (Phase 10 M)
 

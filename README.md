@@ -3,7 +3,7 @@
 **A self-hostable multi-agent operations platform** — chat with a fleet of tool-using agents, hand the orchestrator a goal and watch it execute as a live task DAG, and run the whole thing with production-grade evals, cost governance, and guardrails.
 
 ![CI](https://github.com/hharsha98/agentfleet/actions/workflows/evals.yml/badge.svg)
-![Tests](https://img.shields.io/badge/tests-184%20API%20%2B%2026%20E2E-brightgreen)
+![Tests](https://img.shields.io/badge/tests-239%20API%20%2B%2026%20E2E-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Self-hosted](https://img.shields.io/badge/deploy-self--hosted-informational)
 
@@ -18,7 +18,7 @@ AgentFleet is a self-hostable multi-agent operations platform: chat with a roste
 | ![Landing](docs/screenshots/landing.png) **Landing** — pillars + ops layer overview | ![Chat](docs/screenshots/chat.png) **Chat** — streaming multi-agent chat with live tool-call cards |
 | ![Missions](docs/screenshots/missions.png) **Missions** — Kanban DAG execution with a human-approval gate | ![Evals](docs/screenshots/evals.png) **Evals** — LLM-as-judge scoring + CI regression gate |
 
-*(placeholders — add your own via the [demo script](docs/DEMO.md))*
+*(captured from a running instance — reproduce them with the [demo script](docs/DEMO.md))*
 
 ## Architecture
 
@@ -89,7 +89,7 @@ Full trade-off records (context → decision → why → what we gave up) live i
 
 ## The ops layer (what makes it different)
 
-Most agent demos stop at "it can call a tool." AgentFleet treats an agent like a production service: every reply is metered for tokens/cost/latency and checked against per-agent and global budget caps; the Eval Center runs deterministic checks plus an LLM-as-judge over golden cases and a red-team suite (prompt-injection, jailbreak, secret-exfiltration attempts), gated in CI on every push; every tool result is scanned for injected instructions before it reaches the model; and every agent config change can be published as a version and rolled back with one click. The story isn't "an agent that works" — it's "an agent fleet you could actually run."
+Most agent demos stop at "it can call a tool." AgentFleet treats an agent like a production service: every reply is metered for tokens/cost/latency and checked against per-agent and global budget caps; the Eval Center runs deterministic checks plus an LLM-as-judge over golden cases and a red-team suite (prompt-injection, jailbreak, secret-exfiltration attempts) — the deterministic checks run in CI on every push, while the LLM-judged eval currently runs only when a provider key is present and is **not yet blocking** (`.github/workflows/evals.yml`); every tool result is scanned for injected instructions before it reaches the model; and every agent config change can be published as a version and rolled back with one click. The story isn't "an agent that works" — it's "an agent fleet you could actually run."
 
 ## Tech stack
 
@@ -113,7 +113,12 @@ docker compose -f docker/compose.full.yaml up --build
 # open http://localhost:3002
 ```
 
-The api container self-migrates and seeds the built-in agent roster on boot.
+A one-shot `migrate` service applies migrations, and `api`/`worker` wait on it via
+`service_completed_successfully` — deliberately, so that with more than one replica
+they never race `alembic upgrade head`. The api container then seeds the built-in
+agent roster on boot (idempotent). See the header of
+[`apps/api/docker-entrypoint.sh`](apps/api/docker-entrypoint.sh) for why migrations
+are *not* in the entrypoint.
 
 **Dev mode** (infra in Docker, api/web run locally with hot reload):
 
@@ -133,6 +138,11 @@ sign-in fails with `redirect_uri_mismatch`. `CORS_ORIGINS` in
 answering either way.
 
 K8s manifests for a local kind/k3d/minikube cluster live in [k8s/](k8s/README.md).
+
+Deploying publicly on free tiers — Neon (Postgres + pgvector), Hugging Face Spaces
+(API), Vercel (web) — is covered step by step in [docs/DEPLOY.md](docs/DEPLOY.md),
+including why the API needs a 16GB host: it measures ~205MB imported and ~507MB
+once the embedding model is resident, which does not fit a 256MB or 512MB free tier.
 
 Want to see it running before you set it up? Follow the [demo script](docs/DEMO.md).
 
@@ -155,12 +165,15 @@ All LLM calls go through one OpenAI-compatible provider abstraction (ADR-005 in 
 
 **Next:**
 - [ ] P8 — extra roster agents beyond the built-in set
-- [ ] Cloud deploy on demand (ADR-007) — AWS at interview time, GCP after
+- [x] Redis/arq durable task execution (ADR-004) — `ORCHESTRATOR_MODE=arq` enqueues to
+      the worker; verified by killing the API mid-run and watching the run complete
+- [ ] Cloud deploy — GCP (Cloud Run + Terraform + Workload Identity Federation), with
+      the manifests in [k8s/](k8s/README.md) validated on a kind cluster in CI
 
 **Intentionally not wired yet** (see [ARCHITECTURE.md](ARCHITECTURE.md) for the full trade-offs):
-- Redis/arq durable task execution (ADR-004) — the DAG orchestrator runs in-process today; Redis is already in the compose stack, queue-ready
 - Temporal as the longer-term durable-execution answer, noted in ADR-004 as the scale-up path
-- Cloud deploy via Terraform to AWS then GCP (ADR-007) — deliberately deferred to interview time so cloud credits aren't burned before anyone is watching
+- Hybrid retrieval (sparse + dense with reranking) — retrieval is dense-only today; see ADR-002's dated status block
+- OpenTelemetry GenAI tracing — see ADR-003's dated status block for what is and is not wired
 
 ## License
 

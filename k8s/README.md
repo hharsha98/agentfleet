@@ -1,12 +1,32 @@
 # AgentFleet on Kubernetes (local cluster)
 
-Resume/demo artifact for a local kind/k3d/minikube cluster. Not applied in CI.
+For a local kind/k3d/minikube cluster.
 
-Deploys 5 workloads: `postgres`, `redis`, `api`, `worker`, `web`. `worker`
-reuses the `agentfleet-api:local` image (no separate build) and runs
+> **Status (2026-08-03) — read this before trusting the manifests below.**
+> These were written as a demo artifact and, until now, were **never applied
+> anywhere and never validated in CI**. That showed: two defects meant the stack
+> could not actually serve traffic.
+>
+> - `SEARXNG_URL` pointed at a Service that does not exist under `k8s/` (compose
+>   has one; these manifests never did). `web_search` degrades to "no results"
+>   rather than crashing, so it failed *quietly* — worse than failing loudly.
+> - `FREE_LLM_BASE_URL` was `http://localhost:3001/v1`, a host-machine dev proxy
+>   address. Inside a pod, `localhost` is the pod, so every LLM call failed.
+>
+> A third: this file claimed `ORCHESTRATOR_MODE=arq` was set on **both** `api` and
+> `worker`. It was set only on `worker`, so the API ran missions in-process while
+> an idle worker polled an empty queue. That one is **fixed** — `k8s/api.yaml` now
+> sets it, and the two defects above are annotated in place there.
+>
+> These manifests are being reworked into `base/` + `overlays/{kind,gke}` and wired
+> into CI against a kind cluster, so "it deploys" becomes a check on every push
+> instead of a claim in a README. Until that lands, read this page as a description
+> of work in progress.
+
+Deploys 5 workloads: `postgres`, `redis`, `api`, `worker`, `web`. `worker` reuses
+the `agentfleet-api:local` image (no separate build) and runs
 `arq app.worker.WorkerSettings` instead of `uvicorn`, so mission runs execute
-durably and survive an `api` pod restart (`ORCHESTRATOR_MODE=arq`, set on
-both `api` and `worker` — see ARCHITECTURE.md ADR-004).
+durably and survive an `api` pod restart (see ARCHITECTURE.md ADR-004).
 
 ## 1. Build images
 

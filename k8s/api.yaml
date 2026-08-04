@@ -6,6 +6,19 @@ metadata:
 data:
   DATABASE_URL: postgresql+asyncpg://agentfleet:agentfleet@postgres:5432/agentfleet
   REDIS_URL: redis://redis:6379/0
+  # Enqueue runs to the arq worker instead of running them in the API process, so a
+  # run survives an api pod restart. k8s/README.md documented this as set on BOTH
+  # api and worker; it was set only in worker.yaml, so the API ran missions
+  # in-process while an idle worker polled an empty queue.
+  ORCHESTRATOR_MODE: arq
+  # KNOWN DEFECTS — why this stack has never served traffic. Recorded here rather
+  # than silently patched, and fixed properly in the base/overlays rework:
+  #   SEARXNG_URL points at a Service that does not exist under k8s/ (compose has
+  #     one; these manifests do not). web_search degrades to "no results" instead
+  #     of crashing, so it fails quietly — which is worse than failing loudly.
+  #   FREE_LLM_BASE_URL is a HOST-machine dev proxy address. Inside a pod,
+  #     localhost IS the pod, so every LLM call fails. It also carries a key, so it
+  #     belongs in the Secret, not in this ConfigMap.
   SEARXNG_URL: http://searxng:8080
   DEFAULT_MODEL: openai/gpt-oss-120b
   FREE_LLM_BASE_URL: http://localhost:3001/v1
