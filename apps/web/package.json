@@ -21,7 +21,7 @@
     "react-dom": "19.2.4",
     "vega": "^5.33.1",
     "vega-embed": "^6.29.0",
-    "vega-lite": "^5.23.0"
+    "vega-lite": "^6.4.3"
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",
