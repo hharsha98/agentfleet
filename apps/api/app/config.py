@@ -9,6 +9,54 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://agentfleet:agentfleet@localhost:5432/agentfleet"
     redis_url: str = "redis://localhost:6379/0"
 
+    # Async engine connection pool (Bug 1, Wave 1 — see app/db.py for
+    # pool_pre_ping, which is hardcoded True rather than a setting because
+    # there is no deployment where you'd ever want it off).
+    #
+    # Sizing is derived, not guessed — the arithmetic:
+    #
+    # Assumed cap: 25 concurrent connections. That's GCP Cloud SQL's
+    # documented default max_connections for the db-f1-micro tier (Wave 4's
+    # target; GCP sizes the default off the tier's ~0.6GB RAM). Neon's free
+    # tier (Wave 2's target) is NOT the binding constraint: its pooled
+    # (pgbouncer) endpoint supports far more than 25, so whichever number
+    # this app is sized against, Cloud SQL is the tighter one. This is a
+    # documented ASSUMPTION pending real numbers once each service is
+    # actually provisioned (Wave 2 / Wave 4) — re-derive this arithmetic
+    # then rather than trusting it forever.
+    #
+    # Assumed fleet shape: up to 4 API instances (Cloud Run's eventual
+    # autoscale ceiling for a portfolio-scale app — k8s/api.yaml hardcodes
+    # replicas: 1 today, so 4 is a forward-looking assumption, not a
+    # measurement) + 1 arq worker instance (matches k8s/worker.yaml's
+    # replicas: 1 today; the cron poller in worker.py's WorkerSettings also
+    # assumes exactly one process, so this one shouldn't be scaled anyway).
+    #
+    #   API:    (db_pool_size=3 + db_max_overflow=2) x 4 instances = 20
+    #   Worker: (worker's own smaller pool, set via env — see app/worker.py
+    #            which defaults DB_POOL_SIZE/DB_MAX_OVERFLOW down to 1+1
+    #            before importing app.db) x 1 instance              =  2
+    #   ---------------------------------------------------------------
+    #   Peak = 22, leaving 3 connections of headroom under the 25 cap for a
+    #   manual psql/alembic/admin connection.
+    #
+    # If max_app_instances or the cap changes, redo this arithmetic — these
+    # defaults are sized against it, not picked round numbers.
+    db_pool_size: int = 3
+    db_max_overflow: int = 2
+    # Recycle comfortably under Neon's free-tier auto-suspend (assumed 5
+    # minutes / 300s of idle compute — confirm at Wave 2; this is the
+    # "proxy/DB idle timeout" this must sit under). pool_pre_ping already
+    # catches a connection that went stale AFTER a suspend; pool_recycle
+    # proactively refreshes connections before they'd have gone stale, so
+    # the two are complementary, not redundant.
+    db_pool_recycle_seconds: int = 270
+    # SQLAlchemy's own library default (30s) — made an explicit, documented
+    # setting here rather than an implicit default so it shows up as a real
+    # knob during a review, not something to rediscover in the SQLAlchemy
+    # source.
+    db_pool_timeout_seconds: int = 30
+
     # How mission runs get dispatched: "inprocess" (default — asyncio.create_task
     # in the API process; dies if the API restarts, but needs no extra
     # service, so `uvicorn` dev flow and the test suite keep working
@@ -24,6 +72,30 @@ class Settings(BaseSettings):
     planner_model: str = ""
 
     anthropic_api_key: str = ""
+
+    # LLM client timeouts (Bug 2, Wave 1 — see app/providers.py). Asymmetric
+    # on purpose: `connect` fails fast because a dead endpoint has no reason
+    # to take long; `read` is generous because a large model streaming a
+    # long completion can legitimately run past a minute.
+    #
+    # `read` MUST stay under Cloud Run's request timeout (default 300s,
+    # Wave 4's eventual deploy target) — if Cloud Run kills the request
+    # first, this timeout never gets the chance to fire. 120s leaves
+    # ~2.5x Cloud Run's own margin over a typical long completion while
+    # keeping well clear of the 300s ceiling.
+    llm_connect_timeout_seconds: float = 5.0
+    llm_read_timeout_seconds: float = 120.0
+    llm_write_timeout_seconds: float = 10.0
+    llm_pool_timeout_seconds: float = 5.0
+    # SDK retry cap: kept LOW on purpose. self_heal_deadline_seconds and the
+    # escalation ladder above already retry *semantically* (new prompt,
+    # escalated model) on top of whatever the SDK does — piling the SDK's
+    # own retries underneath that would let a transport hiccup compound
+    # into a multi-minute stall exactly while the self-heal clock is
+    # already ticking. 1 covers a single transport blip (dropped
+    # connection, a bare 5xx) without adding meaningfully to worst-case
+    # latency; anything beyond that is self-heal's job, not the SDK's.
+    llm_max_retries: int = 1
 
     # Shared HS256 JWT signing secret (Phase 12 B): same value the web app
     # uses to mint tokens. Blank -> app.auth.current_user fails CLOSED (503),
