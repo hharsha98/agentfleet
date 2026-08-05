@@ -55,8 +55,9 @@ passing.** That rule has already caught real mistakes in this repo.
 | — | Public demo sign-in bounded by the budget system | ✅ `78242a2` |
 | — | Free-tier deploy prepared (`deploy/hfspace/`, `docs/DEPLOY.md`) | ✅ `3e49be8` |
 | **0** | Stop advertising infrastructure that does not exist | ✅ `3c810f4` |
-| **1** | **Four real bugs + make the eval gate real** | ⬅️ **next** |
-| 2 | Ship the free stack (Neon + HF Spaces + Vercel) — first public URL | todo |
+| **1** | Half A — four real bugs | ✅ `6cb8ca5` |
+| **1** | Half B — make the eval gate real | ✅ (this commit) |
+| **2** | **Ship the free stack (Neon + HF Spaces + Vercel) — first public URL** | ⬅️ **next** |
 | 3 | Container hardening, `k8s/` base+overlays, kind-in-CI, E2E in CI | todo |
 | 4 | GCP: Cloud Run + Terraform + Workload Identity Federation | todo |
 | 5 | GKE Autopilot evidence run, time-boxed, on the $300 credit | todo |
@@ -70,6 +71,33 @@ those days hardening Dockerfiles is pure waste.
 ---
 
 # Wave 1 — the next task
+
+**Status (2026-08-05): Wave 1 is complete.** Everything below is kept as the
+written record of what was wrong and why it mattered — it is no longer a task
+list. Half A landed in `6cb8ca5`; Half B landed in the commit that added this
+block. Next task is **Wave 2**.
+
+What Half B actually shipped, since it differs from the sketch below in two
+places worth knowing:
+
+- `scripts/stub_llm.py` serves recorded replies from
+  `scripts/fixtures/llm_fixtures.json` and supports **streaming**, because
+  `app/services/chat.py` streams — a non-streaming stub would have been
+  useless against the real code path. It defaults to port **8099**, not 8081:
+  `docker/compose.yaml` already publishes searxng on 8081.
+- `evals-live` skips when `FREE_LLM_BASE_URL` is empty as well as when
+  `FREE_LLM_KEY` is. An unset GitHub secret expands to an empty string, and
+  pydantic treats an empty env var as a real value that **overrides** the
+  field default rather than falling back to it — so an unguarded live gate
+  would build a client against `base_url=""` and report a config gap as a
+  provider outage.
+
+Verified locally before commit: `ruff` clean, `pytest` 279 passed, and the
+offline gate scoring 17/17 agents at 100% with no API key. All three
+`run_evals` exit codes were exercised for real — 0 (pass), 1 (forced
+regression via a deliberately wrong fixture file), 2 (stub stopped).
+`gitleaks v8.30.1` scanned 139 commits and found no leaks, so the new
+blocking secret-scan gate starts green.
 
 Two halves, independent. Do them in either order.
 

@@ -91,6 +91,8 @@ Full trade-off records (context → decision → why → what we gave up) live i
 
 Most agent demos stop at "it can call a tool." AgentFleet treats an agent like a production service: every reply is metered for tokens/cost/latency and checked against per-agent and global budget caps; the Eval Center runs deterministic checks plus an LLM-as-judge over golden cases and a red-team suite (prompt-injection, jailbreak, secret-exfiltration attempts) — the deterministic checks run in CI on every push, while the LLM-judged eval currently runs only when a provider key is present and is **not yet blocking** (`.github/workflows/evals.yml`); every tool result is scanned for injected instructions before it reaches the model; and every agent config change can be published as a version and rolled back with one click. The story isn't "an agent that works" — it's "an agent fleet you could actually run."
 
+**Status (2026-08-05):** The claim above is now out of date — that was the honest temporary state, and the real gate has since landed. `.github/workflows/evals.yml` runs the eval gate as two blocking jobs: **`evals-offline`** (deterministic checks plus judge-parsing against a recorded stub LLM, no secrets required, runs on every PR including forks) and **`evals-live`** (the real provider, on pushes to `main` and manual `workflow_dispatch` only — not on PRs). `evals-live` distinguishes a genuine eval regression from a dead free-tier provider: the latter emits a `::warning::` and passes, rather than failing `main` for a reason unrelated to agent quality. Neither job uses `continue-on-error`.
+
 ## Tech stack
 
 **Backend** — Python 3.12 · FastAPI (async) · Pydantic v2 · SQLAlchemy 2 (async) · Alembic · PostgreSQL + pgvector

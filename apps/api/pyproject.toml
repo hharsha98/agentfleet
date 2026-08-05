@@ -45,6 +45,18 @@ dev = [
 line-length = 100
 target-version = "py312"
 
+[tool.ruff.lint.per-file-ignores]
+# Both files have DELIBERATE late imports, not accidental ones: env vars
+# must be set (migrations/env.py: the DB URL via app.config; tests/conftest.py:
+# AUTH_SECRET/RATE_LIMIT_DISABLED/DATABASE_URL, see its module docstring)
+# BEFORE the first `app.*` import in the process, because app.config.get_settings()
+# is @lru_cache'd and several app modules (app.db, app.ratelimit) build
+# module-level state from settings at import time. Reordering these imports
+# to satisfy E402 would silently break that ordering guarantee — do not
+# "fix" them; the ignore is the fix.
+"migrations/env.py" = ["E402"]
+"tests/conftest.py" = ["E402"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 pythonpath = ["."]

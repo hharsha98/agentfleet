@@ -7,7 +7,33 @@ on:
   workflow_dispatch:
 
 jobs:
-  test:
+  # Fast, no services. Ruff has been configured in pyproject.toml since early
+  # on but was never actually run in CI — this is the first time a lint
+  # violation can fail a build instead of just sitting in the repo.
+  api-lint:
+    name: api-lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # Exact version, not a floating major: astral-sh/setup-uv publishes no
+      # `v9` tag — only `v9.0.0` — so `@v9` fails to resolve and the job dies
+      # before it starts. actions/* do publish moving majors; this repo does
+      # not, so pin it precisely.
+      - name: Install uv
+        uses: astral-sh/setup-uv@v9.0.0
+
+      - name: Install dependencies
+        working-directory: apps/api
+        run: uv sync
+
+      - name: Ruff
+        working-directory: apps/api
+        run: uv run ruff check .
+
+  # Postgres-backed test suite plus migration-drift detection. Blocking.
+  api-tests:
+    name: api-tests
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -30,9 +56,65 @@ jobs:
       # doesn't fail CLOSED with 503. tests/conftest.py mints its tokens with
       # this exact same value.
       AUTH_SECRET: test-secret-for-ci
-      # Secrets are allowed in job-level env, but NOT in a step's `if:` — so we
-      # surface the key here and gate the eval step on env below.
-      FREE_LLM_KEY: ${{ secrets.FREE_LLM_KEY }}
+    steps:
+      - uses: actions/checkout@v7
+
+      # Exact version, not a floating major: astral-sh/setup-uv publishes no
+      # `v9` tag — only `v9.0.0` — so `@v9` fails to resolve and the job dies
+      # before it starts. actions/* do publish moving majors; this repo does
+      # not, so pin it precisely.
+      - name: Install uv
+        uses: astral-sh/setup-uv@v9.0.0
+
+      - name: Install dependencies
+        working-directory: apps/api
+        run: uv sync
+
+      - name: Run migrations
+        working-directory: apps/api
+        run: uv run alembic upgrade head
+
+      # Migration drift gate: fails if the SQLAlchemy models and the latest
+      # migration have diverged (e.g. someone edited a model without
+      # generating/committing a migration for it). Almost no portfolio
+      # project checks this, and it catches a real class of bug.
+      - name: Check for migration drift
+        working-directory: apps/api
+        run: uv run alembic check
+
+      - name: Seed built-in agents
+        working-directory: apps/api
+        run: uv run python -m scripts.seed_agents
+
+      - name: Run tests
+        working-directory: apps/api
+        run: uv run pytest -q
+
+  # The real eval gate, offline half. No secrets anywhere in this job, so it
+  # runs — and must pass — on every PR, including from forks that can never
+  # see FREE_LLM_KEY. It exercises the same check_case/judge() parsing code
+  # as the live gate, just against a local stub instead of a real provider,
+  # so it's fully deterministic and hermetic.
+  evals-offline:
+    name: evals-offline
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: agentfleet
+          POSTGRES_PASSWORD: agentfleet
+          POSTGRES_DB: agentfleet
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U agentfleet"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql+asyncpg://agentfleet:agentfleet@localhost:5432/agentfleet
+      AUTH_SECRET: test-secret-for-ci
     steps:
       - uses: actions/checkout@v7
 
@@ -55,19 +137,161 @@ jobs:
         working-directory: apps/api
         run: uv run python -m scripts.seed_agents
 
-      - name: Run tests
+      - name: Seed golden eval cases
         working-directory: apps/api
-        run: uv run pytest -q
+        run: uv run python -m scripts.seed_evals
 
-      # LLM eval gate: runs scripts.run_evals against a real provider, so it
-      # needs a provider key secret. Guarded + non-blocking so PRs from forks
-      # (or repos that haven't configured the secret yet) don't fail CI —
-      # this job is the regression gate, meant to be tightened once
-      # FREE_LLM_KEY / ANTHROPIC_API_KEY are configured as repo secrets.
-      - name: Run LLM eval gate
-        if: ${{ env.FREE_LLM_KEY != '' }}
-        continue-on-error: true
+      # Backgrounded on purpose: the process needs to keep serving requests
+      # for the rest of the job. Output goes to a log file instead of the
+      # step's stdout so a startup crash is still inspectable after the job
+      # moves on to the next step.
+      - name: Start stub LLM
         working-directory: apps/api
         run: |
-          uv run python -m scripts.seed_evals
+          nohup uv run python -m scripts.stub_llm > /tmp/stub_llm.log 2>&1 &
+
+      # Bounded poll instead of a fixed sleep-and-hope: fails fast if the
+      # stub never comes up, and doesn't waste time waiting once it does.
+      - name: Wait for stub LLM to be healthy
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:8099/health > /dev/null; then
+              echo "stub LLM is healthy after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "stub LLM did not become healthy within 30s" >&2
+          echo "--- stub_llm.log ---" >&2
+          cat /tmp/stub_llm.log >&2 || true
+          exit 1
+
+      - name: Run offline eval gate
+        working-directory: apps/api
+        env:
+          # 8099 matches scripts/stub_llm.py's default (8081 is searxng's port
+          # in docker/compose.yaml — irrelevant here, but kept consistent so
+          # the local and CI invocations are the same command).
+          FREE_LLM_BASE_URL: http://127.0.0.1:8099/v1
+          FREE_LLM_KEY: stub
+        run: uv run python -m scripts.run_evals
+
+  # The real eval gate, live half: a genuine provider call. Only runs where
+  # a provider key can exist at all — pushes to main and manual dispatch —
+  # never on pull_request (fork PRs can't see the secret anyway, and same-repo
+  # PRs are covered by evals-offline plus this job on the next main push).
+  evals-live:
+    name: evals-live
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: agentfleet
+          POSTGRES_PASSWORD: agentfleet
+          POSTGRES_DB: agentfleet
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U agentfleet"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql+asyncpg://agentfleet:agentfleet@localhost:5432/agentfleet
+      AUTH_SECRET: test-secret-for-ci
+      # Secrets are allowed in job-level env, but NOT in a step's `if:` — so
+      # we surface the key here and check it in a step below instead.
+      FREE_LLM_KEY: ${{ secrets.FREE_LLM_KEY }}
+      FREE_LLM_BASE_URL: ${{ secrets.FREE_LLM_BASE_URL }}
+      EVAL_RETRIES: "2"
+    steps:
+      - uses: actions/checkout@v7
+
+      # Exact version, not a floating major: astral-sh/setup-uv publishes no
+      # `v9` tag — only `v9.0.0` — so `@v9` fails to resolve and the job dies
+      # before it starts. actions/* do publish moving majors; this repo does
+      # not, so pin it precisely.
+      - name: Install uv
+        uses: astral-sh/setup-uv@v9.0.0
+
+      - name: Install dependencies
+        working-directory: apps/api
+        run: uv sync
+
+      - name: Run migrations
+        working-directory: apps/api
+        run: uv run alembic upgrade head
+
+      - name: Seed built-in agents
+        working-directory: apps/api
+        run: uv run python -m scripts.seed_agents
+
+      - name: Seed golden eval cases
+        working-directory: apps/api
+        run: uv run python -m scripts.seed_evals
+
+      # No `continue-on-error` — the exit-code split below is what lets this
+      # job be blocking at all, instead of the old all-or-nothing gate that
+      # had to choose between "always green" and "green only with a secret".
+      #
+      # scripts/run_evals.py exit codes:
+      #   0 = pass
+      #   1 = real eval regression        -> fail the job, something broke
+      #   2 = provider unavailable        -> warn and PASS; a dead free-tier
+      #       endpoint must not redden `main` for a reason that has nothing
+      #       to do with agent quality
+      - name: Run live eval gate
+        working-directory: apps/api
+        run: |
+          if [ -z "${FREE_LLM_KEY}" ]; then
+            echo "::warning::FREE_LLM_KEY is not set — skipping the live eval gate."
+            exit 0
+          fi
+
+          # FREE_LLM_BASE_URL is checked too, and this is the non-obvious part:
+          # an unset repo secret expands to an EMPTY STRING, and pydantic
+          # treats an empty env var as a real value that OVERRIDES the field
+          # default in app/config.py — it does not fall back to it. So without
+          # this guard, a repo with FREE_LLM_KEY configured but no
+          # FREE_LLM_BASE_URL would build a client against base_url="" and fail
+          # in a way that looks like a provider outage rather than a missing
+          # setting. Verified against Settings() directly, not assumed.
+          if [ -z "${FREE_LLM_BASE_URL}" ]; then
+            echo "::warning::FREE_LLM_BASE_URL is not set — skipping the live eval gate (an empty value would override the config default, not fall back to it)."
+            exit 0
+          fi
+
+          set +e
           uv run python -m scripts.run_evals
+          code=$?
+          set -e
+
+          if [ "$code" -eq 0 ]; then
+            echo "Live eval gate passed."
+          elif [ "$code" -eq 2 ]; then
+            echo "::warning::Live LLM provider unavailable (run_evals exit 2) — treating as a pass so a dead free-tier endpoint doesn't fail main."
+          else
+            echo "Live eval gate failed (run_evals exit ${code})."
+            exit 1
+          fi
+
+  # Secret scanning. gitleaks/gitleaks-action@v2 requires a paid
+  # GITLEAKS_LICENSE key once a repo is under an organisation account — this
+  # repo doesn't have one, so run the CLI straight from the official Docker
+  # image instead. Same scan, no licence coupling, no dependency on a key
+  # that might never get configured. Version pinned exactly (not `:latest`)
+  # so the gate's behaviour doesn't shift under us between runs.
+  gitleaks:
+    name: gitleaks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Run gitleaks
+        run: |
+          docker run --rm -v "$(pwd):/repo" zricethezav/gitleaks:v8.30.1 \
+            detect --source /repo --no-banner --redact

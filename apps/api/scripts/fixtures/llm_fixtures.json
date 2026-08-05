@@ -1,0 +1,122 @@
+{
+  "_comment": [
+    "Canned replies for scripts/stub_llm.py, keyed by rule so the",
+    "evals-offline CI gate (scripts/run_evals.py) is fully hermetic.",
+    "Every rule here exists to satisfy exactly one case in",
+    "scripts/seed_evals.py::EVAL_CASES — each rule's 'name' names that",
+    "case so a failure is traceable back to its source. Rules use a",
+    "short, distinctive substring from that case's `input` as `match` so",
+    "they can never accidentally fire for a DIFFERENT case's input (see",
+    "scripts/stub_llm.py::select_reply — first full match wins). Adding a",
+    "new eval case means adding a new rule here, or it silently falls",
+    "through to `default` and probably fails its expected_contains check."
+  ],
+  "default": "I'm a stub assistant with no fixture rule matching this request.",
+  "rules": [
+    {
+      "name": "orchestrator: 3-step podcast plan",
+      "match": ["podcast"],
+      "reply": "Here is a 3-step plan:\n1. Choose your podcast topic and format.\n2. Record and edit a pilot episode.\n3. Publish it and promote across platforms."
+    },
+    {
+      "name": "orchestrator: birthday party numbered list",
+      "match": ["birthday party"],
+      "reply": "1. Pick a date, venue, and guest list.\n2. Send invitations.\n3. Plan food, cake, and activities."
+    },
+    {
+      "name": "creative-writer: sea couplet with 'wave'",
+      "match": ["couplet", "sea"],
+      "reply": "The ocean sings in endless sway,\nA rolling wave greets the break of day."
+    },
+    {
+      "name": "creative-writer: Sam birthday greeting",
+      "match": ["birthday greeting"],
+      "reply": "Happy birthday, Sam! Wishing you a day full of laughter and joy."
+    },
+    {
+      "name": "system-architect: web app mermaid diagram",
+      "match": ["web app"],
+      "reply": "```mermaid\ngraph LR\n  Browser --> API --> Database\n```"
+    },
+    {
+      "name": "system-architect: three-tier mermaid diagram",
+      "match": ["three-tier"],
+      "reply": "```mermaid\ngraph LR\n  Client --> Server --> Cache\n```"
+    },
+    {
+      "name": "deep-research: what is Python",
+      "match": ["what is python"],
+      "reply": "Python is a high-level, general-purpose programming language known for its readable syntax."
+    },
+    {
+      "name": "deep-research: what is HTTP",
+      "match": ["what is http"],
+      "reply": "HTTP is the application-layer protocol used to transfer data across the web."
+    },
+    {
+      "name": "sql-analytics + data-analyst: analytics_sales row count",
+      "match": ["analytics_sales table"],
+      "reply": "The analytics_sales table has exactly 60 rows."
+    },
+    {
+      "name": "sql-analytics: distinct regions in analytics_sales",
+      "match": ["distinct regions"],
+      "reply": "There are exactly 4 distinct regions in analytics_sales."
+    },
+    {
+      "name": "meeting-notes: Jane Doe / Acme Corp call",
+      "match": ["jane doe"],
+      "reply": "Meeting notes: call with Jane Doe from Acme Corp. Next step: send pricing by Friday."
+    },
+    {
+      "name": "outreach: Acme Corp Series A",
+      "match": ["series a"],
+      "reply": "Subject: Congrats on the Series A, Acme Corp! I'd love to show you how we can help as you scale."
+    },
+    {
+      "name": "competitor-monitor: Acme competitor",
+      "match": ["monitor for a competitor"],
+      "reply": "For Acme, I'd monitor pricing changes, product launches, hiring trends, and review sentiment."
+    },
+    {
+      "name": "fact-checker: Eiffel Tower in Berlin",
+      "match": ["eiffel tower"],
+      "reply": "FALSE. The Eiffel Tower is located in Paris, France, not Berlin."
+    },
+    {
+      "name": "market-intelligence: assess Acme Corp",
+      "match": ["assess acme corp"],
+      "reply": "To assess Acme Corp, I'd research its funding history, leadership team, and market position."
+    },
+    {
+      "name": "patent-scout: Acme Corp widget technology patents",
+      "match": ["widget technology"],
+      "reply": "I'd search USPTO and Google Patents for Acme Corp's widget technology filings."
+    },
+    {
+      "name": "code-reviewer: raw diff for a GitHub PR URL",
+      "match": ["github.com/acme/widgets/pull/42"],
+      "reply": "Append .diff to the PR URL: https://github.com/acme/widgets/pull/42.diff to fetch the raw diff."
+    },
+    {
+      "name": "resume-builder: tailor resume for Acme Corp",
+      "match": ["tailor my resume"],
+      "reply": "To tailor your resume for Acme Corp, I first need the job description and your current resume."
+    },
+    {
+      "name": "youtube-research: Acme Reviews channel",
+      "match": ["acme reviews"],
+      "reply": "For Acme Reviews, I'd look at upload frequency, view counts, and audience comments."
+    },
+    {
+      "name": "clinical-research: Acme Syndrome on PubMed",
+      "match": ["acme syndrome"],
+      "reply": "For Acme Syndrome, I'd search PubMed for case studies, treatment trials, and prevalence data."
+    },
+    {
+      "name": "web-navigator: summarize example.com/acme",
+      "match": ["example.com/acme"],
+      "reply": "I'd fetch https://example.com/acme and summarize its main heading and content — it looks like an Acme page."
+    }
+  ]
+}

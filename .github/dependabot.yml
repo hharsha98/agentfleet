@@ -1,0 +1,38 @@
+# https://docs.github.com/en/code-security/dependabot/dependabot-version-updates
+version: 2
+updates:
+  # apps/api pins with uv.lock, not requirements.txt. Dependabot's `pip`
+  # ecosystem only understands requirements*.txt and would silently ignore
+  # this lockfile entirely; the `uv` ecosystem reads uv.lock directly, so
+  # that's the one that actually produces update PRs here.
+  - package-ecosystem: "uv"
+    directory: "/apps/api"
+    schedule:
+      interval: "weekly"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "npm"
+    directory: "/apps/web"
+    schedule:
+      interval: "weekly"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Keeps the pinned action versions (e.g. astral-sh/setup-uv, actions/checkout)
+  # current without hand-tracking release notes.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
