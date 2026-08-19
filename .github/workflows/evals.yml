@@ -21,7 +21,7 @@ jobs:
       # before it starts. actions/* do publish moving majors; this repo does
       # not, so pin it precisely.
       - name: Install uv
-        uses: astral-sh/setup-uv@v9.0.0
+        uses: astral-sh/setup-uv@v10.0.1
 
       - name: Install dependencies
         working-directory: apps/api
@@ -64,7 +64,7 @@ jobs:
       # before it starts. actions/* do publish moving majors; this repo does
       # not, so pin it precisely.
       - name: Install uv
-        uses: astral-sh/setup-uv@v9.0.0
+        uses: astral-sh/setup-uv@v10.0.1
 
       - name: Install dependencies
         working-directory: apps/api
@@ -123,7 +123,7 @@ jobs:
       # before it starts. actions/* do publish moving majors; this repo does
       # not, so pin it precisely.
       - name: Install uv
-        uses: astral-sh/setup-uv@v9.0.0
+        uses: astral-sh/setup-uv@v10.0.1
 
       - name: Install dependencies
         working-directory: apps/api
@@ -214,7 +214,7 @@ jobs:
       # before it starts. actions/* do publish moving majors; this repo does
       # not, so pin it precisely.
       - name: Install uv
-        uses: astral-sh/setup-uv@v9.0.0
+        uses: astral-sh/setup-uv@v10.0.1
 
       - name: Install dependencies
         working-directory: apps/api
