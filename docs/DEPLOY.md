@@ -43,6 +43,18 @@ commit.
 To keep it private instead, supply a GitHub token as a build secret and adjust
 `SOURCE_REPO` in the Space Dockerfile.
 
+**Status (2026-09-01): done — the repo is public.** `hharsha98/agentfleet`
+reports `"visibility": "PUBLIC"`. The scan above was re-run independently
+before flipping it, across all 141 commits at the time: no AWS keys, no
+OpenAI/Anthropic/Google API keys, no GitHub tokens, no `GOCSPX-` OAuth client
+secrets, no `.apps.googleusercontent.com` client IDs, no private keys, and no
+assigned secret values. `.gitignore` covers `.env` and `.env.*` while
+whitelisting `.env.example`, and `.env` has never been tracked.
+
+So the Space's clone works as written, with no build token, and the
+`SOURCE_REPO` workaround in the paragraph above is no longer needed. It is
+kept for anyone forking this into a private repo of their own.
+
 ---
 
 ## 1. Database — Neon
@@ -113,8 +125,32 @@ Keep it. It goes into **both** the Space and Vercel, byte-identical.
    | `AUTH_URL` | your Vercel URL, e.g. `https://agentfleet.vercel.app` |
    | `AUTH_GOOGLE_ID` | from Google console |
    | `AUTH_GOOGLE_SECRET` | from Google console |
-   | `INTERNAL_API_URL` | your Space URL from step 3 |
+   | `INTERNAL_API_URL` | your Space URL from step 3 — used by **server** components |
+   | `NEXT_PUBLIC_API_URL` | your Space URL from step 3 — used by the **browser** |
+   | `NEXT_PUBLIC_SITE_URL` | your Vercel URL (fill after the first deploy, then redeploy) |
    | `DEMO_LOGIN_ENABLED` | `1` |
+
+   > **Both API URL variables are required, and they are not interchangeable.**
+   > `apps/web/lib/api.ts` resolves two different bases: server components use
+   > `INTERNAL_API_URL`, while `apiFetch()` — the wrapper behind all 13 client
+   > components, the chat UI among them — uses `NEXT_PUBLIC_API_URL`, falling
+   > back to `http://localhost:8000`. Set only `INTERNAL_API_URL` and your
+   > pages will render while every interaction in the browser quietly tries to
+   > reach *the visitor's own laptop* and fails. On Vercel both take the same
+   > value: your Space URL. That localhost fallback is correct for local
+   > development, which is exactly why this gap stays invisible until you
+   > deploy.
+   >
+   > **`NEXT_PUBLIC_*` is baked in at BUILD time, not read at runtime.** Adding
+   > or changing either of these needs a **redeploy** to take effect — saving
+   > the variable alone does nothing. Same trap as the Space needing a Factory
+   > rebuild, and for the same reason.
+   >
+   > `NEXT_PUBLIC_SITE_URL` feeds `metadataBase` in `apps/web/app/layout.tsx`.
+   > Leave it unset and your Open Graph card resolves against
+   > `http://localhost:3002`, so link previews break precisely when you share
+   > the URL with someone who matters. It is chicken-and-egg: you only learn
+   > your Vercel URL after the first deploy, so set it then and redeploy.
 
 4. Deploy, then note the final URL.
 
@@ -158,6 +194,8 @@ first line reads everything after it differently.
 |---|---|
 | Sign-in works, every API call 401s | `AUTH_SECRET` differs between Vercel and the Space |
 | API calls blocked in the browser console | `CORS_ORIGINS` missing the Vercel origin, or set but not rebuilt |
+| Pages load, but nothing interactive works; console shows calls to `localhost:8000` | `NEXT_PUBLIC_API_URL` unset on Vercel, or set without redeploying. **This is not CORS** — the browser is reaching for the visitor's own machine, so read the failing URL before touching `CORS_ORIGINS` |
+| Open Graph / link preview image is blank when shared | `NEXT_PUBLIC_SITE_URL` unset, so `metadataBase` resolves against `localhost:3002` |
 | `redirect_uri_mismatch` on Google | production callback URL not registered (step 5.2) |
 | Space build fails at the clone | repo is private and no token was supplied |
 | Missing relation / catalog errors | migrations did not run — read the boot log |
