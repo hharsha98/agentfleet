@@ -3,6 +3,7 @@ from collections.abc import AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.config import get_settings
+from app.db_connect import asyncpg_connect_args
 
 _settings = get_settings()
 
@@ -29,6 +30,7 @@ engine = create_async_engine(
     max_overflow=_settings.db_max_overflow,
     pool_recycle=_settings.db_pool_recycle_seconds,
     pool_timeout=_settings.db_pool_timeout_seconds,
+    connect_args=asyncpg_connect_args(_settings.database_schema, _settings.database_ssl),
 )
 SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 

@@ -24,6 +24,7 @@ import logging
 from langgraph.checkpoint.memory import MemorySaver
 
 from app.config import get_settings
+from app.db_connect import psycopg_connect_kwargs
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +76,11 @@ async def get_checkpointer():
             from psycopg_pool import AsyncConnectionPool
 
             dsn = _psycopg_dsn(settings.database_url)
-            pool = AsyncConnectionPool(dsn, open=False, kwargs={"autocommit": True})
+            pool = AsyncConnectionPool(
+                dsn,
+                open=False,
+                kwargs=psycopg_connect_kwargs(settings.database_schema, settings.database_ssl),
+            )
             await pool.open()
             saver = AsyncPostgresSaver(pool)
             # Idempotent: creates the checkpoint tables if they don't exist

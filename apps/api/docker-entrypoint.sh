@@ -49,17 +49,27 @@ PYEOF
 
 # Single-instance platforms only. Compose/k8s leave this unset so replicas
 # never race alembic. The CREATE EXTENSION is idempotent and non-fatal if
-# the role cannot create extensions (Neon/Supabase grant it; some hosts do not).
+# the role cannot create extensions (Neon grants it; Supabase already has
+# `vector` in the `extensions` schema). A dedicated schema (DATABASE_SCHEMA,
+# default public) is created first so tables never land in someone else's
+# public schema.
 if [ "${RUN_MIGRATIONS_ON_BOOT:-}" = "1" ]; then
-  echo "[entrypoint] ensuring pgvector extension..."
-  python3 - <<'PYEOF' || echo "[entrypoint] pgvector step skipped (already present, or not permitted)"
-import asyncio, os
+  echo "[entrypoint] ensuring pgvector extension and schema..."
+  python3 - <<'PYEOF' || echo "[entrypoint] pgvector/schema step skipped (already present, or not permitted)"
+import asyncio, os, re
 import asyncpg
 
 async def main():
     dsn = os.environ["DATABASE_URL"].replace("postgresql+asyncpg://", "postgresql://")
-    conn = await asyncpg.connect(dsn)
+    schema = (os.environ.get("DATABASE_SCHEMA") or "public").strip() or "public"
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", schema):
+        raise SystemExit(f"[entrypoint] invalid DATABASE_SCHEMA: {schema!r}")
+    ssl = os.environ.get("DATABASE_SSL", "").lower() in ("1", "true", "yes")
+    conn = await asyncpg.connect(dsn, ssl=True if ssl else None)
     try:
+        if schema != "public":
+            await conn.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema}"')
+            print(f"[entrypoint] schema {schema} ready")
         await conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
         print("[entrypoint] pgvector ready")
     finally:

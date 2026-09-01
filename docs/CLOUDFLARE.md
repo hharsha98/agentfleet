@@ -20,7 +20,7 @@ Workers AI is optional and only as another OpenAI-compatible base URL.
 |---|---|---|---|
 | Web (Next.js 16 App Router + Auth.js) | Worker via [OpenNext](https://opennext.js.org/cloudflare) | **`agentfleet-app`** | Pages' Next.js preset is **static HTML export**. This app mints JWTs, runs server components, and cannot be exported. |
 | API (FastAPI) | Container + a thin Worker proxy | **`agentfleet-api`** | The existing Docker image, `ORCHESTRATOR_MODE=inprocess` (no Redis). |
-| Postgres + pgvector | **External** (Neon or Supabase) | — | Talk TLS from the container. Do not use D1. Do not use Hyperdrive. |
+| Postgres + pgvector | **Supabase** (existing project, schema `agentfleet`) | `koyhzzyzxcalyzruhgqw` | Talk TLS from the container. Do not use D1. Do not use Hyperdrive. |
 
 Do **not** deploy either of these over:
 
@@ -59,24 +59,54 @@ forward to. Use the Hugging Face Space from [DEPLOY.md](DEPLOY.md) instead.
 
 ---
 
-## 1. Database — Neon or Supabase (pgvector)
+## 1. Database — existing Supabase (pgvector)
 
-Same rewrite as [DEPLOY.md](DEPLOY.md):
+This deploy uses the already-running Supabase project, **not** a new Neon
+database and not D1:
 
-1. Create a Postgres database with the `vector` extension available.
-2. Copy the connection string
-   (`postgresql://user:pass@host/db?sslmode=require`).
-3. Rewrite: `postgresql://` → `postgresql+asyncpg://`, and **drop**
-   `?sslmode=require`. asyncpg rejects that parameter and negotiates TLS
-   itself.
+| | |
+|---|---|
+| Name | hharsha98's Project |
+| Ref | `koyhzzyzxcalyzruhgqw` |
+| Region | `eu-west-1` (Ireland) |
+| Engine | Postgres 17 (`ACTIVE_HEALTHY`) |
+| Host | `db.koyhzzyzxcalyzruhgqw.supabase.co` |
+| Database | `postgres` |
+| App schema | **`agentfleet`** (not `public`) |
+
+`vector` is already installed in the `extensions` schema. The `agentfleet`
+schema exists and is **not** granted to `anon` / `authenticated`, so it
+does not collide with other `public` tables and is not on the Data API.
+The API sets `search_path` to `agentfleet,extensions,public` so unqualified
+`vector` types and app tables resolve without touching anyone else's
+`public` objects.
+
+Rewrite the dashboard URI the same way as [DEPLOY.md](DEPLOY.md):
+
+1. Copy the URI (`postgresql://postgres:…@db.koyhzzyzxcalyzruhgqw.supabase.co:5432/postgres?sslmode=require`).
+2. Change `postgresql://` → `postgresql+asyncpg://`.
+3. **Drop** `?sslmode=require` — asyncpg rejects that parameter.
+4. Enable TLS with `DATABASE_SSL=1` (already a wrangler `var`), not a query string.
 
 ```
-postgresql+asyncpg://user:pass@host/db
+postgresql+asyncpg://postgres:YOUR_PASSWORD@db.koyhzzyzxcalyzruhgqw.supabase.co:5432/postgres
 ```
 
-Do not put this in git. The container reaches Postgres **directly over TLS**.
-Hyperdrive is a Worker-side pooler; it is not available inside the
-Container runtime.
+Do **not** commit `YOUR_PASSWORD`. Put the rewritten URI in
+`deploy/cloudflare/.dev.vars` (gitignored) and `wrangler secret put DATABASE_URL`.
+
+The API container connects to that host **directly over TLS**. Hyperdrive is
+a Worker-side pooler and does not work inside Containers
+([cloudflare/containers#97](https://github.com/cloudflare/containers/issues/97)).
+Do not add a Hyperdrive binding to this Worker.
+
+`ORCHESTRATOR_MODE=inprocess` stays on: no Redis, no arq worker. Mission
+DAGs run inside the API process.
+
+If the container cannot open IPv6 to `db.*.supabase.co`, the fallback is
+Supabase's **session** pooler on port **5432** (not transaction-mode 6543,
+which breaks asyncpg prepared statements). Same rewrite: `+asyncpg`, no
+`sslmode`, `DATABASE_SSL=1`.
 
 ---
 
@@ -118,7 +148,7 @@ Secrets (`wrangler secret put` / `.dev.vars` locally):
 
 | Name | Purpose |
 |---|---|
-| `DATABASE_URL` | Rewritten Neon/Supabase DSN above |
+| `DATABASE_URL` | Rewritten Supabase DSN above (password not in git) |
 | `AUTH_SECRET` | Shared with web, byte-identical |
 | `FREE_LLM_BASE_URL` | OpenAI-compatible endpoint |
 | `FREE_LLM_KEY` | Provider key |
@@ -133,6 +163,8 @@ Secrets (`wrangler secret put` / `.dev.vars` locally):
 | `RUN_MIGRATIONS_ON_BOOT` | `1` |
 | `DEFAULT_MODEL` | `openai/gpt-oss-120b` |
 | `EMBEDDINGS_PREWARM` | `1` |
+| `DATABASE_SCHEMA` | `agentfleet` |
+| `DATABASE_SSL` | `1` |
 | `CORS_ORIGINS` | web origin(s), comma-separated — fill after step 4, then redeploy the API Worker (vars, not a rebuild of the image) |
 
 The proxy Worker refuses to start a container if the four secrets are
@@ -245,6 +277,28 @@ Private window, no session:
 
 ---
 
+## Cloudflare extras vs Useful Agents (GCP)
+
+[useful-agents.com](https://useful-agents.com) runs on GKE Autopilot + Cloud
+SQL + Redis. AgentFleet on Cloudflare is the same *product* (chat, DAG
+missions, RAG, MCP, evals), with these Cloudflare pieces closing that infra
+gap. They are **not** required to get a stranger onto demo login; the first
+deploy is Container `standard-1` + Supabase + in-process orchestrator.
+
+| GCP (Useful Agents) | Cloudflare extra | What it replaces / adds | First deploy? |
+|---|---|---|---|
+| GKE Autopilot pods | **Workers Paid Containers `standard-1`** (4 GiB) | Runs the real FastAPI image. `lite` (256 MiB) OOMs; measured RSS is ~507 MB with fastembed. | **Yes** — pinned in `wrangler.jsonc` |
+| Cloud SQL Postgres | **Supabase** `db.koyhzzyzxcalyzruhgqw.supabase.co` schema `agentfleet` | pgvector, TLS from the container. Not D1, not Hyperdrive. | **Yes** |
+| Redis / arq workers | **Queues + Workflows** | Durable DAG steps if you outgrow `ORCHESTRATOR_MODE=inprocess` (a run currently dies if the container sleeps mid-mission). Wire a Workflow around `POST /api/v1/runs` later; do not turn Redis on inside the container for v1. | No — keep `inprocess` |
+| GCS / disk uploads | **R2** | Original file blobs. Today ingest stores chunks + embeddings in Postgres (5 MB cap). R2 is the place for larger artifacts / raw PDFs without stuffing `public` or the container's ephemeral disk. | No |
+| Provider sprawl / retries | **AI Gateway** | Front `FREE_LLM_BASE_URL` with `https://gateway.ai.cloudflare.com/v1/<account>/<gateway>/…` so logging, caching, and provider failover sit in one place. Still OpenAI-compatible — no second client. | Optional |
+| VPC + Memorystore | (none) | Container `enableInternet=true` reaches Supabase and the LLM endpoint over TLS. | — |
+
+Do **not** overwrite Pages project **`agentfleet-gallery`**. These extras
+belong on `agentfleet-app` / `agentfleet-api` only.
+
+---
+
 ## Fallback: Pages frontend + HF Spaces API
 
 If Containers cannot deploy, you can still ship a usable demo:
@@ -280,7 +334,8 @@ cd apps/web && npm run cf:preview
 | `deploy/cloudflare/wrangler.jsonc` | API Worker + Container |
 | `deploy/cloudflare/src/index.ts` | Proxy (pass-through, no app rewrite) |
 | `apps/api/Dockerfile` | Image wrangler builds (`image` path in wrangler.jsonc) |
-| `apps/api/docker-entrypoint.sh` | `RUN_MIGRATIONS_ON_BOOT=1` for this single instance |
+| `apps/api/app/db_connect.py` | `DATABASE_SCHEMA` + `DATABASE_SSL` connect args |
+| `apps/api/tests/test_db_connect.py` | Offline schema/TLS connect-arg tests |
 | `apps/web/wrangler.jsonc` | OpenNext Worker `agentfleet-app` |
 | `apps/web/open-next.config.ts` | OpenNext adapter |
 | `docs/DEPLOY.md` | Free-tier Spaces + Vercel (kept) |

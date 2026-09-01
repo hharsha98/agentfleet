@@ -5,13 +5,16 @@
 #   npx wrangler secret put FREE_LLM_BASE_URL
 #   npx wrangler secret put FREE_LLM_KEY
 #
-# Postgres DSN: postgresql+asyncpg://user:pass@host/db
+# Existing Supabase (ref koyhzzyzxcalyzruhgqw, eu-west-1, Postgres 17):
+#   postgresql+asyncpg://postgres:YOUR_PASSWORD@db.koyhzzyzxcalyzruhgqw.supabase.co:5432/postgres
+#
 # Do NOT append ?sslmode=require — asyncpg rejects that parameter and
-# negotiates TLS itself. Hyperdrive is NOT used here (it does not work
-# inside Cloudflare Containers — cloudflare/containers#97); the container
-# talks to Neon/Supabase over TLS directly.
+# negotiates TLS via DATABASE_SSL=1 (wrangler vars). Hyperdrive is NOT
+# used (cloudflare/containers#97); the container talks to Supabase over
+# TLS directly. Tables live in schema `agentfleet` (DATABASE_SCHEMA),
+# not public.
 
-DATABASE_URL=postgresql+asyncpg://USER:PASSWORD@HOST/neondb
+DATABASE_URL=postgresql+asyncpg://postgres:YOUR_PASSWORD@db.koyhzzyzxcalyzruhgqw.supabase.co:5432/postgres
 AUTH_SECRET=generate-with-openssl-rand-base64-32
 FREE_LLM_BASE_URL=https://your-openai-compatible-endpoint/v1
 FREE_LLM_KEY=your-provider-key
