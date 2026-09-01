@@ -4,6 +4,7 @@
   --foreground: #f4f4f5;
   --muted: #a1a1aa;
   --accent: #5e6ad2;
+  --accent-text: #8b93ea; /* #5e6ad2 is 4.21:1 on #0a0a0a at 12px */
   --accent-hot: #8b7ff0;
   --hairline: rgba(255, 255, 255, 0.1);
   --surface-1: #17171d;
@@ -130,7 +131,7 @@ a {
 .eyebrow {
   position: relative;
   margin: 0;
-  color: var(--accent);
+  color: var(--accent-text);
   font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.16em;
@@ -299,9 +300,6 @@ figure img {
   border-radius: 16px;
   border: 1px solid var(--hairline);
   background: var(--surface-1);
-  aspect-ratio: 16 / 10;
-  object-fit: cover;
-  object-position: top center;
   box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
 }
 
@@ -329,7 +327,7 @@ figcaption em {
   gap: 0.75rem 1.25rem;
   margin: 0.85rem 0 0;
   font-size: 0.8125rem;
-  color: #71717a;
+  color: var(--muted);
 }
 
 .step a {
@@ -350,7 +348,7 @@ figcaption em {
 }
 
 footer {
-  color: #71717a;
+  color: var(--muted);
   text-align: center;
   padding: 1.5rem var(--gutter) 4rem;
   font-size: 0.8125rem;
@@ -401,7 +399,6 @@ footer code {
 
   figure img {
     border-radius: 12px;
-    aspect-ratio: auto;
   }
 }
 
