@@ -1,0 +1,141 @@
+name: e2e
+
+# Playwright suite against the real full stack (docker/compose.full.yaml):
+# postgres + redis + searxng + a one-shot migration + api + worker + web,
+# built and wired together exactly as a local `docker compose up --build`
+# would. This is the first time the 26 specs in apps/web/e2e/ run anywhere
+# but a developer's own machine — see apps/web/e2e/README.md, which states
+# plainly that this suite was "not wired into CI" before now.
+#
+# E2E_SKIP_LLM=1 drops the "llm" Playwright project (chat streaming,
+# playground A/B — see apps/web/playwright.config.ts), so this job runs the
+# 26 "deterministic" specs with no LLM provider needed anywhere in the
+# stack. That is also why FREE_LLM_KEY/FREE_LLM_BASE_URL are never set
+# below: docker/compose.full.yaml already treats them as optional
+# (${FREE_LLM_BASE_URL:-} etc.) and the app's own escalation/self-heal
+# paths simply aren't exercised by the deterministic specs.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: e2e
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      # Repo-root .env, not a per-job secret: two things read it directly on
+      # their own, outside any `environment:` block this workflow controls.
+      #   - docker/compose.full.yaml's `env_file: - ../.env` on migrate/api
+      #     (worker doesn't need auth, only DB/redis wiring it fills in itself).
+      #   - apps/web/e2e/auth.setup.ts, which forges the Playwright session
+      #     cookie by reading AUTH_SECRET from this exact file (repo root,
+      #     three directories up from apps/web/e2e) and encrypting with it —
+      #     see that file's header comment for why it has to be the same
+      #     secret the API and web app verify against.
+      # Not a real credential: thrown away with the runner, never used
+      # anywhere outside this ephemeral stack.
+      - name: Write CI .env
+        run: |
+          cat > .env <<'EOF'
+          AUTH_SECRET=e2e-ci-secret-not-a-real-credential
+          EOF
+
+      # No compose override here, on purpose. The `web` service used to lack
+      # `env_file` / AUTH_SECRET entirely — Phase 12 B2's Auth.js gating
+      # landed after compose.full.yaml was written and nothing wired the
+      # secret through — so next-auth could not decrypt the session cookie
+      # auth.setup.ts forges, and every gated page redirected despite a valid
+      # cookie. That is fixed in docker/compose.full.yaml itself rather than
+      # papered over with a CI-only override: an override would have left
+      # `docker compose up` broken for every human running it locally while
+      # CI quietly went green, and CI would no longer be exercising the file
+      # it claims to exercise.
+      - name: Build and start the stack
+        run: |
+          docker compose -f docker/compose.full.yaml up -d --build
+
+      # Bounded poll instead of a fixed sleep-and-hope, matching the pattern
+      # already used for the stub LLM in evals.yml. /health/ready is api's
+      # own readiness probe (apps/api/app/main.py) — it only returns 200
+      # once migrations have applied and the process isn't mid-shutdown, so
+      # this is a real readiness signal, not just "the port is open."
+      - name: Wait for API readiness
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:8000/health/ready > /dev/null; then
+              echo "api ready after $((i * 2))s"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "api did not become ready within 120s" >&2
+          docker compose -f docker/compose.full.yaml logs --no-color
+          exit 1
+
+      - name: Install web dependencies
+        working-directory: apps/web
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: apps/web
+        run: npx playwright install --with-deps chromium
+
+      # `--reporter=list,html` adds the HTML report on top of the repo's own
+      # `list` reporter (apps/web/playwright.config.ts) without editing that
+      # file — a CLI-supplied reporter list overrides the config's for this
+      # run only. The html report and the trace/screenshot artifacts
+      # `trace: "retain-on-failure"` already produces (same config) are what
+      # gets uploaded below when a spec fails.
+      - name: Run Playwright suite
+        working-directory: apps/web
+        env:
+          E2E_SKIP_LLM: "1"
+        run: npx playwright test --reporter=list,html
+
+      - name: Upload Playwright HTML report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Upload traces and screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-test-results
+          path: apps/web/test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
+      # Container logs are the other half of "debuggable on red" — a failed
+      # spec might be a frontend bug, but it might just as well be the api
+      # or worker container itself misbehaving after boot, which the
+      # Playwright artifacts above can't show.
+      - name: Dump container logs on failure
+        if: failure()
+        run: docker compose -f docker/compose.full.yaml logs --no-color
+
+      # Always, not just on success: a stack left running (or a lingering
+      # volume) is exactly the kind of thing that silently breaks the next
+      # run.
+      - name: Tear down the stack
+        if: always()
+        run: docker compose -f docker/compose.full.yaml down -v

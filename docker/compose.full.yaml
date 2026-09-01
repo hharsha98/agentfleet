@@ -134,10 +134,28 @@ services:
         NEXT_PUBLIC_API_URL: http://localhost:8000
     ports:
       - "3002:3002"
+    # The web app MINTS the API JWT (apps/web/lib/api.ts signApiToken) and the
+    # api VERIFIES it (apps/api/app/auth.py) -- both with AUTH_SECRET. This
+    # service had no env_file at all, so AUTH_SECRET was never set here and
+    # signApiToken threw "AUTH_SECRET is not configured": every gated page
+    # failed while the api container looked perfectly healthy. Same ../.env
+    # the api service above uses, so the two secrets cannot drift apart.
+    #
+    # AUTH_SECRET is deliberately NOT re-declared under `environment:` below.
+    # compose lets `environment:` override `env_file:`, so writing
+    # `AUTH_SECRET: ${AUTH_SECRET:-}` would substitute the HOST shell's value
+    # -- usually empty -- and that empty string would silently win over the
+    # real value from ../.env.
+    env_file:
+      - ../.env
     environment:
       # SSR fetches reach the api over the compose network (runtime env, not
       # baked at build time like NEXT_PUBLIC_API_URL) — Phase 12 F2.
       INTERNAL_API_URL: http://api:8000
+      # Auth.js rejects requests whose Host header it does not recognise. In
+      # compose the browser arrives as localhost:3002 while the container sees
+      # its own hostname, which trips UntrustedHost on every gated route.
+      AUTH_TRUST_HOST: "true"
     depends_on:
       - api
 
