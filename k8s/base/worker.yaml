@@ -60,6 +60,18 @@ spec:
           volumeMounts:
             - name: embed-cache
               mountPath: /home/app/.cache
+            # CONFIRMED BROKEN without this (Wave 3C, verified against a real
+            # kind cluster) — see the identical comment in k8s/base/api.yaml.
+            # fastembed's own define_cache_dir() helper unconditionally calls
+            # tempfile.gettempdir() even when FASTEMBED_CACHE_PATH is set, and
+            # that raises FileNotFoundError under readOnlyRootFilesystem with
+            # no /tmp mounted. This worker doesn't prewarm the model at
+            # startup (see the env comment above), but it loads fastembed the
+            # moment any mission calls the search_documents tool — without
+            # this mount, that mission would crash the pod mid-run instead of
+            # just failing the one tool call.
+            - name: tmp
+              mountPath: /tmp
           # Resource sizing derivation (Wave 3B). Same underlying
           # measurement as k8s/base/api.yaml (deploy/hfspace/Dockerfile:
           # ~205MB/~196Mi imported, ~507MB/~484Mi with the fastembed model
@@ -129,4 +141,8 @@ spec:
           # container is the only liveness guarantee this Deployment has.
       volumes:
         - name: embed-cache
+          emptyDir: {}
+        # See the volumeMounts comment above — required for fastembed's
+        # define_cache_dir() to not crash under readOnlyRootFilesystem.
+        - name: tmp
           emptyDir: {}

@@ -1,0 +1,163 @@
+name: k8s
+
+# Wave 3C: k8s/base + k8s/overlays/{dev,prod} existed and rendered
+# (`kubectl kustomize`), but nothing in CI ever actually deployed them — the
+# manifests were only known to parse, never to run. This workflow builds the
+# two images the manifests reference, stands up a real kind (Kubernetes IN
+# Docker) cluster, applies the dev overlay, and proves the stack actually
+# comes up: the one-shot migrate Job completes, the api Deployment becomes
+# available, and /health/ready answers 200 from inside the cluster.
+#
+# Single job, not split like evals.yml/web.yml — every step here depends on
+# the same live cluster from the step before it, so there is nothing to
+# parallelize.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  k8s-smoke:
+    name: k8s-smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # Exact tags the manifests hardcode (k8s/base/{api,migrate-job,worker}.yaml
+      # and web.yaml) — kind never touches a registry for these, so the tag
+      # only has to match what the Deployment/Job specs ask for.
+      - name: Build api image
+        run: docker build -t agentfleet-api:local -f apps/api/Dockerfile apps/api
+
+      - name: Build web image
+        run: docker build -t agentfleet-web:local -f apps/web/Dockerfile apps/web
+
+      # Pinned to an exact release tag (helm/kind-action does publish moving
+      # majors, but this repo's convention — see astral-sh/setup-uv in
+      # evals.yml — is to pin exactly regardless). Also installs a matching
+      # kubectl, and registers a post-job step that deletes the cluster
+      # automatically, so there is no separate teardown step below.
+      - name: Create kind cluster
+        uses: helm/kind-action@v1.14.0
+        with:
+          cluster_name: agentfleet
+
+      # Locally-built images are not in any registry — a kind node would
+      # otherwise try to pull them and fail. `kind load docker-image` copies
+      # the image straight into the cluster's node containerd, and
+      # imagePullPolicy: IfNotPresent on every workload (k8s/base/*.yaml)
+      # means the kubelet is satisfied with what's already loaded instead of
+      # attempting a pull.
+      - name: Load images into kind
+        run: |
+          kind load docker-image agentfleet-api:local --name agentfleet
+          kind load docker-image agentfleet-web:local --name agentfleet
+
+      # k8s/base/secret.example.yaml is a template, not a real Secret — the
+      # real one is deliberately not in the repo. Keys copied verbatim from
+      # that file's `stringData`; values are dummy, just present so
+      # envFrom.secretRef on api/worker/migrate resolves instead of leaving
+      # pods stuck in CreateContainerConfigError. Applied before the overlay
+      # below so the Secret exists by the time those pods are scheduled.
+      - name: Create namespace and dummy Secret
+        run: |
+          kubectl apply -f k8s/base/namespace.yaml
+          kubectl create secret generic agentfleet-secrets \
+            --namespace agentfleet \
+            --from-literal=FREE_LLM_KEY=ci-dummy \
+            --from-literal=ANTHROPIC_API_KEY=ci-dummy \
+            --from-literal=PLANNER_MODEL=ci-dummy \
+            --from-literal=LANGFUSE_PUBLIC_KEY=ci-dummy \
+            --from-literal=LANGFUSE_SECRET_KEY=ci-dummy
+
+      - name: Deploy dev overlay
+        run: kubectl apply -k k8s/overlays/dev
+
+      # The migrate Job (k8s/base/migrate-job.yaml) owns `alembic upgrade
+      # head` and must finish before api/worker can do anything useful — its
+      # own comment header says as much. `--for=condition=complete` blocks
+      # until the Job controller reports the one required pod succeeded,
+      # tolerating the backoffLimit: 3 retries in between (e.g. a first
+      # attempt racing postgres's own startup).
+      - name: Wait for migrate Job
+        run: kubectl wait --for=condition=complete job/migrate -n agentfleet --timeout=180s
+
+      - name: Wait for api rollout
+        run: kubectl rollout status deployment/api -n agentfleet --timeout=180s
+
+      # Genuine assertion, not just "the pod started": a one-shot pod makes
+      # the actual HTTP call to the api Service's ClusterIP and exits
+      # non-zero on anything but a 200, so this pod's phase (Succeeded vs
+      # Failed) is the pass/fail signal. Bounded poll instead of a fixed
+      # sleep-and-hope, same style as evals.yml's stub-LLM readiness wait.
+      - name: Smoke test /health/ready
+        run: |
+          kubectl run smoke-test -n agentfleet --image=agentfleet-api:local --restart=Never \
+            --command -- python -c "
+          import sys, urllib.error, urllib.request
+          try:
+              resp = urllib.request.urlopen('http://api:8000/health/ready', timeout=5)
+              code = resp.status
+          except urllib.error.HTTPError as e:
+              code = e.code
+          print(f'/health/ready returned {code}')
+          sys.exit(0 if code == 200 else 1)
+          "
+
+          for i in $(seq 1 30); do
+            phase=$(kubectl get pod smoke-test -n agentfleet -o jsonpath='{.status.phase}' 2>/dev/null)
+            if [ "$phase" = "Succeeded" ]; then
+              echo "smoke test passed after ${i}s"
+              kubectl logs pod/smoke-test -n agentfleet
+              exit 0
+            fi
+            if [ "$phase" = "Failed" ]; then
+              echo "smoke test pod failed" >&2
+              kubectl logs pod/smoke-test -n agentfleet >&2 || true
+              exit 1
+            fi
+            sleep 1
+          done
+          echo "smoke test did not reach a terminal phase within 30s" >&2
+          kubectl logs pod/smoke-test -n agentfleet >&2 || true
+          exit 1
+
+      # Runs on any failure above (image build has already succeeded by
+      # then in every case that matters — cluster creation, deploy, wait, or
+      # smoke test). A red build with no diagnostics is not debuggable, and
+      # that matters more here than a clean happy path: this is the first
+      # time these manifests have ever run against a real cluster in CI.
+      - name: Dump diagnostics
+        if: failure()
+        run: |
+          echo "::group::kubectl get pods -A"
+          kubectl get pods -A -o wide || true
+          echo "::endgroup::"
+
+          echo "::group::kubectl get all -n agentfleet"
+          kubectl get all -n agentfleet || true
+          echo "::endgroup::"
+
+          echo "::group::kubectl describe pods -n agentfleet"
+          kubectl describe pods -n agentfleet || true
+          echo "::endgroup::"
+
+          echo "::group::kubectl describe job/migrate -n agentfleet"
+          kubectl describe job/migrate -n agentfleet || true
+          echo "::endgroup::"
+
+          echo "::group::kubectl get events -n agentfleet"
+          kubectl get events -n agentfleet --sort-by=.lastTimestamp || true
+          echo "::endgroup::"
+
+          for app in api worker web postgres redis migrate; do
+            echo "::group::kubectl logs -l app=${app} -n agentfleet"
+            kubectl logs -n agentfleet -l "app=${app}" --all-containers --tail=300 || true
+            echo "::endgroup::"
+
+            echo "::group::kubectl logs -l app=${app} -n agentfleet --previous"
+            kubectl logs -n agentfleet -l "app=${app}" --all-containers --tail=300 --previous || true
+            echo "::endgroup::"
+          done

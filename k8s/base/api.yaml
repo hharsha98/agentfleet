@@ -102,6 +102,20 @@ spec:
           volumeMounts:
             - name: embed-cache
               mountPath: /home/app/.cache
+            # CONFIRMED BROKEN without this (Wave 3C, verified against a real
+            # kind cluster): fastembed's own define_cache_dir() helper
+            # (fastembed/common/utils.py) unconditionally calls
+            # tempfile.gettempdir() as part of computing its *unused*
+            # fallback default, even when FASTEMBED_CACHE_PATH is set above —
+            # a fastembed library quirk, not app code. Python's tempfile
+            # module raises FileNotFoundError if none of /tmp, /var/tmp,
+            # /usr/tmp exist and are writable, which readOnlyRootFilesystem
+            # makes true here, so every TextEmbedding() call crashed the
+            # container before it ever reached a request. EMBEDDINGS_PREWARM
+            # defaults to "1" (app/config.py), so this fired unconditionally
+            # at startup, not just on first embedding use.
+            - name: tmp
+              mountPath: /tmp
           # Resource sizing derivation (Wave 3B) — see
           # deploy/hfspace/Dockerfile's header comment, the only measured
           # footprint on record for this exact image's Python process:
@@ -158,6 +172,10 @@ spec:
         # cost, not a bug — see the note on EMBEDDINGS_PREWARM above for why
         # that download happens automatically rather than blocking traffic.
         - name: embed-cache
+          emptyDir: {}
+        # See the volumeMounts comment above — required for fastembed's
+        # define_cache_dir() to not crash under readOnlyRootFilesystem.
+        - name: tmp
           emptyDir: {}
 ---
 apiVersion: v1
