@@ -11,27 +11,27 @@
     "e2e:fast": "E2E_SKIP_LLM=1 playwright test"
   },
   "dependencies": {
-    "@sentry/nextjs": "^10.65.0",
-    "@vapi-ai/web": "^2.6.1",
-    "@xyflow/react": "12.11.2",
-    "jose": "^6.2.3",
-    "next": "16.2.11",
+    "@sentry/nextjs": "^10.72.0",
+    "@vapi-ai/web": "^2.7.0",
+    "@xyflow/react": "12.11.5",
+    "jose": "^6.2.10",
+    "next": "16.3.3",
     "next-auth": "^5.0.0-beta.31",
-    "react": "19.2.4",
-    "react-dom": "19.2.4",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
     "vega": "^5.33.1",
     "vega-embed": "^6.29.0",
     "vega-lite": "^5.23.0"
   },
   "devDependencies": {
-    "@playwright/test": "^1.61.1",
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "agentation": "^3.0.2",
     "eslint": "^9",
-    "eslint-config-next": "16.2.10",
+    "eslint-config-next": "16.3.3",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
