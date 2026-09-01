@@ -1,12 +1,12 @@
 # AgentFleet web container — multi-stage build.
-# Base: node:22.11.0-slim — matches Node 22 installed for local dev, pinned
+# Base: node:22.23.2-slim — matches Node 22 installed for local dev, pinned
 # to a specific patch tag for reproducible builds.
 # TODO(follow-up): pin by @sha256 digest too. Not done here because this
 # environment has no Docker/registry access to resolve a real digest
 # offline, and inventing one would be worse than a tag pin.
 
 # ---- Stage 1: build -------------------------------------------------------
-FROM node:22.11.0-slim AS build
+FROM node:22.23.2-slim AS build
 WORKDIR /app
 
 COPY package.json package-lock.json ./
@@ -23,7 +23,7 @@ ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 RUN npm run build
 
 # ---- Stage 2: runtime -------------------------------------------------
-FROM node:22.11.0-slim AS runtime
+FROM node:22.23.2-slim AS runtime
 
 # Non-root user the process runs as. UID/GID 1000 is a fixed contract with
 # the Kubernetes manifests (k8s/) — do not change either value without
@@ -40,7 +40,19 @@ FROM node:22.11.0-slim AS runtime
 # global fetch (Node 18+) rather than installing curl to call one URL.
 # Installing curl measurably grew this image by ~25MB (424MB -> 449MB),
 # which is a bad trade in an image whose point is a smaller attack surface.
-RUN mkdir -p /home/node/.cache && chown -R node:node /home/node
+# npm is deleted from the RUNTIME stage on purpose.
+#
+# This stage runs `node server.js` against a Next.js standalone build. It
+# never installs anything, so a package manager here is pure surface area.
+# Concretely, measured with Trivy against node:22.23.2-slim: every one of
+# the 11 remaining fixable HIGH/CRITICAL findings lives inside npm's own
+# bundled dependencies -- tar (CVE-2026-59873, CRITICAL), brace-expansion,
+# picomatch, sigstore, ip-address, pacote. None is reachable from this
+# image's actual job. Deleting npm removes all 11 rather than suppressing
+# them in a .trivyignore, which would leave the risk while hiding it.
+# The build stage above still has npm, which is where `npm ci` needs it.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx \
+    && mkdir -p /home/node/.cache && chown -R node:node /home/node
 
 WORKDIR /app
 ENV NODE_ENV=production

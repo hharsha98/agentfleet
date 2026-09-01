@@ -1,5 +1,5 @@
 # AgentFleet API container.
-# Base: python:3.12.11-slim — matches requires-python = ">=3.12" in
+# Base: python:3.12.14-slim — matches requires-python = ">=3.12" in
 # pyproject.toml, pinned to a specific patch tag for reproducible builds.
 # TODO(follow-up): pin by @sha256 digest too. Not done here because this
 # environment has no Docker/registry access to resolve a real digest
@@ -15,7 +15,7 @@
 # CMD, port) is unchanged from the previous single-stage version.
 
 # ---- Stage 1: builder ------------------------------------------------------
-FROM python:3.12.11-slim AS builder
+FROM python:3.12.14-slim AS builder
 
 # Pinned, not :latest — a floating tag here silently changes the resolver
 # that produces uv.lock's install plan, which is the opposite of what
@@ -34,7 +34,7 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev
 
 # ---- Stage 2: runtime -------------------------------------------------
-FROM python:3.12.11-slim AS runtime
+FROM python:3.12.14-slim AS runtime
 
 # Non-root user the process runs as. UID/GID 1000 is a fixed contract with
 # the Kubernetes manifests (k8s/) being written in parallel — do not change
