@@ -1,0 +1,42 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Full Next.js App Router + Auth.js. Cloudflare Pages' Next.js preset is
+  // static HTML export and cannot run this app. OpenNext deploys Worker
+  // `agentfleet-app` (never `agentfleet-gallery` — that is the static
+  // recruiter gallery at agentfleet-gallery.pages.dev).
+  "name": "agentfleet-app",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "workers_dev": true,
+  "preview_urls": true,
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "services": [
+    {
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "agentfleet-app"
+    }
+  ],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+  // Non-secret runtime config. AUTH_SECRET is a wrangler secret — generate
+  // at deploy time, byte-identical with the API Worker, never commit it.
+  // NEXT_PUBLIC_* is also baked in at `npm run cf:build`; changing it
+  // without rebuilding does nothing (same trap as docs/DEPLOY.md).
+  "vars": {
+    "DEMO_LOGIN_ENABLED": "1",
+    "AUTH_TRUST_HOST": "true",
+    "INTERNAL_API_URL": "https://agentfleet-api.YOUR_SUBDOMAIN.workers.dev",
+    "NEXT_PUBLIC_API_URL": "https://agentfleet-api.YOUR_SUBDOMAIN.workers.dev",
+    "NEXT_PUBLIC_SITE_URL": "https://agentfleet-app.YOUR_SUBDOMAIN.workers.dev",
+    "AUTH_URL": "https://agentfleet-app.YOUR_SUBDOMAIN.workers.dev"
+  },
+  "secrets": {
+    "required": ["AUTH_SECRET"]
+  }
+}

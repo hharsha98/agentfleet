@@ -1,0 +1,11 @@
+# Next.js env loaded by OpenNext / wrangler dev. Never commit real values.
+# AUTH_SECRET must byte-match the API Worker secret.
+
+NEXTJS_ENV=production
+AUTH_SECRET=generate-with-openssl-rand-base64-32
+DEMO_LOGIN_ENABLED=1
+AUTH_TRUST_HOST=true
+INTERNAL_API_URL=https://agentfleet-api.YOUR_SUBDOMAIN.workers.dev
+NEXT_PUBLIC_API_URL=https://agentfleet-api.YOUR_SUBDOMAIN.workers.dev
+NEXT_PUBLIC_SITE_URL=https://agentfleet-app.YOUR_SUBDOMAIN.workers.dev
+AUTH_URL=https://agentfleet-app.YOUR_SUBDOMAIN.workers.dev

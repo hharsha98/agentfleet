@@ -1,0 +1,65 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "agentfleet-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "preview_urls": true,
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+  // Non-secret container/runtime config. Secrets (DATABASE_URL, AUTH_SECRET,
+  // FREE_LLM_BASE_URL, FREE_LLM_KEY) are set with `wrangler secret put` —
+  // never commit them here. CORS_ORIGINS must include the deployed web
+  // origin (Worker `agentfleet-app`) after that URL exists; placeholder
+  // until then.
+  "vars": {
+    "ORCHESTRATOR_MODE": "inprocess",
+    "DEMO_LOGIN_ENABLED": "1",
+    "SEED_DEMO_DATA": "1",
+    "RUN_MIGRATIONS_ON_BOOT": "1",
+    "DEFAULT_MODEL": "openai/gpt-oss-120b",
+    "CORS_ORIGINS": "http://localhost:3002,https://agentfleet-app.YOUR_SUBDOMAIN.workers.dev",
+    "EMBEDDINGS_PREWARM": "1"
+  },
+  "secrets": {
+    "required": [
+      "DATABASE_URL",
+      "AUTH_SECRET",
+      "FREE_LLM_BASE_URL",
+      "FREE_LLM_KEY"
+    ]
+  },
+  "containers": [
+    {
+      "class_name": "AgentFleetApi",
+      // Reuse the API image. Build context is apps/api/ (Dockerfile directory).
+      // Do not point this at deploy/hfspace/Dockerfile — that image clones
+      // GitHub at build time because a Space repo has no apps/api context.
+      "image": "../../apps/api/Dockerfile",
+      // lite = 256 MiB: OOM (API is ~205 MB imported, ~507 MB with fastembed).
+      // basic = 1 GiB: tight. standard-1 = 4 GiB: the honest size for RAG.
+      "instance_type": "standard-1",
+      "max_instances": 2,
+      "image_vars": {
+        "BAKE_EMBEDDINGS": "1"
+      }
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "AGENTFLEET_API",
+        "class_name": "AgentFleetApi"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["AgentFleetApi"]
+    }
+  ]
+}

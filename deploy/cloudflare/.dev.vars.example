@@ -1,0 +1,17 @@
+# Copy to .dev.vars (gitignored) for `wrangler dev`.
+# Never commit real values. Production secrets go in via:
+#   npx wrangler secret put DATABASE_URL
+#   npx wrangler secret put AUTH_SECRET
+#   npx wrangler secret put FREE_LLM_BASE_URL
+#   npx wrangler secret put FREE_LLM_KEY
+#
+# Postgres DSN: postgresql+asyncpg://user:pass@host/db
+# Do NOT append ?sslmode=require — asyncpg rejects that parameter and
+# negotiates TLS itself. Hyperdrive is NOT used here (it does not work
+# inside Cloudflare Containers — cloudflare/containers#97); the container
+# talks to Neon/Supabase over TLS directly.
+
+DATABASE_URL=postgresql+asyncpg://USER:PASSWORD@HOST/neondb
+AUTH_SECRET=generate-with-openssl-rand-base64-32
+FREE_LLM_BASE_URL=https://your-openai-compatible-endpoint/v1
+FREE_LLM_KEY=your-provider-key

@@ -1,10 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Produces a minimal .next/standalone server bundle (node_modules pruned to
-  // only what's needed at runtime) — required for the multi-stage Docker
-  // build in apps/web/Dockerfile to keep the runtime image small.
-  output: "standalone",
+  // Docker (apps/web/Dockerfile) needs a standalone server bundle. OpenNext
+  // on Cloudflare adapts `next build` itself and rejects `output: "standalone"`.
+  // Vercel and `npm run build` keep the Docker default; `npm run cf:build`
+  // sets OPEN_NEXT=1.
+  ...(process.env.OPEN_NEXT === "1" ? {} : { output: "standalone" as const }),
 };
 
 export default nextConfig;
