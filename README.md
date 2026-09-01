@@ -6,6 +6,7 @@
 ![Tests](https://img.shields.io/badge/tests-239%20API%20%2B%2026%20E2E-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Self-hosted](https://img.shields.io/badge/deploy-self--hosted-informational)
+[![Live gallery](https://img.shields.io/badge/live-gallery-5e6ad2)](https://agentfleet-gallery.pages.dev)
 
 ## What it is
 
@@ -18,7 +19,7 @@ AgentFleet is a self-hostable multi-agent operations platform: chat with a roste
 | ![Landing](docs/screenshots/landing.png) **Landing** — pillars + ops layer overview | ![Chat](docs/screenshots/chat.png) **Chat** — streaming multi-agent chat with live tool-call cards |
 | ![Missions](docs/screenshots/missions.png) **Missions** — Kanban DAG execution with a human-approval gate | ![Evals](docs/screenshots/evals.png) **Evals** — LLM-as-judge scoring + CI regression gate |
 
-*(captured from a running instance — reproduce them with the [demo script](docs/DEMO.md))*
+*(captured from a running instance — reproduce them with the [demo script](docs/DEMO.md). Recruiter click-through of the same captures: **[Live gallery](https://agentfleet-gallery.pages.dev)** — a static screenshot site, not a hosted FastAPI/Next.js instance.)*
 
 ## Architecture
 
