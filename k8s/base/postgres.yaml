@@ -1,0 +1,119 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: agentfleet
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: agentfleet
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      # RISK, stated plainly rather than hidden in a wall of YAML: the
+      # Wave 3B task contract fixes UID/GID 1000 for "every Deployment and
+      # Job pod spec" in k8s/, which is a contract apps/api/Dockerfile and
+      # apps/web/Dockerfile (hardened in parallel) were built to match — but
+      # pgvector/pgvector:pg16 is a third-party image this repo does not
+      # build, and its upstream (the official postgres image) traditionally
+      # bakes in its own non-root `postgres` user, commonly UID/GID 999, NOT
+      # 1000. fsGroup: 1000 below will make the PVC-backed pgdata volume
+      # group-writable by GID 1000 regardless (kubelet chowns fresh volume
+      # content to fsGroup on mount), which covers the data directory
+      # itself. What is NOT verified — because the Docker daemon is
+      # unavailable in this environment and no cluster could be created —
+      # is whether the postgres server process starts cleanly when run as
+      # an arbitrary UID with no matching /etc/passwd entry inside that
+      # specific image. Before trusting this in a real cluster, run
+      # `docker run --rm pgvector/pgvector:pg16 id` and
+      # `kubectl kustomize` + apply against a real kind cluster and watch
+      # `kubectl logs` for the postgres pod.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: postgres
+          image: pgvector/pgvector:pg16
+          ports:
+            - containerPort: 5432
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          env:
+            - name: POSTGRES_USER
+              value: agentfleet
+            - name: POSTGRES_PASSWORD
+              value: agentfleet
+            - name: POSTGRES_DB
+              value: agentfleet
+          volumeMounts:
+            - name: pgdata
+              mountPath: /var/lib/postgresql/data
+            # WHY: postgres's default unix_socket_directories is
+            # /var/run/postgresql, and the container also needs a writable
+            # /tmp for on-disk sort/hash spills once work_mem is exceeded
+            # and other scratch use. Neither is on the PVC above, and both
+            # are plain image-filesystem paths that readOnlyRootFilesystem
+            # would otherwise make unwritable.
+            - name: pg-run
+              mountPath: /var/run/postgresql
+            - name: tmp
+              mountPath: /tmp
+          # Resource sizing (Wave 3B): NOT measured — there is no
+          # deploy/hfspace-style footprint note for this image anywhere in
+          # the repo. These are conservative, widely-used defaults for a
+          # small single-instance Postgres, sized to match the existing 1Gi
+          # PVC's implied dev-scale dataset (this is explicitly "a local
+          # kind/k3d/minikube cluster" per k8s/README.md, not a production
+          # database). Replace with real `kubectl top pod` numbers once a
+          # cluster is available to measure against.
+          #   requests.memory = 256Mi / limits.memory = 512Mi
+          #   requests.cpu    = 100m  / limits.cpu    = 500m
+          resources:
+            requests:
+              memory: 256Mi
+              cpu: 100m
+            limits:
+              memory: 512Mi
+              cpu: 500m
+      volumes:
+        - name: pgdata
+          persistentVolumeClaim:
+            claimName: postgres-pvc
+        - name: pg-run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: agentfleet
+spec:
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432

@@ -1,0 +1,43 @@
+# PodDisruptionBudgets for the prod overlay's multi-replica workloads only
+# (api, worker, web — see kustomization.yaml in this directory for why
+# postgres/redis are excluded: they stay single-replica, so a PDB on them
+# would only ever block voluntary disruption, never provide redundancy).
+#
+# minAvailable: 1 with replicas: 2 (set via this overlay's kustomization.yaml
+# `replicas:` block) means exactly one pod may be voluntarily evicted at a
+# time (e.g. during `kubectl drain` or a rolling node upgrade) while the
+# other keeps serving. Setting minAvailable equal to the replica count would
+# block ALL voluntary disruption, which defeats the purpose of having a PDB
+# at all.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: api
+  namespace: agentfleet
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: api
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: worker
+  namespace: agentfleet
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: worker
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: web
+  namespace: agentfleet
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: web

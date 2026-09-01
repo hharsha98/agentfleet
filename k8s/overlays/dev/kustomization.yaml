@@ -1,0 +1,27 @@
+# Dev overlay (Wave 3B). For a local kind/k3d/minikube cluster — see
+# k8s/README.md for the full apply flow.
+#
+# This overlay does not change the namespace: this repo runs against a
+# single local cluster, not genuinely separate dev/prod clusters or
+# namespaces, so splitting namespaces per overlay would be infrastructure
+# this repo cannot actually back up. "dev" vs "prod" here means "how many
+# replicas and how strict is the disruption budget", nothing more.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+# 1 replica per workload — this is already every workload's default in
+# k8s/base/*.yaml, so this block changes nothing in practice. It is written
+# out explicitly anyway so "dev = 1 replica" (the Wave 3B requirement) is a
+# visible fact of this overlay, not something a reader has to go verify
+# against base's defaults, and so this is the natural place to put future
+# dev-specific replica tuning.
+replicas:
+  - name: api
+    count: 1
+  - name: worker
+    count: 1
+  - name: web
+    count: 1

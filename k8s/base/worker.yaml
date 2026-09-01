@@ -1,0 +1,132 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker
+  namespace: agentfleet
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: worker
+  template:
+    metadata:
+      labels:
+        app: worker
+    spec:
+      # See k8s/base/api.yaml for the full rationale — same UID/GID contract
+      # as apps/api/Dockerfile (this Deployment reuses the agentfleet-api
+      # image, just with a different `command`).
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: worker
+          image: agentfleet-api:local
+          imagePullPolicy: IfNotPresent
+          command: ["arq", "app.worker.WorkerSettings"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          envFrom:
+            - configMapRef:
+                name: agentfleet-config
+            - secretRef:
+                name: agentfleet-secrets
+          env:
+            - name: ORCHESTRATOR_MODE
+              value: arq
+            # Same writable-cache need as api.yaml, for the same reason,
+            # via a different code path: app/worker.py's WorkerSettings run
+            # app/services/orchestrator.py's plan_and_execute/execute_run,
+            # which can invoke the search_documents agent tool
+            # (app/tools.py) mid-mission. That tool lazy-imports
+            # app.services.ingest.embed_texts and loads the same fastembed
+            # model on demand — unlike the api Deployment, this worker does
+            # NOT pre-warm it at startup (app/worker.py has no equivalent to
+            # app/main.py's lifespan pre-warm), so whether this ever fires
+            # depends on what missions actually run. See k8s/base/api.yaml
+            # for why a writable cache dir is required either way once it
+            # does.
+            - name: FASTEMBED_CACHE_PATH
+              value: /home/app/.cache/fastembed
+            - name: HF_HOME
+              value: /home/app/.cache/huggingface
+          volumeMounts:
+            - name: embed-cache
+              mountPath: /home/app/.cache
+          # Resource sizing derivation (Wave 3B). Same underlying
+          # measurement as k8s/base/api.yaml (deploy/hfspace/Dockerfile:
+          # ~205MB/~196Mi imported, ~507MB/~484Mi with the fastembed model
+          # resident), applied differently because this process's steady
+          # state differs from the api Deployment's:
+          #   - No startup pre-warm (see the env comment above), so a
+          #     worker pod that never runs a search_documents-using mission
+          #     stays near the ~196Mi import baseline for its whole life.
+          #   - app/worker.py deliberately caps its own DB pool to
+          #     DB_POOL_SIZE=1/DB_MAX_OVERFLOW=1 (vs the api Deployment's
+          #     3+2 default), so its baseline is a little lighter than the
+          #     api container's even before any embedding is loaded.
+          #   - But it CAN reach the same ~484Mi steady state as api the
+          #     moment a mission does call that tool, and the model then
+          #     stays resident (module-level singleton, never unloaded) for
+          #     the rest of the pod's life. Sizing for "never happens" would
+          #     risk an OOMKill mid-mission, which is worse than idle
+          #     over-provisioning — so the ceiling matches api's.
+          #   requests.memory = 256Mi — above the lighter idle baseline,
+          #     below api's request, reflecting the smaller DB pool and no
+          #     guaranteed pre-warm.
+          #   limits.memory   = 768Mi — same ceiling as api.yaml: the
+          #     worst case (model resident) is identical.
+          # CPU, again not measured anywhere in this repo:
+          #   requests.cpu = 100m — this process is idle most of the time,
+          #     blocked on the arq/redis job queue (see app/worker.py).
+          #   limits.cpu   = 1000m — same burst headroom as api, for the
+          #     same reason (on-CPU fastembed inference when it does run).
+          resources:
+            requests:
+              memory: 256Mi
+              cpu: 100m
+            limits:
+              memory: 768Mi
+              cpu: 1000m
+          # No liveness/readiness probe is configured here, deliberately —
+          # see the "PROBES" note below rather than treating the absence as
+          # an oversight.
+          #
+          # PROBES: this worker has no HTTP server (arq WorkerSettings only
+          # — see app/worker.py), so the httpGet style used by api.yaml and
+          # web.yaml is not available. arq itself ships a `--check` CLI
+          # subcommand purpose-built for exactly this: it reads a
+          # health-check key the running worker writes to Redis on an
+          # interval (WorkerSettings.health_check_interval), and exits
+          # non-zero if that heartbeat is stale — which is what a genuinely
+          # meaningful exec probe would need (an actual liveness signal, not
+          # just "is PID 1 still technically running", which a /proc/1
+          # trick like `grep arq /proc/1/cmdline` cannot tell apart from a
+          # hung-but-alive process — this repo will not ship that as a probe
+          # precisely because it would be fake).
+          #
+          # It is NOT wired up here because it could not be verified: the
+          # WorkerSettings class above does not set
+          # health_check_interval/health_check_key explicitly, so it runs
+          # on arq's own defaults, and there is no Docker daemon or cluster
+          # available in this environment to actually run
+          # `arq --check app.worker.WorkerSettings` against a live worker
+          # and confirm the command, its exit-code contract, and a sane
+          # `periodSeconds` all work as expected. Shipping an unverified
+          # exec probe risks the opposite failure mode from having none: a
+          # flaky or wrong probe killing a worker mid-mission (job_timeout =
+          # 600s in WorkerSettings — a false-positive restart here is not
+          # free). Once a real cluster is available, wiring up
+          # `arq --check` as an exec liveness probe is the correct next
+          # step; until then, kubelet's own crash-restart on a dead
+          # container is the only liveness guarantee this Deployment has.
+      volumes:
+        - name: embed-cache
+          emptyDir: {}
