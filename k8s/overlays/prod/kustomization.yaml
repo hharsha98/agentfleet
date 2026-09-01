@@ -1,0 +1,34 @@
+# Prod overlay (Wave 3B). Read k8s/README.md's status block before treating
+# this as production-ready: it has only ever been rendered with
+# `kubectl kustomize` in this environment (no Docker daemon, so no kind
+# cluster could be created and no `kubectl apply` has ever been run against
+# it, here or anywhere else). "Prod" means "more replicas and a disruption
+# budget for the stateless workloads", not "battle-tested".
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+  - pdb.yaml
+
+# Only api/worker/web are scaled. postgres and redis deliberately stay at
+# base's replicas: 1 — kept honest per the Wave 3B brief:
+#   - postgres: the PVC is ReadWriteOnce with no replication set up (no
+#     streaming replica, no Patroni/operator). A second replica would
+#     either fail to mount the same RWO volume or (if given its own PVC)
+#     silently diverge into a second, unsynced database. Real Postgres HA
+#     is out of scope for this rework.
+#   - redis: no clustering/Sentinel is configured. A second replica would
+#     just be a second, independent, unsynced cache/queue — worse than one,
+#     since arq jobs enqueued to one replica would never be seen by a
+#     worker polling the other.
+# api/worker/web have no such constraint: they are stateless (state lives
+# in postgres/redis), so running more than one pod is straightforwardly
+# correct.
+replicas:
+  - name: api
+    count: 2
+  - name: worker
+    count: 2
+  - name: web
+    count: 2

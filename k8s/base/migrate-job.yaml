@@ -1,0 +1,91 @@
+# One-shot Alembic migration Job (Phase 12 F2).
+#
+# Why a Job and not an initContainer on the api Deployment: with >1 api
+# replica, every pod's initContainer would race `alembic upgrade head`
+# simultaneously — a Job runs it exactly once cluster-wide. The api pods
+# must not serve until this has completed; their entrypoint no longer
+# migrates (see apps/api/docker-entrypoint.sh) and the readiness probe
+# (/health/ready) keeps them out of the Service until the DB answers.
+#
+# Jobs are immutable once completed — before re-applying after an image
+# change, delete the old one:
+#   kubectl delete job -n agentfleet migrate --ignore-not-found
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: migrate
+  namespace: agentfleet
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app: migrate
+    spec:
+      restartPolicy: Never
+      # Same UID/GID contract as k8s/base/api.yaml — this Job reuses the
+      # agentfleet-api image apps/api/Dockerfile builds, so the same UID
+      # 1000/GID 1000 `app` user applies here without the third-party-image
+      # caveat that applies to postgres.yaml/redis.yaml.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: migrate
+          image: agentfleet-api:local
+          imagePullPolicy: IfNotPresent
+          # `command` overrides the image ENTRYPOINT (docker-entrypoint.sh),
+          # so this container only migrates, then exits.
+          command: ["alembic", "upgrade", "head"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          envFrom:
+            - configMapRef:
+                name: agentfleet-config
+            - secretRef:
+                name: agentfleet-secrets
+          # No emptyDir volume is added here, unlike api.yaml/worker.yaml.
+          # apps/api/migrations/env.py imports only app.config and
+          # app.models — it does NOT import app.main/app.routes, so it
+          # never pulls in app.services.ingest and therefore never imports
+          # fastembed, unlike the api/worker containers. Alembic itself
+          # does not write local files at runtime (no cache dir, no scratch
+          # files — it only talks to Postgres over DATABASE_URL). The one
+          # remaining write Python *might* attempt is .pyc bytecode
+          # caching under site-packages on the read-only root; CPython's
+          # import system silently ignores a PermissionError there rather
+          # than failing the import, so this is not a path the process
+          # "must" write, in the sense the rest of this file's comments use
+          # that word. If a real cluster run of this Job ever proves that
+          # wrong, that would be new information this environment (no
+          # Docker daemon, no cluster) could not surface.
+          #
+          # Resource sizing (Wave 3B), derived by analogy rather than
+          # measured directly (no Job-specific measurement exists in the
+          # repo): the ~205MB/~196Mi "imported" baseline in
+          # deploy/hfspace/Dockerfile's header comment covers the FULL
+          # apps/api application (FastAPI, all routes, and — via
+          # app/routes/documents.py — the fastembed package itself). This
+          # Job's import graph (alembic + app.config + app.models +
+          # SQLAlchemy/asyncpg) is a strict subset of that: no FastAPI, no
+          # fastembed/onnxruntime. Budgeting roughly half that baseline for
+          # a plain SQLAlchemy+asyncpg+alembic process is conservative in
+          # the safe direction (it is very likely lower in practice), and
+          # this only needs to survive one short-lived `alembic upgrade
+          # head` run.
+          #   requests.memory = 128Mi / limits.memory = 256Mi
+          #   requests.cpu    = 100m  / limits.cpu    = 500m
+          resources:
+            requests:
+              memory: 128Mi
+              cpu: 100m
+            limits:
+              memory: 256Mi
+              cpu: 500m

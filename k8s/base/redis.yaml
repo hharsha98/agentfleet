@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: agentfleet
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      # Same caveat as k8s/base/postgres.yaml: this UID/GID 1000 contract
+      # comes from apps/api/Dockerfile and apps/web/Dockerfile (hardened in
+      # parallel); redis:7-alpine is a third-party image not built by this
+      # repo, and Alpine's official redis image traditionally bakes in its
+      # own non-root `redis` user (commonly UID/GID 999), not 1000.
+      # fsGroup: 1000 covers the emptyDir volume below regardless; whether
+      # the redis-server process itself starts cleanly as an arbitrary UID
+      # with no /etc/passwd entry has NOT been verified — no Docker daemon
+      # or cluster is available in this environment. Check
+      # `docker run --rm redis:7-alpine id` before trusting this.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          ports:
+            - containerPort: 6379
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            # WHY: redis's default `dir` is /data (its image WORKDIR), and
+            # its default `save` points (900 1, 300 10, 60 10000) mean it
+            # will attempt a background RDB snapshot the first time enough
+            # writes land within one of those windows. Its default
+            # `stop-writes-on-bgsave-error yes` means a failed snapshot
+            # write does not just log — it stops accepting further writes
+            # cluster-wide. There is no PVC for redis (this cache is
+            # intentionally ephemeral, unchanged from before this rework),
+            # so an emptyDir here does not add persistence guarantees; it
+            # only keeps /data writable so BGSAVE does not fail outright
+            # under readOnlyRootFilesystem.
+            - name: redis-data
+              mountPath: /data
+          # Resource sizing (Wave 3B): NOT measured — no footprint note for
+          # this image exists in the repo. redis:7-alpine with no
+          # persistence and no large dataset (used here purely as the arq
+          # job queue + cache, per k8s/base/api.yaml's REDIS_URL) has a
+          # genuinely small baseline; these are conservative, widely-cited
+          # defaults for that use case, not a derivation.
+          #   requests.memory = 32Mi  / limits.memory = 128Mi
+          #   requests.cpu    = 50m   / limits.cpu    = 200m
+          resources:
+            requests:
+              memory: 32Mi
+              cpu: 50m
+            limits:
+              memory: 128Mi
+              cpu: 200m
+      volumes:
+        - name: redis-data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: agentfleet
+spec:
+  selector:
+    app: redis
+  ports:
+    - port: 6379
+      targetPort: 6379

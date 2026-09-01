@@ -1,0 +1,103 @@
+name: trivy
+
+# Container image vulnerability scanning for both AgentFleet images
+# (apps/api/Dockerfile, apps/web/Dockerfile). Runs the official Trivy CLI
+# straight from its Docker image rather than a marketplace Action — same
+# reasoning as evals.yml's gitleaks job (docker run zricethezav/gitleaks
+# directly): one fewer third-party Action in the supply chain, and version-
+# pinned exactly (not :latest) so the gate's behavior doesn't shift under
+# us between runs.
+#
+# Threshold, chosen from real scan output, not picked blind.
+#
+# --ignore-unfixed is what keeps this gate meaningful: it fails only on CVEs
+# where a newer package version already exists ("someone should bump this"),
+# never on irreducible base-image debt with no upstream fix, which no amount
+# of rebuilding could clear. HIGH+CRITICAL with --ignore-unfixed is wired
+# below.
+#
+# This gate was NOT merged red. The first scan against the then-pinned base
+# images found 106 fixable HIGH/CRITICAL across the two images, 7 of them
+# CRITICAL. Rather than loosen the threshold until that went green, the
+# findings were fixed, and every step was re-measured (2026-09-01):
+#
+#   api  56 -> 0   base python:3.12.11-slim -> 3.12.14-slim (55 -> 0 at the
+#                  base layer alone), then cryptography 49.0.0 -> 50.0.1,
+#                  a transitive dep, bumped in apps/api/uv.lock.
+#   web  50 -> 1   base node:22.11.0-slim -> 22.23.2-slim (45 -> 11), then
+#                  npm deleted from the runtime stage. All 11 of those lived
+#                  inside npm's own bundled deps (tar, brace-expansion,
+#                  picomatch, sigstore, ip-address, pacote), and this image
+#                  runs `node server.js` against a standalone build, so it
+#                  never needs a package manager at runtime. next 16.2.10 ->
+#                  16.2.11 then cleared 4 more.
+#
+# node:22-alpine was measured as an alternative and rejected: 13 fixable
+# HIGH/CRITICAL versus slim's 11 -- a downgrade wearing a fix's clothes.
+#
+# The single remaining finding is documented, with its reason and its unblock
+# condition, in .trivyignore at the repo root. That file is mounted into the
+# container below: Trivy reads it from its own working directory, so without
+# the mount it would be silently ignored and this gate would fail in CI while
+# passing locally.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: trivy-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TRIVY_IMAGE: aquasec/trivy:0.74.0
+
+jobs:
+  trivy:
+    name: trivy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build api image
+        run: docker build -t agentfleet-api:scan apps/api
+
+      - name: Build web image
+        run: docker build -t agentfleet-web:scan apps/web
+
+      # Shared across both scans below (same job, same runner filesystem) so
+      # the ~110MB vulnerability DB downloads once instead of twice.
+      - name: Prepare Trivy cache dir
+        run: mkdir -p /tmp/trivy-cache
+
+      - name: Scan api image
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v /tmp/trivy-cache:/root/.cache/ \
+            -v "$PWD/.trivyignore:/.trivyignore:ro" \
+            "$TRIVY_IMAGE" image \
+            --scanners vuln \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --ignorefile /.trivyignore \
+            --exit-code 1 \
+            --format table \
+            agentfleet-api:scan
+
+      - name: Scan web image
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v /tmp/trivy-cache:/root/.cache/ \
+            -v "$PWD/.trivyignore:/.trivyignore:ro" \
+            "$TRIVY_IMAGE" image \
+            --scanners vuln \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --ignorefile /.trivyignore \
+            --exit-code 1 \
+            --format table \
+            agentfleet-web:scan

@@ -1,0 +1,121 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: agentfleet
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      # apps/web/Dockerfile (hardened in parallel) runs as UID 1000 / GID
+      # 1000 — not a new user named `app` like the api image, but the
+      # `node` user the node:22-slim base image already ships at exactly
+      # that UID/GID (see that Dockerfile's comment: creating a second user
+      # at 1000 fails the build, so it reuses the built-in one instead).
+      # Kubernetes' runAsUser/runAsGroup match the numeric UID/GID, not the
+      # name, so this is still the same 1000/1000 contract as api.yaml.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: web
+          image: agentfleet-web:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3002
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          env:
+            - name: PORT
+              value: "3002"
+            - name: HOSTNAME
+              value: 0.0.0.0
+            # SSR fetches reach the api Service over cluster DNS (Phase 12
+            # F2) — the browser keeps the baked-in NEXT_PUBLIC_API_URL.
+            - name: INTERNAL_API_URL
+              value: http://api:8000
+          volumeMounts:
+            # WHY: apps/web/next.config.ts sets `output: "standalone"`, and
+            # the App Router (apps/web/app/) caches fetch() responses to
+            # disk under .next/cache by default at runtime — this app's SSR
+            # pages fetch the api Service on every request (INTERNAL_API_URL
+            # above), so that cache directory gets exercised, not just a
+            # theoretical path. WORKDIR is /app (apps/web/Dockerfile), so
+            # the on-disk cache root is /app/.next/cache. With
+            # readOnlyRootFilesystem: true that path needs its own writable
+            # mount; the rest of /app (server.js, the pruned
+            # node_modules, .next/static, public/) is read-only, which is
+            # correct — nothing else in this image is written to at
+            # runtime.
+            - name: next-cache
+              mountPath: /app/.next/cache
+          # Resource sizing (Wave 3B): unlike the api container, there is no
+          # measured footprint for this image anywhere in the repo — no
+          # deploy/hfspace-style comment exists for apps/web/Dockerfile.
+          # These are conservative, commonly-cited defaults for a small
+          # Next.js `output: standalone` SSR server (single Node process,
+          # no heavy in-process compute — it proxies to the api Service
+          # rather than doing work itself), NOT a derivation from a repo
+          # measurement. Treat as a placeholder to replace with real
+          # `kubectl top pod` numbers once a cluster can actually run this.
+          #   requests.memory = 128Mi / limits.memory = 384Mi
+          #   requests.cpu    = 100m  / limits.cpu    = 500m
+          resources:
+            requests:
+              memory: 128Mi
+              cpu: 100m
+            limits:
+              memory: 384Mi
+              cpu: 500m
+          # PROBES: apps/web/Dockerfile already ships a Docker HEALTHCHECK
+          # against `curl -f http://localhost:3002/` — reused verbatim here
+          # rather than inventing a different target, since it is the one
+          # endpoint this image's own author already treated as "the app is
+          # up". Unlike api.yaml, there is no dedicated health route (no
+          # app/api/health equivalent under apps/web/app/), so readiness and
+          # liveness intentionally hit the same path; only the timing
+          # differs, mirroring api.yaml's readiness-tighter/liveness-looser
+          # style. A dedicated /api/health route would be a good follow-up
+          # so these two probes can mean different things.
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 3002
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 3002
+            initialDelaySeconds: 10
+            periodSeconds: 15
+      volumes:
+        - name: next-cache
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  namespace: agentfleet
+spec:
+  type: NodePort
+  selector:
+    app: web
+  ports:
+    - port: 3002
+      targetPort: 3002
+      nodePort: 30302

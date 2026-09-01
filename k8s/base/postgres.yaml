@@ -1,0 +1,152 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: agentfleet
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: agentfleet
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      # RISK, stated plainly rather than hidden in a wall of YAML: the
+      # Wave 3B task contract fixes UID/GID 1000 for "every Deployment and
+      # Job pod spec" in k8s/, which is a contract apps/api/Dockerfile and
+      # apps/web/Dockerfile (hardened in parallel) were built to match — but
+      # pgvector/pgvector:pg16 is a third-party image this repo does not
+      # build, and its upstream (the official postgres image) traditionally
+      # bakes in its own non-root `postgres` user, commonly UID/GID 999, NOT
+      # 1000. fsGroup: 1000 below will make the PVC-backed pgdata volume
+      # group-writable by GID 1000 regardless (kubelet chowns fresh volume
+      # content to fsGroup on mount), which covers the data directory
+      # itself.
+      #
+      # CONFIRMED BROKEN without the initContainer below (Wave 3C, verified
+      # against a real kind cluster): `docker run --rm
+      # pgvector/pgvector:pg16 id` shows the image's own entrypoint runs as
+      # root by default, then either chowns PGDATA to its baked-in
+      # `postgres` user (when it detects it's running as root) or leaves it
+      # alone. Neither path matches "already owned by 1000:1000" — fsGroup
+      # only chgrps the volume, it does not chown the owning UID away from
+      # root — so `initdb` runs as UID 1000 against a directory it does not
+      # own, with `capabilities: drop: ALL` removing CAP_FOWNER, and its own
+      # internal `chmod 00700 $PGDATA` fails with "Operation not permitted"
+      # and initdb aborts (CrashLoopBackOff). The initContainer below runs
+      # briefly as root — the one place in this file that happens — solely
+      # to chown PGDATA and the postgresql run dir to 1000:1000 before the
+      # real postgres container (still fully non-root, unchanged below)
+      # ever starts.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: fix-data-permissions
+          image: pgvector/pgvector:pg16
+          command:
+            - sh
+            - -c
+            - |
+              mkdir -p /var/lib/postgresql/data /var/run/postgresql
+              chown -R 1000:1000 /var/lib/postgresql/data /var/run/postgresql
+              chmod 0700 /var/lib/postgresql/data
+          # Deliberately root, and only here: the main postgres container's
+          # securityContext (unchanged, below) stays non-root. This
+          # container's only job is a one-time chown so that container can
+          # start as UID 1000 against a directory it actually owns.
+          securityContext:
+            runAsNonRoot: false
+            runAsUser: 0
+            runAsGroup: 0
+            allowPrivilegeEscalation: false
+          volumeMounts:
+            - name: pgdata
+              mountPath: /var/lib/postgresql/data
+            - name: pg-run
+              mountPath: /var/run/postgresql
+      containers:
+        - name: postgres
+          image: pgvector/pgvector:pg16
+          ports:
+            - containerPort: 5432
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          env:
+            - name: POSTGRES_USER
+              value: agentfleet
+            - name: POSTGRES_PASSWORD
+              value: agentfleet
+            - name: POSTGRES_DB
+              value: agentfleet
+          volumeMounts:
+            - name: pgdata
+              mountPath: /var/lib/postgresql/data
+            # WHY: postgres's default unix_socket_directories is
+            # /var/run/postgresql, and the container also needs a writable
+            # /tmp for on-disk sort/hash spills once work_mem is exceeded
+            # and other scratch use. Neither is on the PVC above, and both
+            # are plain image-filesystem paths that readOnlyRootFilesystem
+            # would otherwise make unwritable.
+            - name: pg-run
+              mountPath: /var/run/postgresql
+            - name: tmp
+              mountPath: /tmp
+          # Resource sizing (Wave 3B): NOT measured — there is no
+          # deploy/hfspace-style footprint note for this image anywhere in
+          # the repo. These are conservative, widely-used defaults for a
+          # small single-instance Postgres, sized to match the existing 1Gi
+          # PVC's implied dev-scale dataset (this is explicitly "a local
+          # kind/k3d/minikube cluster" per k8s/README.md, not a production
+          # database). Replace with real `kubectl top pod` numbers once a
+          # cluster is available to measure against.
+          #   requests.memory = 256Mi / limits.memory = 512Mi
+          #   requests.cpu    = 100m  / limits.cpu    = 500m
+          resources:
+            requests:
+              memory: 256Mi
+              cpu: 100m
+            limits:
+              memory: 512Mi
+              cpu: 500m
+      volumes:
+        - name: pgdata
+          persistentVolumeClaim:
+            claimName: postgres-pvc
+        - name: pg-run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: agentfleet
+spec:
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432

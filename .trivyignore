@@ -1,0 +1,31 @@
+# Trivy vulnerability ignore list, read automatically by the scans in
+# .github/workflows/trivy.yml (api scan ~line 87, web scan ~line 100).
+#
+# Rules for this file, so it never becomes the place risk goes to hide:
+#   - one specific ID per entry, never a blanket or wildcard ignore
+#   - every entry carries a date, the reason it cannot be fixed today, and
+#     the concrete condition that unblocks it
+#   - an entry that exists only to turn the gate green does not belong here;
+#     fix the dependency instead
+#   - re-check entries on every dependency upgrade, and delete them the
+#     moment they resolve
+#
+# Everything else was fixed rather than ignored. For the record, on
+# 2026-09-01 the two images went from 106 fixable HIGH/CRITICAL findings
+# (7 of them CRITICAL) down to this single entry, by bumping the base images
+# (python:3.12.11-slim -> 3.12.14-slim, node:22.11.0-slim -> 22.23.2-slim),
+# deleting npm from the web runtime stage, and upgrading cryptography
+# (49.0.0 -> 50.0.1) and next (16.2.10 -> 16.2.11).
+
+# 2026-09-01 - sharp 0.34.5 in the web image. Fixed upstream in 0.35.0.
+#
+# Why it is not simply upgraded: next 16.2.11 declares sharp as an OPTIONAL
+# dependency pinned to ^0.34.5, and that range excludes 0.35.0. Forcing it
+# through an npm `overrides` entry would run sharp outside the range next
+# supports. apps/web/app/opengraph-image.tsx genuinely uses next/image, so
+# the cost is a broken Open Graph image pipeline - a real regression traded
+# for a tidier scan result.
+#
+# Unblocked when next widens its sharp range to admit >= 0.35.0. Re-check on
+# every next upgrade and delete this entry as soon as that lands.
+GHSA-f88m-g3jw-g9cj

@@ -1,0 +1,191 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agentfleet-config
+  namespace: agentfleet
+data:
+  DATABASE_URL: postgresql+asyncpg://agentfleet:agentfleet@postgres:5432/agentfleet
+  REDIS_URL: redis://redis:6379/0
+  # Enqueue runs to the arq worker instead of running them in the API process, so a
+  # run survives an api pod restart. k8s/README.md documented this as set on BOTH
+  # api and worker; it was set only in worker.yaml, so the API ran missions
+  # in-process while an idle worker polled an empty queue.
+  ORCHESTRATOR_MODE: arq
+  # KNOWN DEFECTS — why this stack has never served traffic. Recorded here rather
+  # than silently patched, and fixed properly in the base/overlays rework:
+  #   SEARXNG_URL points at a Service that does not exist under k8s/ (compose has
+  #     one; these manifests do not). web_search degrades to "no results" instead
+  #     of crashing, so it fails quietly — which is worse than failing loudly.
+  #   FREE_LLM_BASE_URL is a HOST-machine dev proxy address. Inside a pod,
+  #     localhost IS the pod, so every LLM call fails. It also carries a key, so it
+  #     belongs in the Secret, not in this ConfigMap.
+  SEARXNG_URL: http://searxng:8080
+  DEFAULT_MODEL: openai/gpt-oss-120b
+  FREE_LLM_BASE_URL: http://localhost:3001/v1
+  LANGFUSE_HOST: https://cloud.langfuse.com
+---
+# NOTE (Phase 12 F2): the one-shot `migrate` Job (migrate-job.yaml) must run
+# before api pods can serve — the entrypoint no longer runs migrations
+# per-replica (multi-replica race). An initContainer was considered but a Job
+# is correct for >1 replica: it runs exactly once cluster-wide. Until the Job
+# completes, api pods stay out of the Service via the /health/ready probe.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: agentfleet
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+    spec:
+      # Pod-level security context (Wave 3B). Matches the fixed UID/GID
+      # contract shared with apps/api/Dockerfile, hardened in parallel: that
+      # image creates user `app` as UID 1000 / GID 1000. fsGroup: 1000 makes
+      # every mounted volume below (the fastembed-cache emptyDir) group-
+      # writable by that GID regardless of how the volume's backing storage
+      # was provisioned.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: api
+          image: agentfleet-api:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          # Container-level hardening to go with the pod-level identity
+          # above: no setuid escalation, no Linux capabilities beyond the
+          # default-drop-ALL baseline, and a read-only root filesystem
+          # backed by the emptyDir below wherever the app must actually
+          # write.
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          envFrom:
+            - configMapRef:
+                name: agentfleet-config
+            - secretRef:
+                name: agentfleet-secrets
+          env:
+            # WHY this needs a writable path at all: apps/api/Dockerfile (the
+            # regular, non-Spaces image built for this cluster) does NOT bake
+            # the fastembed embedding model in at build time — only
+            # deploy/hfspace/Dockerfile does that. app/services/ingest.py's
+            # _get_embedder() therefore downloads the ~130MB
+            # BAAI/bge-small-en-v1.5 model from Hugging Face on first use
+            # (and again on every pod restart, since it is not persisted).
+            # With readOnlyRootFilesystem: true, fastembed/huggingface_hub's
+            # default cache location (under the process's home directory)
+            # is not writable, so the download would fail the first time any
+            # request needs an embedding (search_documents tool call, or the
+            # startup pre-warm in app/main.py's lifespan, which is enabled
+            # by default via EMBEDDINGS_PREWARM=1 — see app/config.py).
+            # Fix: point the cache at the emptyDir volume mounted below.
+            # Env var names copied verbatim from deploy/hfspace/Dockerfile,
+            # which solves the exact same problem the exact same way.
+            - name: FASTEMBED_CACHE_PATH
+              value: /home/app/.cache/fastembed
+            - name: HF_HOME
+              value: /home/app/.cache/huggingface
+          volumeMounts:
+            - name: embed-cache
+              mountPath: /home/app/.cache
+            # CONFIRMED BROKEN without this (Wave 3C, verified against a real
+            # kind cluster): fastembed's own define_cache_dir() helper
+            # (fastembed/common/utils.py) unconditionally calls
+            # tempfile.gettempdir() as part of computing its *unused*
+            # fallback default, even when FASTEMBED_CACHE_PATH is set above —
+            # a fastembed library quirk, not app code. Python's tempfile
+            # module raises FileNotFoundError if none of /tmp, /var/tmp,
+            # /usr/tmp exist and are writable, which readOnlyRootFilesystem
+            # makes true here, so every TextEmbedding() call crashed the
+            # container before it ever reached a request. EMBEDDINGS_PREWARM
+            # defaults to "1" (app/config.py), so this fired unconditionally
+            # at startup, not just on first embedding use.
+            - name: tmp
+              mountPath: /tmp
+          # Resource sizing derivation (Wave 3B) — see
+          # deploy/hfspace/Dockerfile's header comment, the only measured
+          # footprint on record for this exact image's Python process:
+          #   ~205MB imported (FastAPI + SQLAlchemy/asyncpg + the fastembed
+          #     package itself, pulled in transitively by
+          #     app/routes/documents.py -> app/services/ingest.py at import
+          #     time) -- treated here as ~205Mi (measurement tooling like
+          #     `docker stats`/`kubectl top` reports binary MiB while
+          #     usually labelling it "MB"; the ~5% slack this ambiguity
+          #     introduces is well inside the buffer below).
+          #   ~507MB (~484Mi) once the fastembed model is resident.
+          # EMBEDDINGS_PREWARM defaults to "1" (app/config.py), so app/
+          # main.py's lifespan loads the model shortly after startup on
+          # every pod — steady-state memory is the ~484Mi figure, not the
+          # ~196Mi import-only baseline.
+          #   requests.memory = 512Mi   — just above the measured ~484Mi
+          #     steady state; the scheduler will not place this pod
+          #     somewhere that can't hold the model once it's loaded.
+          #   limits.memory   = 768Mi   — ~1.5x steady state, headroom for
+          #     concurrent request bodies, the SQLAlchemy pool
+          #     (db_pool_size=3 + db_max_overflow=2 per app/config.py), and
+          #     general allocator fragmentation.
+          # CPU is NOT measured anywhere in this repo — these are
+          # conservative estimates, not a derivation, flagged as such:
+          #   requests.cpu = 250m — FastAPI is I/O-bound for most routes.
+          #   limits.cpu   = 1000m — headroom for fastembed's on-CPU ONNX
+          #     inference (ARCHITECTURE.md ADR-008), the one genuinely
+          #     CPU-heavy thing this process does.
+          resources:
+            requests:
+              memory: 512Mi
+              cpu: 250m
+            limits:
+              memory: 768Mi
+              cpu: 1000m
+          # Readiness = DB answers SELECT 1 (/health/ready); liveness stays
+          # the cheap DB-free /health so a slow DB never kills the process.
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 15
+      volumes:
+        # Backs FASTEMBED_CACHE_PATH/HF_HOME above and is the sole reason
+        # readOnlyRootFilesystem: true works on this container. Ephemeral by
+        # design: a pod restart re-downloading the model is an accepted
+        # cost, not a bug — see the note on EMBEDDINGS_PREWARM above for why
+        # that download happens automatically rather than blocking traffic.
+        - name: embed-cache
+          emptyDir: {}
+        # See the volumeMounts comment above — required for fastembed's
+        # define_cache_dir() to not crash under readOnlyRootFilesystem.
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+  namespace: agentfleet
+spec:
+  selector:
+    app: api
+  ports:
+    - port: 8000
+      targetPort: 8000

@@ -58,8 +58,36 @@ passing.** That rule has already caught real mistakes in this repo.
 | **1** | Half A — four real bugs | ✅ `6cb8ca5` |
 | **1** | Half B — make the eval gate real | ✅ (this commit) |
 | **2** | **Ship the free stack (Neon + HF Spaces + Vercel) — first public URL** | ⬅️ **next** |
-| 3 | Container hardening, `k8s/` base+overlays, kind-in-CI, E2E in CI | todo |
-| 4 | GCP: Cloud Run + Terraform + Workload Identity Federation | todo |
+| 3 | Container hardening, `k8s/` base+overlays, kind-in-CI, E2E in CI | ✅ `16916bf` |
+| 4 | GCP: Cloud Run + Cloud SQL + Terraform + Workload Identity Federation | todo |
+
+**Status (2026-09-01): Waves 2 and 3 ran out of order — 3 first, then 2.**
+Wave 3 is complete (`0b03e26`, `4174b53`, `f68e6ec`, `b5c2e37`, `93d8738`,
+`16916bf`). Wave 2 is the next task and is **not** skipped.
+
+Why the swap, since the ordering above was deliberate: the plan briefly became
+"skip Wave 2, deploy straight to GCP", then changed back, by which point Wave 3
+was underway. The order turned out better anyway — Wave 3 hardens exactly what
+Wave 2 deploys, and running the manifests in a real kind cluster surfaced three
+crashes that would otherwise have appeared as a mysteriously half-broken public
+URL: postgres `initdb` failing under a dropped-capabilities `securityContext`,
+fastembed needing a writable `/tmp` under `readOnlyRootFilesystem`, and the
+`web` service never receiving `AUTH_SECRET` in `docker/compose.full.yaml`.
+
+Two decisions recorded here so they are not re-litigated:
+
+- **Waves 2 and 4 are both happening, and they do not conflict.** They are two
+  independent deploys of one repo. Wave 2 is a free demo URL (Neon + HF Spaces
+  + Vercel — $0, no card, no expiry); Wave 4 is the GCP practice deployment.
+  Nothing in Wave 2 creates a GCP project, so it does not start the $300
+  credit's 90-day clock, and the sequencing rule above still holds.
+- **Wave 4 targets Cloud Run + Cloud SQL**, with GitHub Actions authenticating
+  via Workload Identity Federation rather than a long-lived service-account
+  JSON key.
+
+The repo is now **public** (`hharsha98/agentfleet`), which Wave 2 depends on:
+the Space's Dockerfile clones GitHub at build time and cannot do that for a
+private repo without a build token.
 | 5 | GKE Autopilot evidence run, time-boxed, on the $300 credit | todo |
 | 6 | Teardown + writeup + `docs/AWS_EQUIVALENTS.md` | todo |
 | 7 | AI substance: hybrid retrieval, retrieval evals, judge calibration, OTel | todo |
