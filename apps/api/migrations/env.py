@@ -19,10 +19,20 @@ if config.config_file_name is not None:
 # Our app's models drive autogenerate; the DB URL comes from settings/.env
 # so it is never duplicated in alembic.ini.
 from app.config import get_settings
+from app.db_connect import asyncpg_connect_args
 from app.models import Base
 
-config.set_main_option("sqlalchemy.url", get_settings().database_url)
+settings = get_settings()
+config.set_main_option("sqlalchemy.url", settings.database_url)
 target_metadata = Base.metadata
+
+# Cloudflare/Supabase: DATABASE_SCHEMA=agentfleet. Local compose stays `public`
+# (None here so Alembic uses the connection default, matching existing DBs).
+_VERSION_TABLE_SCHEMA = (
+    None
+    if (settings.database_schema or "public").strip() in ("", "public")
+    else settings.database_schema.strip()
+)
 
 # Tables created OUTSIDE Alembic (LangGraph's AsyncPostgresSaver manages its own
 # `checkpoint*` tables via setup(); `analytics_*` are seeded demo data). They are
@@ -61,6 +71,7 @@ def run_migrations_offline() -> None:
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         include_object=_include_object,
+        version_table_schema=_VERSION_TABLE_SCHEMA,
     )
 
     with context.begin_transaction():
@@ -72,6 +83,7 @@ def do_run_migrations(connection: Connection) -> None:
         connection=connection,
         target_metadata=target_metadata,
         include_object=_include_object,
+        version_table_schema=_VERSION_TABLE_SCHEMA,
     )
 
     with context.begin_transaction():
@@ -88,6 +100,7 @@ async def run_async_migrations() -> None:
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
+        connect_args=asyncpg_connect_args(settings.database_schema, settings.database_ssl),
     )
 
     async with connectable.connect() as connection:

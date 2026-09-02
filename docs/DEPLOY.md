@@ -11,6 +11,13 @@ use without cloning anything.
 | API (FastAPI) | **Hugging Face Spaces** | 2 vCPU / **16 GB RAM** free |
 | Web (Next.js) | **Vercel** | first-party Next.js host, generous free tier |
 
+**Cloudflare (Workers Paid, Containers)** is a second hosted path: OpenNext
+Worker `agentfleet-app` + FastAPI as a Cloudflare Container (`agentfleet-api`)
++ the existing Supabase project (schema `agentfleet`, TLS from the container —
+not Hyperdrive). That is [CLOUDFLARE.md](CLOUDFLARE.md). It does not replace
+this free-tier Neon recipe, and it is not the static gallery at
+`agentfleet-gallery.pages.dev`.
+
 **No Redis.** Set `ORCHESTRATOR_MODE=inprocess`; the orchestrator already falls
 back to in-process execution when Redis is unreachable.
 

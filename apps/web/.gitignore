@@ -37,6 +37,13 @@ yarn-error.log*
 # from AUTH_SECRET on every run, never commit it.
 /e2e/.auth/
 
+# OpenNext / Wrangler (Cloudflare deploy — see docs/CLOUDFLARE.md)
+.open-next
+.wrangler
+.dev.vars
+!/.dev.vars.example
+cloudflare-env.d.ts
+
 # vercel
 .vercel
 

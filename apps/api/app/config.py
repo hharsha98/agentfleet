@@ -7,6 +7,14 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     database_url: str = "postgresql+asyncpg://agentfleet:agentfleet@localhost:5432/agentfleet"
+    # Postgres schema for app tables + Alembic version + LangGraph checkpoints.
+    # Default `public` matches local compose. Cloudflare/Supabase set
+    # DATABASE_SCHEMA=agentfleet so we do not collide with other public tables.
+    database_schema: str = "public"
+    # asyncpg rejects `?sslmode=require` on the DSN. Set DATABASE_SSL=1 so
+    # the engine encrypts like libpq sslmode=require (no CA/hostname verify).
+    # Leave off for local compose, which has no TLS.
+    database_ssl: bool = False
     redis_url: str = "redis://localhost:6379/0"
 
     # Async engine connection pool (Bug 1, Wave 1 — see app/db.py for

@@ -146,6 +146,13 @@ Deploying publicly on free tiers — Neon (Postgres + pgvector), Hugging Face Sp
 including why the API needs a 16GB host: it measures ~205MB imported and ~507MB
 once the embedding model is resident, which does not fit a 256MB or 512MB free tier.
 
+A Cloudflare path (OpenNext Worker `agentfleet-app` + FastAPI Container
+`agentfleet-api` + existing Supabase schema `agentfleet`) is
+[docs/CLOUDFLARE.md](docs/CLOUDFLARE.md). It needs Workers Paid (`standard-1`
+Containers), talks to Postgres over TLS (Hyperdrive does not work inside
+Containers), keeps `ORCHESTRATOR_MODE=inprocess`, and does not overwrite
+Pages project `agentfleet-gallery`. It does not replace the Spaces+Vercel recipe.
+
 Want to see it running before you set it up? Follow the [demo script](docs/DEMO.md).
 
 ## Model routing
