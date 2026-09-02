@@ -11,9 +11,9 @@ class Settings(BaseSettings):
     # Default `public` matches local compose. Cloudflare/Supabase set
     # DATABASE_SCHEMA=agentfleet so we do not collide with other public tables.
     database_schema: str = "public"
-    # asyncpg rejects `?sslmode=require` on the DSN. Set DATABASE_SSL=1 and
-    # the engine passes ssl=True (Supabase/Neon TLS). Leave off for local
-    # compose, which has no TLS.
+    # asyncpg rejects `?sslmode=require` on the DSN. Set DATABASE_SSL=1 so
+    # the engine encrypts like libpq sslmode=require (no CA/hostname verify).
+    # Leave off for local compose, which has no TLS.
     database_ssl: bool = False
     redis_url: str = "redis://localhost:6379/0"
 

@@ -24,6 +24,8 @@
     "CORS_ORIGINS": "http://localhost:3002,https://agentfleet-app.YOUR_SUBDOMAIN.workers.dev",
     "EMBEDDINGS_PREWARM": "1",
     "DATABASE_SCHEMA": "agentfleet",
+    // libpq sslmode=require (encrypt, no CA/hostname verify). asyncpg
+    // ssl=True is verify-full and fails against this project's pooler.
     "DATABASE_SSL": "1"
   },
   "secrets": {

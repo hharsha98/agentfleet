@@ -70,9 +70,11 @@ database and not D1:
 | Ref | `koyhzzyzxcalyzruhgqw` |
 | Region | `eu-west-1` (Ireland) |
 | Engine | Postgres 17 (`ACTIVE_HEALTHY`) |
-| Host | `db.koyhzzyzxcalyzruhgqw.supabase.co` |
+| Direct host | `db.koyhzzyzxcalyzruhgqw.supabase.co` — **IPv6-only** (no IPv4 route from a typical Mac) |
+| Working session pooler | `aws-1-eu-west-1.pooler.supabase.com` port **5432** |
+| Username | `agentfleet_cf.koyhzzyzxcalyzruhgqw` (the `.projectref` suffix is required) |
 | Database | `postgres` |
-| App schema | **`agentfleet`** (not `public`) |
+| App schema | **`agentfleet`** (not `public`) — already at Alembic head `b51d0f1cf233` (18 tables) |
 
 `vector` is already installed in the `extensions` schema. The `agentfleet`
 schema exists and is **not** granted to `anon` / `authenticated`, so it
@@ -81,21 +83,37 @@ The API sets `search_path` to `agentfleet,extensions,public` so unqualified
 `vector` types and app tables resolve without touching anyone else's
 `public` objects.
 
-Rewrite the dashboard URI the same way as [DEPLOY.md](DEPLOY.md):
+### Observed hosts (do not guess a different pooler)
 
-1. Copy the URI (`postgresql://postgres:…@db.koyhzzyzxcalyzruhgqw.supabase.co:5432/postgres?sslmode=require`).
-2. Change `postgresql://` → `postgresql+asyncpg://`.
-3. **Drop** `?sslmode=require` — asyncpg rejects that parameter.
-4. Enable TLS with `DATABASE_SSL=1` (already a wrangler `var`), not a query string.
+Tried from a laptop against this project; do not invent a substitute:
+
+| Host | Result |
+|---|---|
+| `db.koyhzzyzxcalyzruhgqw.supabase.co` | IPv6-only. No route from this Mac. |
+| `aws-0-eu-west-1.pooler.supabase.com` | Auth error: `tenant/user ... not found` for this project. |
+| `aws-1-eu-west-1.pooler.supabase.com:5432` | **Works** (session mode). |
+| `aws-1-eu-west-1.pooler.supabase.com:6543` | Also authenticated (transaction mode). **Do not use** — asyncpg prepared statements break on transaction-mode poolers. |
+
+### DSN
 
 ```
-postgresql+asyncpg://postgres:YOUR_PASSWORD@db.koyhzzyzxcalyzruhgqw.supabase.co:5432/postgres
+postgresql+asyncpg://agentfleet_cf.koyhzzyzxcalyzruhgqw:YOUR_PASSWORD@aws-1-eu-west-1.pooler.supabase.com:5432/postgres
 ```
 
-Do **not** commit `YOUR_PASSWORD`. Put the rewritten URI in
-`deploy/cloudflare/.dev.vars` (gitignored) and `wrangler secret put DATABASE_URL`.
+1. **Drop** `?sslmode=require` — asyncpg rejects that query parameter.
+2. Enable TLS with `DATABASE_SSL=1` (already a wrangler `var`). That flag
+   matches libpq `sslmode=require`: encrypt, **do not** verify CA or
+   hostname. `asyncpg ssl=True` is verify-full and fails against this
+   pooler (`SSLCertVerificationError: self-signed certificate in
+   certificate chain`, chain rooted at self-signed `Supabase Root 2021
+   CA`). Bundling the official Supabase CA then failed with `CA cert does
+   not include key usage extension`. psycopg already used `sslmode=require`
+   and that path worked.
+3. Do **not** commit `YOUR_PASSWORD`. Put the URI in
+   `deploy/cloudflare/.dev.vars` (gitignored) and
+   `wrangler secret put DATABASE_URL`.
 
-The API container connects to that host **directly over TLS**. Hyperdrive is
+The API container connects to that host **over TLS directly**. Hyperdrive is
 a Worker-side pooler and does not work inside Containers
 ([cloudflare/containers#97](https://github.com/cloudflare/containers/issues/97)).
 Do not add a Hyperdrive binding to this Worker.
@@ -103,10 +121,9 @@ Do not add a Hyperdrive binding to this Worker.
 `ORCHESTRATOR_MODE=inprocess` stays on: no Redis, no arq worker. Mission
 DAGs run inside the API process.
 
-If the container cannot open IPv6 to `db.*.supabase.co`, the fallback is
-Supabase's **session** pooler on port **5432** (not transaction-mode 6543,
-which breaks asyncpg prepared statements). Same rewrite: `+asyncpg`, no
-`sslmode`, `DATABASE_SSL=1`.
+Schema `agentfleet` is already migrated to Alembic head `b51d0f1cf233`
+(18 tables). `RUN_MIGRATIONS_ON_BOOT=1` should be a no-op besides the
+non-fatal `CREATE EXTENSION IF NOT EXISTS vector`.
 
 ---
 
@@ -148,7 +165,7 @@ Secrets (`wrangler secret put` / `.dev.vars` locally):
 
 | Name | Purpose |
 |---|---|
-| `DATABASE_URL` | Rewritten Supabase DSN above (password not in git) |
+| `DATABASE_URL` | Session-pooler DSN above (password not in git) |
 | `AUTH_SECRET` | Shared with web, byte-identical |
 | `FREE_LLM_BASE_URL` | OpenAI-compatible endpoint |
 | `FREE_LLM_KEY` | Provider key |
@@ -160,11 +177,11 @@ Secrets (`wrangler secret put` / `.dev.vars` locally):
 | `ORCHESTRATOR_MODE` | `inprocess` |
 | `DEMO_LOGIN_ENABLED` | `1` |
 | `SEED_DEMO_DATA` | `1` |
-| `RUN_MIGRATIONS_ON_BOOT` | `1` |
+| `RUN_MIGRATIONS_ON_BOOT` | `1` (schema already at `b51d0f1cf233`; no-op besides non-fatal `CREATE EXTENSION`) |
 | `DEFAULT_MODEL` | `openai/gpt-oss-120b` |
 | `EMBEDDINGS_PREWARM` | `1` |
 | `DATABASE_SCHEMA` | `agentfleet` |
-| `DATABASE_SSL` | `1` |
+| `DATABASE_SSL` | `1` (libpq `require`: encrypt, no CA/hostname verify) |
 | `CORS_ORIGINS` | web origin(s), comma-separated — fill after step 4, then redeploy the API Worker (vars, not a rebuild of the image) |
 
 The proxy Worker refuses to start a container if the four secrets are
@@ -288,7 +305,7 @@ deploy is Container `standard-1` + Supabase + in-process orchestrator.
 | GCP (Useful Agents) | Cloudflare extra | What it replaces / adds | First deploy? |
 |---|---|---|---|
 | GKE Autopilot pods | **Workers Paid Containers `standard-1`** (4 GiB) | Runs the real FastAPI image. `lite` (256 MiB) OOMs; measured RSS is ~507 MB with fastembed. | **Yes** — pinned in `wrangler.jsonc` |
-| Cloud SQL Postgres | **Supabase** `db.koyhzzyzxcalyzruhgqw.supabase.co` schema `agentfleet` | pgvector, TLS from the container. Not D1, not Hyperdrive. | **Yes** |
+| Cloud SQL Postgres | **Supabase** session pooler `aws-1-eu-west-1.pooler.supabase.com:5432`, schema `agentfleet` | pgvector, TLS from the container (`DATABASE_SSL=1` = libpq require). Not D1, not Hyperdrive. Direct `db.*.supabase.co` is IPv6-only. | **Yes** |
 | Redis / arq workers | **Queues + Workflows** | Durable DAG steps if you outgrow `ORCHESTRATOR_MODE=inprocess` (a run currently dies if the container sleeps mid-mission). Wire a Workflow around `POST /api/v1/runs` later; do not turn Redis on inside the container for v1. | No — keep `inprocess` |
 | GCS / disk uploads | **R2** | Original file blobs. Today ingest stores chunks + embeddings in Postgres (5 MB cap). R2 is the place for larger artifacts / raw PDFs without stuffing `public` or the container's ephemeral disk. | No |
 | Provider sprawl / retries | **AI Gateway** | Front `FREE_LLM_BASE_URL` with `https://gateway.ai.cloudflare.com/v1/<account>/<gateway>/…` so logging, caching, and provider failover sit in one place. Still OpenAI-compatible — no second client. | Optional |

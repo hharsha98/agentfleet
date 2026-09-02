@@ -58,14 +58,15 @@ if [ "${RUN_MIGRATIONS_ON_BOOT:-}" = "1" ]; then
   python3 - <<'PYEOF' || echo "[entrypoint] pgvector/schema step skipped (already present, or not permitted)"
 import asyncio, os, re
 import asyncpg
+from app.db_connect import asyncpg_connect_args
 
 async def main():
     dsn = os.environ["DATABASE_URL"].replace("postgresql+asyncpg://", "postgresql://")
     schema = (os.environ.get("DATABASE_SCHEMA") or "public").strip() or "public"
     if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", schema):
         raise SystemExit(f"[entrypoint] invalid DATABASE_SCHEMA: {schema!r}")
-    ssl = os.environ.get("DATABASE_SSL", "").lower() in ("1", "true", "yes")
-    conn = await asyncpg.connect(dsn, ssl=True if ssl else None)
+    use_ssl = os.environ.get("DATABASE_SSL", "").lower() in ("1", "true", "yes")
+    conn = await asyncpg.connect(dsn, **asyncpg_connect_args(schema, use_ssl))
     try:
         if schema != "public":
             await conn.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema}"')
