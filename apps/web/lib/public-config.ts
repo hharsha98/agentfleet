@@ -21,11 +21,36 @@ declare global {
  *
  * Set PUBLIC_API_URL only when the browser must call the API host
  * directly (and then CORS_ORIGINS on the API must include this web origin).
- * Never put INTERNAL_API_URL here — that can be a docker hostname.
+ * Loopback / docker hostnames are rejected so a leftover .env line cannot
+ * re-break hosted client pages. Never put INTERNAL_API_URL here.
  */
+export function isUnsafeBrowserApiUrl(url: string): boolean {
+  const trimmed = url.trim();
+  if (!trimmed) return true;
+  if (trimmed.startsWith("/")) return false;
+  let host = "";
+  try {
+    host = new URL(trimmed).hostname.toLowerCase();
+  } catch {
+    return true;
+  }
+  return (
+    host === "localhost" ||
+    host === "127.0.0.1" ||
+    host === "::1" ||
+    host === "[::1]" ||
+    host === "api" ||
+    host === "host.docker.internal" ||
+    host.endsWith(".internal")
+  );
+}
+
 export function browserApiUrlFromEnv(): string {
   const explicit = process.env.PUBLIC_API_URL?.trim();
-  if (explicit) return explicit.replace(/\/$/, "");
+  if (explicit) {
+    const cleaned = explicit.replace(/\/$/, "");
+    if (!isUnsafeBrowserApiUrl(cleaned)) return cleaned;
+  }
   return "/backend";
 }
 
@@ -44,6 +69,25 @@ export function publicConfigFromEnv(): PublicConfig {
     apiUrl: browserApiUrlFromEnv(),
     demoLogin: process.env.DEMO_LOGIN_ENABLED === "1",
     googleLogin: Boolean(process.env.AUTH_GOOGLE_ID),
+  };
+}
+
+export function parsePublicConfig(data: unknown): PublicConfig | null {
+  if (!data || typeof data !== "object") return null;
+  const rec = data as Record<string, unknown>;
+  if (typeof rec.apiUrl !== "string" || !rec.apiUrl.trim()) return null;
+  const apiUrl = rec.apiUrl.trim().replace(/\/$/, "") || "/backend";
+  if (isUnsafeBrowserApiUrl(apiUrl)) {
+    return {
+      apiUrl: "/backend",
+      demoLogin: Boolean(rec.demoLogin),
+      googleLogin: Boolean(rec.googleLogin),
+    };
+  }
+  return {
+    apiUrl,
+    demoLogin: Boolean(rec.demoLogin),
+    googleLogin: Boolean(rec.googleLogin),
   };
 }
 
@@ -69,7 +113,8 @@ export async function loadPublicConfig(): Promise<PublicConfig> {
   inFlight = fetch("/api/public-config", { cache: "no-store" })
     .then(async (res) => {
       if (!res.ok) return publicConfigFromEnv();
-      const data = (await res.json()) as PublicConfig;
+      const parsed = parsePublicConfig(await res.json());
+      const data = parsed ?? publicConfigFromEnv();
       cached = data;
       window.__AGENTFLEET_API_URL__ = data.apiUrl;
       return data;

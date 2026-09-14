@@ -7,13 +7,22 @@ import { publicConfigFromEnv } from "@/lib/public-config";
 
 export const dynamic = "force-dynamic";
 
+function safeRedirectTo(raw: string | string[] | undefined): string {
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  if (!value || typeof value !== "string") return "/chat";
+  if (!value.startsWith("/") || value.startsWith("//") || value.includes("://")) {
+    return "/chat";
+  }
+  return value;
+}
+
 export default async function SignInPage({
   searchParams,
 }: {
-  searchParams: Promise<{ callbackUrl?: string }>;
+  searchParams: Promise<{ callbackUrl?: string | string[] }>;
 }) {
   const params = await searchParams;
-  const redirectTo = params.callbackUrl || "/chat";
+  const redirectTo = safeRedirectTo(params.callbackUrl);
   const { demoLogin, googleLogin } = publicConfigFromEnv();
 
   return (

@@ -115,3 +115,26 @@ def test_public_schema_does_not_set_search_path() -> None:
     assert prepared.search_path is None
     assert "server_settings" not in prepared.connect_args
 
+
+def test_invalid_schema_is_rejected() -> None:
+    import pytest
+
+    from app.database_url import validated_schema_name
+
+    with pytest.raises(ValueError, match="invalid DATABASE_SCHEMA"):
+        validated_schema_name("foo -cenable_seqscan=off")
+    with pytest.raises(ValueError, match="invalid DATABASE_SCHEMA"):
+        prepare_database_url(LOCAL, schema="foo;drop")
+
+
+def test_password_with_slash_is_percent_encoded_and_alembic_env_does_not_ini_interpolate() -> None:
+    """ConfigParser %(here)s + a percent-encoded password used to crash
+    RUN_MIGRATIONS_ON_BOOT before uvicorn started."""
+    from pathlib import Path
+
+    prepared = prepare_database_url("postgresql://user:ab/cd@host:5432/db")
+    assert "%2F" in prepared.sqlalchemy_url
+    env_text = (Path(__file__).resolve().parents[1] / "migrations" / "env.py").read_text()
+    assert "create_async_engine(" in env_text
+    assert "async_engine_from_config" not in env_text
+

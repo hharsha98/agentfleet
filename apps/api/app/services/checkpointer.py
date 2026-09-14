@@ -40,7 +40,12 @@ def _psycopg_dsn(database_url: str) -> str:
     endpoint are handled in app.database_url — this wrapper keeps the
     existing call sites and unit tests stable.
     """
-    return prepare_database_url(database_url).psycopg_dsn
+    settings = get_settings()
+    return prepare_database_url(
+        database_url,
+        schema=settings.database_schema,
+        ssl=True if settings.database_ssl else None,
+    ).psycopg_dsn
 
 
 async def get_checkpointer():

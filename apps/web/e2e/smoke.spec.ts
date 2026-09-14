@@ -129,11 +129,16 @@ test("browser API config is same-origin /backend, not localhost", async ({
   expect(body.apiUrl).not.toContain("localhost");
 
   const hitsLocalApi: string[] = [];
+  const backendHits: string[] = [];
   page.on("request", (req) => {
     if (req.url().includes("localhost:8000")) hitsLocalApi.push(req.url());
+    if (req.url().includes("/backend/")) backendHits.push(req.url());
   });
   await page.goto("/missions");
   await expect(page.getByPlaceholder(/Give the fleet a goal/)).toBeVisible();
+  await expect
+    .poll(() => backendHits.some((u) => u.includes("/backend/api/v1/runs")))
+    .toBeTruthy();
   expect(hitsLocalApi).toEqual([]);
 });
 

@@ -327,11 +327,9 @@ def _get_analytics_engine() -> AsyncEngine:
     if not settings.analytics_database_url:
         return _app_engine
     if _analytics_engine is None:
-        prepared = prepare_database_url(
-            settings.analytics_database_url,
-            schema=settings.database_schema,
-            ssl=True if settings.database_ssl else None,
-        )
+        # Separate analytics DSN: do not inherit the app's DATABASE_SCHEMA
+        # (search_path=agentfleet) or DATABASE_SSL CERT_NONE flag.
+        prepared = prepare_database_url(settings.analytics_database_url)
         _analytics_engine = create_async_engine(
             prepared.sqlalchemy_url,
             echo=False,

@@ -80,12 +80,12 @@ Usage:
 import asyncio
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.db import SessionLocal
-from app.models import Agent, Budget, User
+from app.models import Agent, AgentVersion, Budget, User
 from app.services.versioning import publish_version
 
 # --- Identity ---------------------------------------------------------
@@ -170,6 +170,26 @@ async def _seed(session: AsyncSession) -> dict[str, bool]:
         await session.flush()
         await publish_version(session, sandbox, note="Demo sandbox initial version")
         created["sandbox_agent"] = True
+    else:
+        repaired = False
+        if sandbox.is_builtin:
+            sandbox.is_builtin = False
+            repaired = True
+        if sandbox.user_id != user.id:
+            sandbox.user_id = user.id
+            repaired = True
+        version_count = (
+            await session.execute(
+                select(func.count())
+                .select_from(AgentVersion)
+                .where(AgentVersion.agent_id == sandbox.id)
+            )
+        ).scalar_one()
+        if version_count == 0:
+            await publish_version(session, sandbox, note="Demo sandbox initial version")
+            repaired = True
+        if repaired:
+            created["sandbox_agent"] = True
 
     await session.commit()
     await session.refresh(user)

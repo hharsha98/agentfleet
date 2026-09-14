@@ -29,7 +29,7 @@ export const TOKEN_TTL_SECONDS = 15 * 60; // keep exp short per the B1 contract
  * Retry network failures (and GET 502/503/504) with backoff. Mutations only
  * retry a thrown fetch — a 502 after the server accepted a POST must not be
  * replayed (duplicate chat/orders). */
-const WAKE_BACKOFF_MS = [0, 2000, 4000, 8000];
+const WAKE_BACKOFF_MS = [0, 2000, 4000, 8000, 16000, 32000];
 
 function isGetLike(init: RequestInit): boolean {
   const method = (init.method || "GET").toUpperCase();

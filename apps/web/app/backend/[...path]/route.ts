@@ -17,6 +17,15 @@ const HOP_BY_HOP = new Set([
   "host",
   "content-length",
   "cookie",
+  "content-encoding",
+]);
+
+const CLIENT_FORWARDED = new Set([
+  "x-forwarded-for",
+  "x-forwarded-host",
+  "x-forwarded-proto",
+  "x-real-ip",
+  "forwarded",
 ]);
 
 type RouteContext = { params: Promise<{ path: string[] }> };
@@ -30,10 +39,19 @@ async function proxy(request: Request, context: RouteContext): Promise<Response>
 
   const headers = new Headers();
   request.headers.forEach((value, key) => {
-    if (!HOP_BY_HOP.has(key.toLowerCase())) {
+    const lower = key.toLowerCase();
+    if (!HOP_BY_HOP.has(lower) && !CLIENT_FORWARDED.has(lower)) {
       headers.set(key, value);
     }
   });
+  // Overwrite, never copy, client XFF. TRUST_PROXY_HEADERS=1 on the API
+  // keys unauthenticated limits off this header.
+  const connecting =
+    request.headers.get("cf-connecting-ip") ||
+    request.headers.get("true-client-ip") ||
+    "web-proxy";
+  headers.set("X-Forwarded-For", connecting);
+  headers.set("X-Real-IP", connecting);
 
   const init: RequestInit = {
     method: request.method,
@@ -52,7 +70,17 @@ async function proxy(request: Request, context: RouteContext): Promise<Response>
     }
   }
 
-  const upstream = await fetch(dest, init);
+  let upstream: Response;
+  try {
+    upstream = await fetch(dest, init);
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : "fetch failed";
+    return Response.json(
+      { error: "upstream_unreachable", detail },
+      { status: 502 },
+    );
+  }
+
   const outHeaders = new Headers();
   upstream.headers.forEach((value, key) => {
     if (!HOP_BY_HOP.has(key.toLowerCase())) {

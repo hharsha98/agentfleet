@@ -115,6 +115,8 @@ jobs:
       AUTH_SECRET: demo-smoke-secret-not-a-real-credential
       DEMO_LOGIN_ENABLED: "1"
       SEED_DEMO_DATA: "1"
+      # Hosted Cloudflare path uses schema `agentfleet`, not `public`.
+      DATABASE_SCHEMA: agentfleet
       EMBEDDINGS_PREWARM: "0"
       RATE_LIMIT_DISABLED: "1"
       ORCHESTRATOR_MODE: inprocess

@@ -27,10 +27,13 @@ the rewrite.
 
 from __future__ import annotations
 
+import re
 import ssl
 from dataclasses import dataclass, field
 
 from sqlalchemy.engine.url import make_url
+
+_SCHEMA_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 _SSLMODE_ON = frozenset({"require", "verify-ca", "verify-full", "prefer"})
@@ -87,6 +90,18 @@ def _is_supabase_host(host: str | None) -> bool:
     return "supabase.co" in lowered or "supabase.com" in lowered
 
 
+def validated_schema_name(schema: str) -> str:
+    """Reject anything that is not a single unquoted Postgres identifier.
+
+    `search_path` and `-csearch_path=` are interpolated. A value like
+    `foo -cenable_seqscan=off` must not reach the driver.
+    """
+    name = (schema or "public").strip() or "public"
+    if not _SCHEMA_NAME.fullmatch(name):
+        raise ValueError(f"invalid DATABASE_SCHEMA: {name!r}")
+    return name
+
+
 def postgres_search_path(schema: str) -> str | None:
     """Return a search_path, or None to leave the server default.
 
@@ -94,8 +109,8 @@ def postgres_search_path(schema: str) -> str | None:
     Any other schema is listed first, then `extensions` (where Supabase
     installs pgvector) so an unqualified `vector` type still resolves.
     """
-    name = (schema or "public").strip()
-    if not name or name == "public":
+    name = validated_schema_name(schema)
+    if name == "public":
         return None
     # No spaces: psycopg's `options` string is space-split (`-csearch_path=...`).
     return f"{name},extensions,public"
@@ -142,7 +157,7 @@ def prepare_database_url(
     ssl_require_style = ssl is True
     requires_ssl = True if ssl is True else auto_ssl
     uses_pooler = _is_pooler_host(host)
-    schema_name = (schema or "public").strip() or "public"
+    schema_name = validated_schema_name(schema)
     search_path = postgres_search_path(schema_name)
 
     asyncpg_query = {k: v for k, v in query.items() if k.lower() not in _STRIP_FOR_ASYNCPG}

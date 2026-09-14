@@ -13,7 +13,7 @@ export function ApiStatus() {
 
   useEffect(() => {
     let cancelled = false;
-    const delays = [0, 2000, 4000, 8000, 12000];
+    const delays = [0, 2000, 4000, 8000, 16000, 32000];
 
     (async () => {
       const cfg = await loadPublicConfig();

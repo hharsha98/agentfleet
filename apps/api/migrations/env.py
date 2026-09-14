@@ -3,7 +3,7 @@ from logging.config import fileConfig
 
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
-from sqlalchemy.ext.asyncio import async_engine_from_config
+from sqlalchemy.ext.asyncio import create_async_engine
 
 from alembic import context
 
@@ -24,7 +24,11 @@ from app.models import Base
 
 _settings = get_settings()
 _prepared_url = settings_prepared_url()
-config.set_main_option("sqlalchemy.url", _prepared_url.sqlalchemy_url)
+# Never config.set_main_option("sqlalchemy.url", ...): Alembic.ini uses
+# ConfigParser interpolation (%(here)s). SQLAlchemy's render_as_string
+# percent-encodes passwords containing /, %, @ — that becomes
+# `ValueError: invalid interpolation syntax` and `RUN_MIGRATIONS_ON_BOOT`
+# dies before uvicorn starts.
 target_metadata = Base.metadata
 
 # Cloudflare/Supabase: DATABASE_SCHEMA=agentfleet. Local compose stays `public`
@@ -65,7 +69,7 @@ def run_migrations_offline() -> None:
     script output.
 
     """
-    url = config.get_main_option("sqlalchemy.url")
+    url = _prepared_url.sqlalchemy_url
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -97,9 +101,8 @@ async def run_async_migrations() -> None:
 
     """
 
-    connectable = async_engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
+    connectable = create_async_engine(
+        _prepared_url.sqlalchemy_url,
         poolclass=pool.NullPool,
         connect_args=_prepared_url.connect_args,
     )

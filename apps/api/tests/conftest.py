@@ -60,6 +60,12 @@ import os
 # docstring points 1 and 3.
 os.environ.setdefault("AUTH_SECRET", "test-secret-for-ci")
 os.environ.setdefault("RATE_LIMIT_DISABLED", "1")
+# Assignment, not setdefault: a developer .env with DEMO_LOGIN_ENABLED=1
+# or DATABASE_SCHEMA=agentfleet must not change /health assertions or
+# Alembic's version-table schema for the test database.
+os.environ["DEMO_LOGIN_ENABLED"] = "0"
+os.environ["DATABASE_SCHEMA"] = "public"
+os.environ["DATABASE_SSL"] = "0"
 # Phase 12 F2: never download the ~130MB fastembed model during tests. Belt
 # and braces — the pre-warm runs from the app lifespan, which starlette only
 # triggers inside a `with TestClient(app)` / lifespan-aware ASGI run, and no

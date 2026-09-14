@@ -119,3 +119,6 @@ def test_container_entrypoint_honors_run_migrations_on_boot() -> None:
     text = (Path(__file__).resolve().parents[1] / "docker-entrypoint.sh").read_text()
     assert "RUN_MIGRATIONS_ON_BOOT" in text
     assert "scripts.space_boot" in text
+    boot = (Path(__file__).resolve().parents[1] / "scripts" / "space_boot.py").read_text()
+    assert 'required=True' in boot
+    assert "pg_advisory_lock" in boot
