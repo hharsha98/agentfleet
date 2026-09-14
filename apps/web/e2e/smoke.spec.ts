@@ -203,8 +203,24 @@ test("agent builder uses View for builtins so Edit is not a 403 trap", async ({
     page.getByRole("heading", { name: "Agent builder", level: 1 }),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "New agent" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "View" }).first()).toBeVisible({
-    timeout: 10_000,
-  });
+  await page.getByRole("button", { name: "View" }).first().click();
+  await expect(
+    page.getByRole("heading", { name: "Built-in agent (read-only)" }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Save changes" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Publish current" })).toHaveCount(0);
+});
+
+test("phone Menu lists every primary destination", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/chat");
+  await expect(page.getByRole("navigation", { name: "Primary" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Menu" }).click();
+  const menu = page.getByRole("navigation", { name: "App destinations" });
+  for (const item of PRIMARY_NAV_ITEMS) {
+    await expect(
+      menu.getByRole("link", { name: item.label, exact: true }),
+    ).toBeVisible();
+  }
 });
 

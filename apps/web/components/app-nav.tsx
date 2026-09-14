@@ -249,7 +249,7 @@ export function AppNav({ userMenu }: { userMenu?: ReactNode }) {
   // never do — you'd be on /usage with nothing on screen saying so. It is
   // moved rather than duplicated so there is exactly one aria-current="page"
   // in the header, and so the row never grows past six items.
-  const promoted = OVERFLOW_ITEMS.find((item) => item.href === pathname);
+  const promoted = OVERFLOW_ITEMS.find((item) => pathMatches(pathname, item.href));
   const primaryItems = promoted ? [...PRIMARY_ITEMS, promoted] : PRIMARY_ITEMS;
   const menuItems = promoted
     ? OVERFLOW_ITEMS.filter((item) => item.href !== promoted.href)

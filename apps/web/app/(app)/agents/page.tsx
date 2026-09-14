@@ -160,6 +160,8 @@ export default function AgentsPage() {
   const [rollbackBusy, setRollbackBusy] = useState<Record<string, boolean>>({});
   const [versionStatus, setVersionStatus] = useState<Record<string, string>>({});
 
+  const sandbox = agents.find((a) => a.slug === DEMO_SANDBOX_SLUG);
+
   async function refresh() {
     try {
       const [agentsRes, toolsRes] = await Promise.all([
@@ -267,8 +269,12 @@ export default function AgentsPage() {
           const body = await res.json().catch(() => ({}));
           setFormError(
             res.status === 403
-              ? "Built-in roster agents cannot be edited. Open Demo sandbox agent or click New agent."
-              : (body.detail ?? `Update failed (${res.status})`),
+              ? sandbox
+                ? `Built-in roster agents cannot be edited. Open ${sandbox.name} or click New agent.`
+                : "Built-in roster agents cannot be edited. Click New agent to publish."
+              : typeof body.detail === "string"
+                ? body.detail
+                : `Update failed (${res.status})`,
           );
           return;
         }
@@ -450,7 +456,6 @@ export default function AgentsPage() {
   const builtinCount = agents.filter((a) => a.is_builtin).length;
   const customCount = agents.length - builtinCount;
   const runtimes = Array.from(new Set(agents.map((a) => a.runtime || "langgraph"))).sort();
-  const sandbox = agents.find((a) => a.slug === DEMO_SANDBOX_SLUG);
   const editingAgent = agents.find((a) => a.id === editingId);
   const formReadOnly = Boolean(editingAgent?.is_builtin);
   const listedAgents = [...agents].sort((a, b) => {
@@ -554,8 +559,9 @@ export default function AgentsPage() {
             </h2>
             {formReadOnly && (
               <p className="text-xs text-muted">
-                Roster agents cannot be mutated. Use Demo sandbox agent or New
-                agent to publish versions and attach MCP servers.
+                {sandbox
+                  ? `Roster agents cannot be mutated. Use ${sandbox.name} or New agent to publish versions and attach MCP servers.`
+                  : "Roster agents cannot be mutated. Use New agent to publish versions and attach MCP servers."}
               </p>
             )}
 
@@ -573,7 +579,7 @@ export default function AgentsPage() {
                 onChange={(e) => setForm((f) => ({ ...f, slug: e.target.value }))}
                 placeholder="slug (e.g. my-agent)"
                 required
-                disabled={!!editingId || formReadOnly}
+                disabled={!!editingId}
                 className={inputClass}
               />
             </div>
@@ -985,9 +991,12 @@ export default function AgentsPage() {
                   </p>
                   {a.is_builtin ? (
                     <p className="text-xs text-muted">
-                      Built-in agents are read-only. Publish and roll back on{" "}
-                      <span className="text-foreground">Demo sandbox agent</span>{" "}
-                      or a New agent — a 403 here is ownership, not a dead builder.
+                      Built-in agents are read-only.
+                      {sandbox
+                        ? ` Publish and roll back on ${sandbox.name} or a New agent`
+                        : " Use New agent to publish"}
+                      {" "}
+                      — a 403 here is ownership, not a dead builder.
                     </p>
                   ) : (
                   <div className="flex gap-2">

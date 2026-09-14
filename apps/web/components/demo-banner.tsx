@@ -8,10 +8,9 @@ export function DemoBanner() {
     >
       Shared public demo — every visitor is{" "}
       <span className="text-foreground">demo@agentfleet.local</span> with a daily
-      token cap. Chat, Missions, Workflows, Agents, and Documents are in the
-      nav — built-in agents are read-only; publish on{" "}
+      token cap. Publish on{" "}
       <Link href="/agents" className="underline underline-offset-4 hover:text-foreground">
-        Demo sandbox agent
+        Demo sandbox
       </Link>
       .{" "}
       <Link
