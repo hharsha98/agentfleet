@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AgentFleet — product gallery</title>
+    <meta
+      name="description"
+      content="Recruiter walkthrough of AgentFleet from real screenshots: landing, streaming chat, DAG missions with approval gates, and evals. Self-hostable FastAPI + Next.js + Postgres/pgvector — this page is a gallery, not a hosted app."
+    />
+    <meta name="theme-color" content="#0a0a0a" />
+    <link rel="canonical" href="https://agentfleet-gallery.pages.dev/" />
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="AgentFleet — product gallery" />
+    <meta
+      property="og:description"
+      content="Click through Landing, Chat, Missions, and Evals. Real screenshots from the running app. Self-hostable — not a hosted SaaS."
+    />
+    <meta property="og:url" content="https://agentfleet-gallery.pages.dev/" />
+    <meta property="og:image" content="https://agentfleet-gallery.pages.dev/landing.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="AgentFleet — product gallery" />
+    <meta
+      name="twitter:description"
+      content="Click through Landing, Chat, Missions, and Evals. Real screenshots. Self-hostable."
+    />
+    <meta name="twitter:image" content="https://agentfleet-gallery.pages.dev/landing.png" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <a class="skip" href="#gallery">Skip to gallery</a>
+
+    <header class="hero">
+      <div class="hero-glow" aria-hidden="true"></div>
+
+      <div class="topbar">
+        <a class="wordmark" href="#landing">
+          <svg
+            class="mark"
+            viewBox="0 0 24 24"
+            width="20"
+            height="20"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.75"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="4.75" r="2.25" fill="currentColor" stroke="none" />
+            <circle cx="4.75" cy="18.5" r="2.25" />
+            <circle cx="19.25" cy="18.5" r="2.25" />
+            <path d="M10.74 7.14 6.01 16.11" />
+            <path d="M13.26 7.14 17.99 16.11" />
+          </svg>
+          <span>AgentFleet</span>
+        </a>
+        <div class="topbar-links">
+          <a href="https://github.com/hharsha98/agentfleet">GitHub</a>
+          <a href="https://agentic-systems-studio.com/projects/agentfleet">Studio dossier</a>
+        </div>
+      </div>
+
+      <p class="eyebrow">AgentFleet · product gallery</p>
+      <h1>Click through the product.</h1>
+      <p class="lede">
+        Recruiter walkthrough of a self-hostable multi-agent operations platform.
+        These are real screenshots from a running instance — streaming chat,
+        DAG missions with human-approval gates, RAG, MCP, evals, and cost budgets.
+        This page is a static gallery, not a hosted FastAPI + Next.js deploy
+        (that stack needs Postgres).
+      </p>
+
+      <ul class="chips" aria-label="What this repo actually is">
+        <li>Self-hostable</li>
+        <li>FastAPI + Next.js</li>
+        <li>Postgres / pgvector</li>
+        <li>Streaming chat</li>
+        <li>DAG missions + approval gates</li>
+        <li>RAG · MCP · evals · cost budgets</li>
+        <li>239 API + 26 E2E tests</li>
+      </ul>
+
+      <div class="actions">
+        <a class="btn primary" href="https://github.com/hharsha98/agentfleet">
+          View source on GitHub
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+            <path
+              fill="currentColor"
+              d="M12 .5A11.5 11.5 0 0 0 .5 12.3c0 5.2 3.4 9.6 8.1 11.2.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.5-1.3-1.3-1.7-1.3-1.7-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1.1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.6-.3-5.4-1.3-5.4-5.9 0-1.3.5-2.4 1.2-3.2-.1-.3-.5-1.6.1-3.2 0 0 1-.3 3.3 1.2a11.4 11.4 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.6 1.6.2 2.9.1 3.2.8.8 1.2 1.9 1.2 3.2 0 4.6-2.8 5.6-5.4 5.9.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A11.5 11.5 0 0 0 23.5 12 11.5 11.5 0 0 0 12 .5Z"
+            />
+          </svg>
+        </a>
+        <a class="btn ghost" href="https://agentic-systems-studio.com/projects/agentfleet">
+          Studio dossier
+        </a>
+        <a
+          class="btn ghost"
+          href="https://github.com/hharsha98/agentfleet/blob/main/docs/DEMO.md"
+        >
+          Demo script
+        </a>
+      </div>
+    </header>
+
+    <nav class="toc" aria-label="Product surfaces">
+      <a href="#landing">Landing</a>
+      <a href="#chat">Chat</a>
+      <a href="#missions">Missions</a>
+      <a href="#evals">Evals</a>
+    </nav>
+
+    <main id="gallery">
+      <figure id="landing">
+        <img
+          src="./landing.png"
+          width="2880"
+          height="1800"
+          alt="AgentFleet landing page: dark hero with Open source and Self-hostable badges, serif headline, Launch the fleet button, and an orbital graphic of fleet capabilities."
+        />
+        <figcaption>
+          <strong>Landing</strong> — pillars plus the ops layer, captured from a
+          running instance. The product is open source and self-hostable.
+          This gallery is not a live app URL.
+        </figcaption>
+        <p class="step">
+          <span>1 / 4</span>
+          <a href="#chat">Next: Chat</a>
+        </p>
+      </figure>
+
+      <figure id="chat">
+        <img
+          src="./chat.png"
+          width="2880"
+          height="1800"
+          loading="lazy"
+          alt="AgentFleet Chat: empty conversation shell with suggested prompts, composer, and a roster switcher listing specialist agents with Clinical Research selected."
+        />
+        <figcaption>
+          <strong>Chat</strong> — streaming multi-agent chat with a roster
+          switcher. This capture is the empty conversation shell and suggested
+          prompts, not a live tool-call. Tool-call cards appear when an agent
+          actually calls a tool (web search, document retrieval, or MCP).
+        </figcaption>
+        <p class="step">
+          <a href="#landing">Landing</a>
+          <span>2 / 4</span>
+          <a href="#missions">Next: Missions</a>
+        </p>
+      </figure>
+
+      <figure id="missions">
+        <img
+          src="./missions.png"
+          width="3000"
+          height="2640"
+          loading="lazy"
+          alt="AgentFleet Missions board: Kanban columns with a Needs approval card titled Post the digest to Slack and an Approve and run button, plus completed research tasks."
+        />
+        <figcaption>
+          <strong>Missions</strong> — the orchestrator turns a goal into a live
+          task DAG. This capture is a competitor-teardown run paused on a
+          human-approval gate (“Post the digest to Slack”). Token counts on the
+          cards are from that run, not product SLOs.
+        </figcaption>
+        <p class="step">
+          <a href="#chat">Chat</a>
+          <span>3 / 4</span>
+          <a href="#evals">Next: Evals</a>
+        </p>
+      </figure>
+
+      <figure id="evals">
+        <img
+          src="./evals.png"
+          width="2880"
+          height="1800"
+          loading="lazy"
+          alt="AgentFleet Eval Center for the Clinical Research agent: four golden cases, a Run evals button, and a run history entry showing three of four passed."
+        />
+        <figcaption>
+          <strong>Evals</strong> — Eval Center for the Clinical Research agent:
+          golden cases plus a recorded run. This capture shows 3/4 passed on
+          <em>that one run</em> — not a fleet-wide score. CI runs deterministic
+          checks; the LLM-as-judge path is documented in the README. No invented
+          eval metrics.
+        </figcaption>
+        <p class="step">
+          <a href="#missions">Missions</a>
+          <span>4 / 4</span>
+          <a href="#landing">Back to Landing</a>
+        </p>
+      </figure>
+    </main>
+
+    <footer>
+      <p>
+        Screenshots copied from
+        <code>docs/screenshots/</code>
+        in
+        <a href="https://github.com/hharsha98/agentfleet">github.com/hharsha98/agentfleet</a>.
+        Reproduce them with the
+        <a href="https://github.com/hharsha98/agentfleet/blob/main/docs/DEMO.md">demo script</a>.
+      </p>
+      <p>
+        Studio:
+        <a href="https://agentic-systems-studio.com/projects/agentfleet"
+          >agentic-systems-studio.com/projects/agentfleet</a
+        >
+      </p>
+    </footer>
+  </body>
+</html>

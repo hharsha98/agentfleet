@@ -16,7 +16,7 @@ test("uploading a document ingests it and lists it", async ({ page }) => {
     .setInputFiles(path.join(__dirname, "fixtures/sample.txt"));
   await page.getByRole("button", { name: "Upload" }).click();
 
-  await expect(page.getByText(/ingested into \d+ chunks?/)).toBeVisible({
+  await expect(page.getByText(/ingested into \d+ chunks?/).first()).toBeVisible({
     timeout: 60_000,
   });
   await expect(page.getByText("sample.txt").first()).toBeVisible();

@@ -1,0 +1,8 @@
+{
+  // Static recruiter gallery only — not the FastAPI / Next.js app.
+  // Deploy: wrangler pages deploy gallery --project-name=agentfleet-gallery
+  // No secrets, no Functions, no build step.
+  "name": "agentfleet-gallery",
+  "pages_build_output_dir": "./gallery",
+  "compatibility_date": "2026-09-01"
+}
