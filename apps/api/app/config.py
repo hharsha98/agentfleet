@@ -7,6 +7,15 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     database_url: str = "postgresql+asyncpg://agentfleet:agentfleet@localhost:5432/agentfleet"
+    # Postgres schema for app tables + Alembic version + LangGraph checkpoints.
+    # Default `public` matches local compose. Cloudflare/Supabase set
+    # DATABASE_SCHEMA=agentfleet so we do not collide with other public tables.
+    database_schema: str = "public"
+    # asyncpg rejects `?sslmode=require` on the DSN. Set DATABASE_SSL=1 so
+    # the engine encrypts like libpq sslmode=require (no CA/hostname verify).
+    # Leave off for local compose, which has no TLS. Required for the
+    # Supabase session pooler used by Worker `agentfleet-api`.
+    database_ssl: bool = False
     redis_url: str = "redis://localhost:6379/0"
 
     # Async engine connection pool (Bug 1, Wave 1 — see app/db.py for
@@ -169,6 +178,16 @@ class Settings(BaseSettings):
     # Set to true (env RATE_LIMIT_DISABLED=1) to turn all rate limiting off —
     # used by the test suite (tests/conftest.py) and available for local dev.
     rate_limit_disabled: bool = False
+    # Hugging Face Spaces (and any reverse proxy that overwrites
+    # X-Forwarded-For) should set TRUST_PROXY_HEADERS=1 so unauthenticated
+    # rate limits key on the visitor, not the proxy. Leave off for a
+    # directly-exposed API — the header is trivially spoofable.
+    trust_proxy_headers: bool = False
+
+    # Public-demo door (paired with apps/web/auth.ts). The API only uses this
+    # for /health reporting and the Space boot seed gate; it is not itself
+    # an auth bypass. Env: DEMO_LOGIN_ENABLED=1
+    demo_login_enabled: bool = False
 
     # Deploy safety (Phase 12 F2): load the fastembed model in a background
     # thread at API startup so the first document upload doesn't eat the

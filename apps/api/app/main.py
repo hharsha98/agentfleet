@@ -48,6 +48,18 @@ logger.info(
     type(limiter._storage).__name__,
 )
 
+# Public-demo /health field. idle = pre-warm has not run (a process that
+# never entered lifespan). skipped/warming/ready/failed are set by
+# _start_embeddings_prewarm. Tests set EMBEDDINGS_PREWARM=0, so we start
+# as skipped rather than claiming the model is about to load.
+_embeddings_status = "skipped" if get_settings().embeddings_prewarm == "0" else "idle"
+
+
+def _set_embeddings_status(status: str) -> None:
+    global _embeddings_status
+    _embeddings_status = status
+
+
 def _start_embeddings_prewarm() -> None:
     """Kick off a background load of the fastembed model (Phase 12 F2).
 
@@ -64,7 +76,10 @@ def _start_embeddings_prewarm() -> None:
     """
     if get_settings().embeddings_prewarm == "0":
         logger.info("embeddings pre-warm skipped (EMBEDDINGS_PREWARM=0)")
+        _set_embeddings_status("skipped")
         return
+
+    _set_embeddings_status("warming")
 
     def _warm() -> None:
         logger.info("embeddings pre-warm started")
@@ -73,9 +88,11 @@ def _start_embeddings_prewarm() -> None:
 
             ingest._get_embedder()
             logger.info("embeddings pre-warm done")
+            _set_embeddings_status("ready")
         except Exception:
             # Non-fatal: uploads fall back to loading the model on demand.
             logger.warning("embeddings pre-warm failed", exc_info=True)
+            _set_embeddings_status("failed")
 
     threading.Thread(target=_warm, name="embeddings-prewarm", daemon=True).start()
 
@@ -291,10 +308,23 @@ app.include_router(voice_router, prefix="/api/v1/voice", tags=["voice"])
 
 
 @app.get("/health")
-async def health() -> dict[str, str]:
+async def health() -> dict[str, str | bool]:
     """Liveness: cheap, no dependencies — must stay DB-free so a slow/down
-    database never gets the process killed by a liveness probe."""
-    return {"status": "ok", "service": "agentfleet-api"}
+    database never gets the process killed by a liveness probe.
+
+    Extra fields are also DB-free: they tell a waking public-demo UI whether
+    this is the shared demo and whether the embedding model is resident,
+    without waiting on /health/ready (which needs Postgres, which itself
+    may be scaled to zero on Neon).
+    """
+    settings = get_settings()
+    return {
+        "status": "ok",
+        "service": "agentfleet-api",
+        "orchestrator": settings.orchestrator_mode,
+        "embeddings": _embeddings_status,
+        "demo": settings.demo_login_enabled,
+    }
 
 
 @app.get("/health/ready")

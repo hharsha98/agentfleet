@@ -195,3 +195,37 @@ def test_limit_getters_read_from_live_settings(monkeypatch) -> None:
     assert ratelimit.chat_limit() == "7/second"
     assert ratelimit.upload_limit() == "8/second"
     assert ratelimit.public_limit() == "9/second"
+
+
+def _ip_request(*, xff: str | None = None, client_host: str = "10.0.0.9"):
+    from starlette.requests import Request
+
+    headers = []
+    if xff is not None:
+        headers.append((b"x-forwarded-for", xff.encode()))
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0"},
+        "http_version": "1.1",
+        "method": "GET",
+        "scheme": "http",
+        "path": "/",
+        "raw_path": b"/",
+        "query_string": b"",
+        "headers": headers,
+        "client": (client_host, 1234),
+        "server": ("test", 80),
+    }
+    return Request(scope)
+
+
+def test_rate_limit_key_ignores_xff_by_default(monkeypatch) -> None:
+    monkeypatch.setattr(get_settings(), "trust_proxy_headers", False)
+    request = _ip_request(xff="203.0.113.9, 10.0.0.1")
+    assert ratelimit.rate_limit_key(request) == "ip:10.0.0.9"
+
+
+def test_rate_limit_key_uses_xff_when_trust_proxy_headers(monkeypatch) -> None:
+    monkeypatch.setattr(get_settings(), "trust_proxy_headers", True)
+    request = _ip_request(xff="203.0.113.9, 10.0.0.1")
+    assert ratelimit.rate_limit_key(request) == "ip:203.0.113.9"

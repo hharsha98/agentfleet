@@ -35,9 +35,7 @@ test("landing page renders the hero and a sign-in affordance", async ({ browser 
   await expect(page.getByRole("heading", { level: 1 })).toContainText(
     "team of AI agents",
   );
-  await expect(
-    page.getByRole("button", { name: "Continue with Google" }),
-  ).toBeVisible();
+  await expect(page.getByRole("link", { name: "Sign in" })).toBeVisible();
   await expectNoNextErrorOverlay(page);
   await context.close();
 });
@@ -117,3 +115,25 @@ for (const { path, check } of pageChecks) {
     await expectNoNextErrorOverlay(page);
   });
 }
+
+test("browser API config is same-origin /backend, not localhost", async ({
+  request,
+  page,
+}) => {
+  // Hosted-demo regression: if public-config tells the browser to call
+  // localhost:8000, Chat (RSC) still works and every client page is dead.
+  const res = await request.get("/api/public-config");
+  expect(res.ok()).toBeTruthy();
+  const body = (await res.json()) as { apiUrl: string };
+  expect(body.apiUrl).toBe("/backend");
+  expect(body.apiUrl).not.toContain("localhost");
+
+  const hitsLocalApi: string[] = [];
+  page.on("request", (req) => {
+    if (req.url().includes("localhost:8000")) hitsLocalApi.push(req.url());
+  });
+  await page.goto("/missions");
+  await expect(page.getByPlaceholder(/Give the fleet a goal/)).toBeVisible();
+  expect(hitsLocalApi).toEqual([]);
+});
+

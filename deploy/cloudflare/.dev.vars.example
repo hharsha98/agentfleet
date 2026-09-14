@@ -1,0 +1,25 @@
+# Copy to .dev.vars (gitignored) for `wrangler dev`.
+# Never commit real values. Production secrets go in via:
+#   npx wrangler secret put DATABASE_URL
+#   npx wrangler secret put AUTH_SECRET
+#   npx wrangler secret put FREE_LLM_BASE_URL
+#   npx wrangler secret put FREE_LLM_KEY
+#
+# Existing Supabase (ref koyhzzyzxcalyzruhgqw, eu-west-1, Postgres 17).
+# Observed from a laptop — do not invent a different host:
+#   db.koyhzzyzxcalyzruhgqw.supabase.co          IPv6-only (no Mac IPv4 route)
+#   aws-0-eu-west-1.pooler.supabase.com         tenant/user not found
+#   aws-1-eu-west-1.pooler.supabase.com:5432    works (session mode)
+#   :6543                                      also authed; stay on 5432 (asyncpg)
+# Username MUST be role.projectref:
+#   postgresql+asyncpg://agentfleet_cf.koyhzzyzxcalyzruhgqw:YOUR_PASSWORD@aws-1-eu-west-1.pooler.supabase.com:5432/postgres
+#
+# Do NOT append ?sslmode=require — asyncpg rejects that parameter.
+# DATABASE_SSL=1 (wrangler vars) encrypts like libpq sslmode=require
+# (no CA/hostname verify). Hyperdrive is NOT used
+# (cloudflare/containers#97). Tables live in schema `agentfleet`.
+
+DATABASE_URL=postgresql+asyncpg://agentfleet_cf.koyhzzyzxcalyzruhgqw:YOUR_PASSWORD@aws-1-eu-west-1.pooler.supabase.com:5432/postgres
+AUTH_SECRET=generate-with-openssl-rand-base64-32
+FREE_LLM_BASE_URL=https://your-openai-compatible-endpoint/v1
+FREE_LLM_KEY=your-provider-key

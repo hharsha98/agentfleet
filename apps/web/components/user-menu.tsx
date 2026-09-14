@@ -1,23 +1,18 @@
-import { auth, signIn, signOut } from "@/auth";
+import Link from "next/link";
+
+import { auth, signOut } from "@/auth";
 
 export async function UserMenu() {
   const session = await auth();
 
   if (!session?.user) {
     return (
-      <form
-        action={async () => {
-          "use server";
-          await signIn("google");
-        }}
+      <Link
+        href="/signin"
+        className="cursor-pointer rounded-md bg-accent px-4 py-1.5 text-sm font-medium text-white transition-opacity duration-200 hover:opacity-90"
       >
-        <button
-          type="submit"
-          className="cursor-pointer rounded-md bg-accent px-4 py-1.5 text-sm font-medium text-white transition-opacity duration-200 hover:opacity-90"
-        >
-          Continue with Google
-        </button>
-      </form>
+        Sign in
+      </Link>
     );
   }
 

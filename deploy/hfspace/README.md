@@ -15,8 +15,12 @@ multi-agent operations platform: specialist agents, a DAG orchestrator with
 self-healing and human approval gates, document RAG over pgvector, evals with an
 LLM judge, guardrails, budgets and cost metering.
 
-This Space runs **only the API**. The web UI deploys separately (Vercel) and points
-at this Space's URL.
+This Space runs **only the API**. The web UI deploys separately as Cloudflare
+Worker `agentfleet-app` (OpenNext) and reaches this Space through same-origin
+`/backend` on the web host (`INTERNAL_API_URL` = this Space URL).
+
+Do **not** point the browser at this Space via a baked `NEXT_PUBLIC_API_URL`
+of `localhost:8000`. That is how a demo ends up Chat-only.
 
 ## This file is the Space's config, not documentation
 
@@ -45,11 +49,12 @@ environment variables at runtime.
 | `AUTH_SECRET` | secret | **Must byte-match** the web app's `AUTH_SECRET` — the API verifies the same HS256 JWT the Next.js app mints |
 | `FREE_LLM_BASE_URL` | secret | OpenAI-compatible provider endpoint |
 | `FREE_LLM_KEY` | secret | Provider key |
-| `CORS_ORIGINS` | variable | The deployed web origin, e.g. `https://agentfleet.vercel.app` |
+| `CORS_ORIGINS` | variable | Web origin if clients call this Space directly. The AgentFleet UI uses `/backend` and does not need CORS. |
 | `DEFAULT_MODEL` | variable | e.g. `openai/gpt-oss-120b` |
 | `ORCHESTRATOR_MODE` | variable | `inprocess` — no Redis on the free tier |
 | `DEMO_LOGIN_ENABLED` | variable | `1` to allow the public demo login |
-| `SEED_DEMO_DATA` | variable | `1` to seed demo content on first boot |
+| `SEED_DEMO_DATA` | variable | `1` to seed missions/workflows/evals on first boot |
+| `RUN_MIGRATIONS_ON_BOOT` | variable | unused on this image (the Space entrypoint always migrates); set `1` on the Cloudflare Container image |
 
 `AUTH_SECRET` is the one that breaks things quietly: mismatch it and the UI signs
 in fine while every API call returns 401. `apps/api/app/auth.py` fails closed with

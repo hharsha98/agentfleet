@@ -76,7 +76,7 @@ async def test_seed_is_idempotent_and_sets_global_budget() -> None:
     await engine.dispose()
     async with SessionLocal() as session:
         first = await _seed(session)
-    assert first == {"user": True, "budget": True}
+    assert first == {"user": True, "budget": True, "sandbox_agent": True}
 
     # Re-running must not create a second row of either kind, and must
     # converge the budget back to the declared caps even if something else
@@ -91,7 +91,7 @@ async def test_seed_is_idempotent_and_sets_global_budget() -> None:
 
     async with SessionLocal() as session:
         second = await _seed(session)
-    assert second == {"user": False, "budget": False}
+    assert second == {"user": False, "budget": False, "sandbox_agent": False}
 
     async with SessionLocal() as session:
         user = (await session.execute(select(User).where(User.email == DEMO_EMAIL))).scalar_one()
@@ -104,6 +104,12 @@ async def test_seed_is_idempotent_and_sets_global_budget() -> None:
         assert len(budgets) == 1  # never duplicated
         assert budgets[0].daily_token_limit == DEMO_DAILY_TOKEN_LIMIT
         assert float(budgets[0].daily_usd_limit) == DEMO_DAILY_USD_LIMIT
+
+        sandbox = (
+            await session.execute(select(Agent).where(Agent.slug == "demo-sandbox"))
+        ).scalar_one()
+        assert sandbox.is_builtin is False
+        assert sandbox.user_id == user.id
     await engine.dispose()
 
 

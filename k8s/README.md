@@ -109,7 +109,7 @@ k8s/
 
 ```bash
 docker build -t agentfleet-api:local apps/api
-docker build -t agentfleet-web:local --build-arg NEXT_PUBLIC_API_URL=http://localhost:8000 apps/web
+docker build -t agentfleet-web:local -f apps/web/Dockerfile apps/web
 ```
 
 ## 2. Load images into the cluster

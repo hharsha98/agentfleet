@@ -3,8 +3,10 @@ from collections.abc import AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.config import get_settings
+from app.database_url import settings_prepared_url
 
 _settings = get_settings()
+_prepared_url = settings_prepared_url()
 
 # Bug 1 (Wave 1): the engine used to be built with zero pool configuration.
 # Both eventual deploy targets (Neon, Wave 2; Cloud SQL, Wave 4) scale
@@ -22,13 +24,14 @@ _settings = get_settings()
 # arithmetic (kept there, not duplicated here, so there is exactly one
 # place to update the numbers).
 engine = create_async_engine(
-    _settings.database_url,
+    _prepared_url.sqlalchemy_url,
     echo=False,
     pool_pre_ping=True,
     pool_size=_settings.db_pool_size,
     max_overflow=_settings.db_max_overflow,
     pool_recycle=_settings.db_pool_recycle_seconds,
     pool_timeout=_settings.db_pool_timeout_seconds,
+    connect_args=_prepared_url.connect_args,
 )
 SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 

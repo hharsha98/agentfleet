@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 
+import { ApiStatus } from "@/components/api-status";
 import { AppNav } from "@/components/app-nav";
+import { DemoBanner } from "@/components/demo-banner";
 import { UserMenu } from "@/components/user-menu";
 
 // Nested layout (NOT a root layout — app/layout.tsx above it still owns
@@ -29,6 +31,8 @@ export default function AppShellLayout({ children }: { children: ReactNode }) {
           everything else, which the negative z-index guarantees regardless
           of where in this flex column it's mounted. */}
       <div aria-hidden="true" className="af-app-ground pointer-events-none" />
+      {process.env.DEMO_LOGIN_ENABLED === "1" ? <DemoBanner /> : null}
+      <ApiStatus />
       <AppNav userMenu={<UserMenu />} />
       {children}
     </div>

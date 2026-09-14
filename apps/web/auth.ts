@@ -17,6 +17,7 @@ import Google from "next-auth/providers/google";
 // (apps/api/app/services/budget.py), seeded tight for this identity by
 // apps/api/scripts/seed_demo_user.py — not anything in this file.
 const DEMO_LOGIN_ENABLED = process.env.DEMO_LOGIN_ENABLED === "1";
+const GOOGLE_ENABLED = Boolean(process.env.AUTH_GOOGLE_ID);
 
 const DEMO_USER = {
   id: "demo@agentfleet.local",
@@ -25,9 +26,17 @@ const DEMO_USER = {
 };
 
 // Reads AUTH_GOOGLE_ID / AUTH_GOOGLE_SECRET / AUTH_SECRET from env by convention.
+// Google is omitted entirely when AUTH_GOOGLE_ID is unset so a public demo
+// can ship without OAuth (demo login only) instead of crashing Auth.js.
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  // HF Spaces / any reverse proxy send a Host the app did not bind to.
+  trustHost: true,
+  session: { strategy: "jwt" },
+  pages: {
+    signIn: "/signin",
+  },
   providers: [
-    Google,
+    ...(GOOGLE_ENABLED ? [Google] : []),
     ...(DEMO_LOGIN_ENABLED
       ? [
           Credentials({
@@ -57,6 +66,31 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     // page (see node_modules/next-auth/src/lib/index.ts handleAuth()).
     authorized({ auth: session }) {
       return !!session?.user;
+    },
+    // Credentials providers do not persist `user.email` onto the JWT unless
+    // we copy it here. Chat (RSC) mints a JWT from session.user.email in
+    // process; missions/agents/evals are client components that call
+    // /api/token, which 401s if email is missing — that is the
+    // "only Chat works after demo login" bug.
+    async jwt({ token, user }) {
+      if (user) {
+        token.email = user.email ?? token.email;
+        token.name = user.name ?? token.name;
+        token.sub = user.id ?? user.email ?? token.sub;
+      }
+      if (!token.email && typeof token.sub === "string" && token.sub.includes("@")) {
+        token.email = token.sub;
+      }
+      return token;
+    },
+    async session({ session, token }) {
+      if (session.user) {
+        session.user.email =
+          (typeof token.email === "string" && token.email) || session.user.email;
+        session.user.name =
+          (typeof token.name === "string" && token.name) || session.user.name;
+      }
+      return session;
     },
   },
 });

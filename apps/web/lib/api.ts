@@ -20,19 +20,42 @@
 import { SignJWT } from "jose";
 
 import { auth } from "@/auth";
+import { loadPublicConfig, serverApiUrlFromEnv } from "@/lib/public-config";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-
-// Phase 12 F2 (nice-16): SSR/browser URL split. Server components run
-// *inside* the web container/pod, where the browser-facing
-// NEXT_PUBLIC_API_URL (http://localhost:8000) doesn't point at the api
-// container — INTERNAL_API_URL (e.g. http://api:8000, plain runtime env,
-// never sent to the browser) does. Unset locally -> falls back to the same
-// base the client uses, so `next dev` behavior is unchanged.
-const SERVER_API_BASE =
-  process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const REFRESH_SKEW_SECONDS = 60;
 export const TOKEN_TTL_SECONDS = 15 * 60; // keep exp short per the B1 contract
+
+/** Hugging Face Spaces sleep; the first request often fails to connect.
+ * Retry network failures (and GET 502/503/504) with backoff. Mutations only
+ * retry a thrown fetch — a 502 after the server accepted a POST must not be
+ * replayed (duplicate chat/orders). */
+const WAKE_BACKOFF_MS = [0, 2000, 4000, 8000];
+
+function isGetLike(init: RequestInit): boolean {
+  const method = (init.method || "GET").toUpperCase();
+  return method === "GET" || method === "HEAD";
+}
+
+async function fetchWithWake(url: string, init: RequestInit): Promise<Response> {
+  let lastError: unknown;
+  for (let i = 0; i < WAKE_BACKOFF_MS.length; i++) {
+    if (WAKE_BACKOFF_MS[i] > 0) {
+      await new Promise((resolve) => setTimeout(resolve, WAKE_BACKOFF_MS[i]));
+    }
+    try {
+      const res = await fetch(url, init);
+      const retryHttp =
+        isGetLike(init) && (res.status === 502 || res.status === 503 || res.status === 504);
+      if (!retryHttp || i === WAKE_BACKOFF_MS.length - 1) {
+        return res;
+      }
+    } catch (error) {
+      lastError = error;
+      if (i === WAKE_BACKOFF_MS.length - 1) throw error;
+    }
+  }
+  throw lastError;
+}
 
 /** Signs the contract JWT for a given user. Throws if AUTH_SECRET is unset. */
 export async function signApiToken(
@@ -69,7 +92,7 @@ async function fetchToken(): Promise<string> {
   const res = await fetch("/api/token");
   if (res.status === 401) {
     if (typeof window !== "undefined") {
-      window.location.href = "/api/auth/signin";
+      window.location.href = "/signin";
     }
     throw new SignedOutError();
   }
@@ -101,20 +124,26 @@ async function getToken(forceRefresh = false): Promise<string> {
  * expires. On a 401 response from the API it drops the cache, mints a new
  * token once, and retries the request once. Returns the raw `Response` so
  * callers that need `res.body` (SSE streaming) keep working unchanged.
+ *
+ * The API origin is read at runtime from /api/public-config (PUBLIC_API_URL
+ * or the same-origin `/backend` proxy). Never bake localhost into a hosted
+ * build — that is how client pages (missions, builder, evals) die while Chat
+ * (RSC + INTERNAL_API_URL) still looks alive.
  */
 export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  const { apiUrl } = await loadPublicConfig();
   const token = await getToken();
   const headers = new Headers(init.headers);
   headers.set("Authorization", `Bearer ${token}`);
 
-  let res = await fetch(`${API_BASE}${path}`, { ...init, headers });
+  let res = await fetchWithWake(`${apiUrl}${path}`, { ...init, headers });
 
   if (res.status === 401) {
     cachedToken = null;
     const freshToken = await getToken(true);
     const retryHeaders = new Headers(init.headers);
     retryHeaders.set("Authorization", `Bearer ${freshToken}`);
-    res = await fetch(`${API_BASE}${path}`, { ...init, headers: retryHeaders });
+    res = await fetchWithWake(`${apiUrl}${path}`, { ...init, headers: retryHeaders });
   }
 
   return res;
@@ -138,5 +167,5 @@ export async function apiFetchServer(path: string, init: RequestInit = {}): Prom
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  return fetch(`${SERVER_API_BASE}${path}`, { ...init, headers });
+  return fetch(`${serverApiUrlFromEnv()}${path}`, { ...init, headers });
 }

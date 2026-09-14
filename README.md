@@ -3,7 +3,7 @@
 **A self-hostable multi-agent operations platform** — chat with a fleet of tool-using agents, hand the orchestrator a goal and watch it execute as a live task DAG, and run the whole thing with production-grade evals, cost governance, and guardrails.
 
 ![CI](https://github.com/hharsha98/agentfleet/actions/workflows/evals.yml/badge.svg)
-![Tests](https://img.shields.io/badge/tests-239%20API%20%2B%2026%20E2E-brightgreen)
+![Tests](https://img.shields.io/badge/tests-294%20API%20%2B%2026%20E2E-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Self-hosted](https://img.shields.io/badge/deploy-self--hosted-informational)
 
@@ -103,7 +103,7 @@ Most agent demos stop at "it can call a tool." AgentFleet treats an agent like a
 
 **Frontend** — Next.js 16 (App Router, Turbopack) · TypeScript · Tailwind v4 (hand-rolled dark design system) · Auth.js v5 (Google OAuth)
 
-**Infra** — Docker + one-command Docker Compose · Kubernetes manifests ([k8s/](k8s/README.md)) · GitHub Actions CI (tests against a live pgvector service) · **184 API tests + 26 Playwright E2E**, plus lint and typecheck gates
+**Infra** — Docker + one-command Docker Compose · Kubernetes manifests ([k8s/](k8s/README.md)) · GitHub Actions CI (tests against a live pgvector service) · **294 API tests + 26 Playwright E2E**, plus lint and typecheck gates
 
 ## Quick start (local)
 
@@ -141,10 +141,12 @@ answering either way.
 
 K8s manifests for a local kind/k3d/minikube cluster live in [k8s/](k8s/README.md).
 
-Deploying publicly on free tiers — Neon (Postgres + pgvector), Hugging Face Spaces
-(API), Vercel (web) — is covered step by step in [docs/DEPLOY.md](docs/DEPLOY.md),
-including why the API needs a 16GB host: it measures ~205MB imported and ~507MB
-once the embedding model is resident, which does not fit a 256MB or 512MB free tier.
+Deploying publicly — owned Cloudflare Worker `agentfleet-api` (API) +
+OpenNext Worker `agentfleet-app` (web), or the free-tier fallback Neon +
+Hugging Face Spaces — is covered in [docs/DEPLOY.md](docs/DEPLOY.md).
+**Do not use `agentfleet.pages.dev` or `agentfleet.vercel.app`**; those are
+not this project. Do not point studio DNS at the demo until
+[docs/DEPLOY.md](docs/DEPLOY.md) §5 is green on the live URLs.
 
 Want to see it running before you set it up? Follow the [demo script](docs/DEMO.md).
 

@@ -21,6 +21,7 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 from app.config import get_settings
+from app.database_url import prepare_database_url
 from app.db import SessionLocal
 from app.db import engine as _app_engine
 from app.models import Chunk, Document
@@ -326,7 +327,16 @@ def _get_analytics_engine() -> AsyncEngine:
     if not settings.analytics_database_url:
         return _app_engine
     if _analytics_engine is None:
-        _analytics_engine = create_async_engine(settings.analytics_database_url, echo=False)
+        prepared = prepare_database_url(
+            settings.analytics_database_url,
+            schema=settings.database_schema,
+            ssl=True if settings.database_ssl else None,
+        )
+        _analytics_engine = create_async_engine(
+            prepared.sqlalchemy_url,
+            echo=False,
+            connect_args=prepared.connect_args,
+        )
     return _analytics_engine
 
 
