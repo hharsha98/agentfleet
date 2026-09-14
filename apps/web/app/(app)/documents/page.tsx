@@ -73,6 +73,10 @@ export default function DocumentsPage() {
         setDocs(await res.json());
         const total = res.headers.get("X-Total-Count");
         setTotalCount(total ? Number(total) : null);
+      } else {
+        setNote(
+          `Documents API returned ${res.status}. Chat can still work while this page is unauthorized or the schema is mid-migrate.`,
+        );
       }
     } catch {
       setNote("API offline — it may be waking up from sleep (~10-20s on the hosted demo) or not running locally. Reload in a moment.");
@@ -102,7 +106,7 @@ export default function DocumentsPage() {
           ? `✓ ${body.filename} ingested into ${body.chunks} chunk${body.chunks === 1 ? "" : "s"}`
           : `⚠ ${body.detail ?? `upload failed (${res.status})`}`,
       );
-      if (res.ok) refresh();
+      if (res.ok) await refresh();
     } catch (err) {
       setNote(`⚠ ${String(err)}`);
     } finally {
@@ -154,8 +158,6 @@ export default function DocumentsPage() {
           </span>
         )}
       </PageHeader>
-
-      {note && !busy && docs.length === 0 && <p className="mt-3 font-mono text-xs text-muted">{note}</p>}
 
       {/* Stat row */}
       <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3">
@@ -259,7 +261,16 @@ export default function DocumentsPage() {
             Pick a .txt, .md, or .pdf and press Upload. The first one takes longer than the rest —
             that upload downloads the local embedding model.
           </p>
-          {note && <p className="mt-3 font-mono text-xs text-muted">{note}</p>}
+          {note && (
+            <p
+              role={/API returned|API offline|⚠/.test(note) ? "alert" : "status"}
+              className={`mt-3 font-mono text-xs ${
+                /API returned|API offline/.test(note) ? "text-red-300" : "text-muted"
+              }`}
+            >
+              {note}
+            </p>
+          )}
         </Panel>
       </div>
 

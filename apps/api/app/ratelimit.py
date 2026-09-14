@@ -54,14 +54,6 @@ from app.config import get_settings
 
 logger = logging.getLogger("app.ratelimit")
 
-# X-Forwarded-For is trivially spoofable by anyone who can reach the API
-# directly — only trust it when the API sits behind a reverse proxy that
-# OVERWRITES (not appends to) the header before forwarding. No such proxy
-# is confirmed in this deployment yet, so this stays off; flip to True (and
-# add proper trusted-hop validation) once one is.
-TRUST_PROXY_HEADERS = False
-
-
 def rate_limit_key(request: Request) -> str:
     """slowapi key_func: per-user via the verified JWT's email claim, else
     per-IP. A present-but-invalid/foreign token (e.g. the public invoke
@@ -78,7 +70,10 @@ def rate_limit_key(request: Request) -> str:
             except AuthError:
                 pass  # not a JWT we can verify -> fall through to IP below
 
-    if TRUST_PROXY_HEADERS:
+    # X-Forwarded-For is trivially spoofable on a directly-exposed API.
+    # Hugging Face Spaces (and any reverse proxy that OVERWRITES the
+    # header) should set TRUST_PROXY_HEADERS=1.
+    if get_settings().trust_proxy_headers:
         forwarded = request.headers.get("X-Forwarded-For")
         if forwarded:
             return f"ip:{forwarded.split(',')[0].strip()}"

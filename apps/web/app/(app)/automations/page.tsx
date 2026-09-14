@@ -11,6 +11,7 @@ import { MicButton } from "@/components/mic-button";
 import { PageHeader } from "@/components/page-header";
 import { Term } from "@/components/term";
 import { apiFetch } from "@/lib/api";
+import { absoluteApiUrl, loadPublicConfig } from "@/lib/public-config";
 
 function ClockIcon({ className }: { className?: string }) {
   return (
@@ -52,12 +53,8 @@ function WebhookIcon({ className }: { className?: string }) {
   );
 }
 
-// Only used to render the curl example for the webhook trigger URL below —
-// /api/v1/hooks/* is public (B1 gate excludes it, webhooks authenticate via
-// their own per-webhook secret, not the user's session), so that one string
-// build stays a plain API_URL reference rather than going through apiFetch.
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-
+// Webhook curl examples go through the same-origin /backend proxy (or
+// PUBLIC_API_URL if set). Resolved at runtime — never baked localhost.
 type ScheduledRun = {
   id: string;
   name: string;
@@ -123,6 +120,7 @@ export default function AutomationsPage() {
   // Tracked separately from `copied` so the secret button and the curl button
   // don't both flip to "Copied" when only one was pressed.
   const [curlCopied, setCurlCopied] = useState(false);
+  const [apiUrl, setApiUrl] = useState("/backend");
 
   async function refresh() {
     try {
@@ -161,6 +159,7 @@ export default function AutomationsPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     refresh();
     refreshWebhooks();
+    loadPublicConfig().then((cfg) => setApiUrl(cfg.apiUrl));
   }, []);
 
   async function createSchedule() {
@@ -259,8 +258,8 @@ export default function AutomationsPage() {
   }
 
   function curlExample(webhook: WebhookCreated): string {
-    // API_URL, not the web app's origin — /api/v1/hooks is served by the API.
-    return `curl -X POST ${API_URL}${webhook.trigger_path} \\\n  -H "Authorization: Bearer ${webhook.secret}" \\\n  -d '{"payload":"..."}'`;
+    const origin = absoluteApiUrl(apiUrl);
+    return `curl -X POST ${origin}${webhook.trigger_path} \\\n  -H "Authorization: Bearer ${webhook.secret}" \\\n  -d '{"payload":"..."}'`;
   }
 
   async function copySecret(secret: string) {

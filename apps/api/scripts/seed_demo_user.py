@@ -80,11 +80,13 @@ Usage:
 import asyncio
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.db import SessionLocal
-from app.models import Budget, User
+from app.models import Agent, AgentVersion, Budget, User
+from app.services.versioning import publish_version
 
 # --- Identity ---------------------------------------------------------
 
@@ -106,12 +108,15 @@ DEMO_USER_ID = uuid.uuid5(DEMO_USER_NS, DEMO_EMAIL)
 DEMO_DAILY_TOKEN_LIMIT = 200_000
 DEMO_DAILY_USD_LIMIT = 2.00
 
+# Built-in agents are not mutable (403 on PATCH/publish). The hosted demo
+# must have at least one user-owned agent so builder publish/version/MCP
+# settings are real, not a stub UI over a 403.
+SANDBOX_AGENT_SLUG = "demo-sandbox"
+
 
 async def _seed(session: AsyncSession) -> dict[str, bool]:
-    """Upsert the demo user + its GLOBAL budget row. Returns which of the
-    two rows were newly INSERTed this call (both False on a repeat run
-    that only refreshed values in place)."""
-    created = {"user": False, "budget": False}
+    """Upsert the demo user, GLOBAL budget row, and mutable sandbox agent."""
+    created = {"user": False, "budget": False, "sandbox_agent": False}
 
     user = (
         await session.execute(select(User).where(User.email == DEMO_EMAIL))
@@ -140,6 +145,52 @@ async def _seed(session: AsyncSession) -> dict[str, bool]:
         budget.daily_token_limit = DEMO_DAILY_TOKEN_LIMIT
         budget.daily_usd_limit = DEMO_DAILY_USD_LIMIT
 
+    sandbox = (
+        await session.execute(select(Agent).where(Agent.slug == SANDBOX_AGENT_SLUG))
+    ).scalar_one_or_none()
+    if sandbox is None:
+        sandbox = Agent(
+            slug=SANDBOX_AGENT_SLUG,
+            name="Demo sandbox agent",
+            description=(
+                "Mutable demo agent — publish, version, roll back, and attach MCP "
+                "servers here. Built-in roster agents cannot be edited."
+            ),
+            system_prompt=(
+                "You are a sandbox agent on the public AgentFleet demo. Keep answers "
+                "short. Do not claim to take real-world irreversible actions."
+            ),
+            model=get_settings().default_model,
+            tools=["web_search"],
+            mcp_servers=[],
+            is_builtin=False,
+            user_id=user.id,
+        )
+        session.add(sandbox)
+        await session.flush()
+        await publish_version(session, sandbox, note="Demo sandbox initial version")
+        created["sandbox_agent"] = True
+    else:
+        repaired = False
+        if sandbox.is_builtin:
+            sandbox.is_builtin = False
+            repaired = True
+        if sandbox.user_id != user.id:
+            sandbox.user_id = user.id
+            repaired = True
+        version_count = (
+            await session.execute(
+                select(func.count())
+                .select_from(AgentVersion)
+                .where(AgentVersion.agent_id == sandbox.id)
+            )
+        ).scalar_one()
+        if version_count == 0:
+            await publish_version(session, sandbox, note="Demo sandbox initial version")
+            repaired = True
+        if repaired:
+            created["sandbox_agent"] = True
+
     await session.commit()
     await session.refresh(user)
     return created
@@ -149,12 +200,13 @@ async def main() -> None:
     async with SessionLocal() as session:
         created = await _seed(session)
 
-    if created["user"] or created["budget"]:
+    if any(created.values()):
         parts = [name for name, was_created in created.items() if was_created]
         print(f"Seeded demo identity — newly created: {', '.join(parts)}")
     else:
         print("Demo identity already present — caps refreshed in place (idempotent).")
     print(f"  user:          {DEMO_EMAIL}")
+    print(f"  sandbox agent: {SANDBOX_AGENT_SLUG} (publish/version-able)")
     print(
         f"  global budget: {DEMO_DAILY_TOKEN_LIMIT:,} tokens/day, "
         f"${DEMO_DAILY_USD_LIMIT:.2f}/day"

@@ -8,6 +8,22 @@ from app.main import app
 def test_health() -> None:
     response = TestClient(app).get("/health")
     assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "ok"
+    assert body["service"] == "agentfleet-api"
+    assert body["orchestrator"] == "inprocess"
+    # Tests set EMBEDDINGS_PREWARM=0; lifespan never runs, so this stays skipped.
+    assert body["embeddings"] == "skipped"
+    assert body["demo"] is False
+
+
+def test_health_stays_db_free_with_extra_fields(monkeypatch) -> None:
+    """The extra /health fields must not start touching the DB — a sleeping
+    Neon compute would otherwise make liveness fail the same way readiness
+    does, and the public-demo wake banner would never get a 200."""
+    monkeypatch.setattr(app_db, "engine", _BrokenEngine())
+    response = TestClient(app).get("/health")
+    assert response.status_code == 200
     assert response.json()["status"] == "ok"
 
 

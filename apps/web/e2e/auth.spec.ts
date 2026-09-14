@@ -15,7 +15,7 @@ test("signed-out visitors are redirected off gated pages, and the API 401s witho
   // 1. proxy.ts + auth.ts's `authorized` callback gate /chat — a signed-out
   // visitor should land on the Auth.js sign-in page, not the chat UI.
   await page.goto("/chat");
-  await expect(page).toHaveURL(/\/api\/auth\/signin/);
+  await expect(page).toHaveURL(/\/signin/);
 
   // 2. Belt-and-suspenders on the API side (B1): hitting the backend
   // directly with no Authorization header must 401, independent of

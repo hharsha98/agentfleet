@@ -117,6 +117,10 @@ const inputClass =
 const chipClass =
   "rounded-full border border-hairline px-2.5 py-0.5 font-mono text-[10px] text-muted";
 
+// Seeded by scripts.seed_demo_user when DEMO_LOGIN_ENABLED=1. Built-ins
+// stay 403 on mutate; this is the agent the hosted demo can publish.
+const DEMO_SANDBOX_SLUG = "demo-sandbox";
+
 export default function AgentsPage() {
   const [agents, setAgents] = useState<Agent[]>([]);
   // X-Total-Count from GET /agents (Chunk D2 stat row) — agents is
@@ -155,6 +159,8 @@ export default function AgentsPage() {
   const [publishBusy, setPublishBusy] = useState<Record<string, boolean>>({});
   const [rollbackBusy, setRollbackBusy] = useState<Record<string, boolean>>({});
   const [versionStatus, setVersionStatus] = useState<Record<string, string>>({});
+
+  const sandbox = agents.find((a) => a.slug === DEMO_SANDBOX_SLUG);
 
   async function refresh() {
     try {
@@ -261,7 +267,15 @@ export default function AgentsPage() {
         });
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
-          setFormError(body.detail ?? `Update failed (${res.status})`);
+          setFormError(
+            res.status === 403
+              ? sandbox
+                ? `Built-in roster agents cannot be edited. Open ${sandbox.name} or click New agent.`
+                : "Built-in roster agents cannot be edited. Click New agent to publish."
+              : typeof body.detail === "string"
+                ? body.detail
+                : `Update failed (${res.status})`,
+          );
           return;
         }
       } else {
@@ -442,6 +456,14 @@ export default function AgentsPage() {
   const builtinCount = agents.filter((a) => a.is_builtin).length;
   const customCount = agents.length - builtinCount;
   const runtimes = Array.from(new Set(agents.map((a) => a.runtime || "langgraph"))).sort();
+  const editingAgent = agents.find((a) => a.id === editingId);
+  const formReadOnly = Boolean(editingAgent?.is_builtin);
+  const listedAgents = [...agents].sort((a, b) => {
+    if (a.slug === DEMO_SANDBOX_SLUG) return -1;
+    if (b.slug === DEMO_SANDBOX_SLUG) return 1;
+    if (a.is_builtin !== b.is_builtin) return a.is_builtin ? 1 : -1;
+    return a.name.localeCompare(b.name);
+  });
 
   return (
     <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6">
@@ -452,6 +474,20 @@ export default function AgentsPage() {
         description="Build a new agent in minutes: prompt, model, tools. Publish versions, roll back bad ones, and red-team it before it ships."
       />
       {note && <p className="mt-3 font-mono text-xs text-muted">{note}</p>}
+      {sandbox && (
+        <p className="mt-3 max-w-3xl text-sm text-muted">
+          Hosted demo: publish, version, MCP, and prompt edits belong on{" "}
+          <button
+            type="button"
+            onClick={() => openEditForm(sandbox)}
+            className="cursor-pointer font-medium text-foreground underline underline-offset-4"
+          >
+            {sandbox.name}
+          </button>
+          . Built-in roster cards are read-only — Edit is hidden so a 403 is
+          not mistaken for a dead builder.
+        </p>
+      )}
 
       <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <StatCard
@@ -515,9 +551,21 @@ export default function AgentsPage() {
             className="space-y-3"
           >
             <h2 className="text-sm font-medium">
-              {editingId ? "Edit agent" : "New agent"}
+              {formReadOnly
+                ? "Built-in agent (read-only)"
+                : editingId
+                  ? "Edit agent"
+                  : "New agent"}
             </h2>
+            {formReadOnly && (
+              <p className="text-xs text-muted">
+                {sandbox
+                  ? `Roster agents cannot be mutated. Use ${sandbox.name} or New agent to publish versions and attach MCP servers.`
+                  : "Roster agents cannot be mutated. Use New agent to publish versions and attach MCP servers."}
+              </p>
+            )}
 
+            <fieldset disabled={formReadOnly} className="min-w-0 space-y-3 border-0 p-0">
             <div className="grid gap-3 sm:grid-cols-2">
               <input
                 value={form.name}
@@ -675,23 +723,26 @@ export default function AgentsPage() {
                 </button>
               </div>
             </div>
+            </fieldset>
 
             {formError && <p className="font-mono text-xs text-muted">⚠ {formError}</p>}
 
             <div className="flex gap-2 pt-1">
-              <button
-                type="submit"
-                disabled={busy}
-                className="cursor-pointer rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity duration-200 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {busy ? "Saving…" : editingId ? "Save changes" : "Create agent"}
-              </button>
+              {!formReadOnly && (
+                <button
+                  type="submit"
+                  disabled={busy}
+                  className="cursor-pointer rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity duration-200 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {busy ? "Saving…" : editingId ? "Save changes" : "Create agent"}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={closeForm}
                 className="cursor-pointer rounded-md border border-hairline px-4 py-2 text-sm text-muted transition-colors duration-200 hover:text-foreground"
               >
-                Cancel
+                {formReadOnly ? "Close" : "Cancel"}
               </button>
             </div>
           </form>
@@ -723,7 +774,7 @@ export default function AgentsPage() {
           </p>
         )}
         <ul className="grid gap-3 lg:grid-cols-2">
-          {agents.map((a, i) => (
+          {listedAgents.map((a, i) => (
             <li key={a.id}>
               <Reveal
                 delay={i * 40}
@@ -735,6 +786,11 @@ export default function AgentsPage() {
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium">{a.name}</span>
+                      {a.slug === DEMO_SANDBOX_SLUG && (
+                        <span className="rounded-full border border-accent/40 px-2 py-0.5 font-mono text-[10px] text-accent">
+                          demo sandbox
+                        </span>
+                      )}
                       {a.is_builtin && (
                         <span className="rounded-full border border-hairline px-2 py-0.5 font-mono text-[10px] text-muted">
                           builtin
@@ -746,10 +802,11 @@ export default function AgentsPage() {
                 </div>
                 <div className="flex shrink-0 gap-2">
                   <button
+                    type="button"
                     onClick={() => openEditForm(a)}
                     className="cursor-pointer rounded-md border border-hairline px-3 py-1.5 text-xs text-muted transition-colors duration-200 hover:text-foreground"
                   >
-                    Edit
+                    {a.is_builtin ? "View" : "Edit"}
                   </button>
                   {!a.is_builtin && (
                     <button
@@ -932,6 +989,16 @@ export default function AgentsPage() {
                     until you publish again — and rolling back just points them at an earlier
                     snapshot. Nothing is deleted either way.
                   </p>
+                  {a.is_builtin ? (
+                    <p className="text-xs text-muted">
+                      Built-in agents are read-only.
+                      {sandbox
+                        ? ` Publish and roll back on ${sandbox.name} or a New agent`
+                        : " Use New agent to publish"}
+                      {" "}
+                      — a 403 here is ownership, not a dead builder.
+                    </p>
+                  ) : (
                   <div className="flex gap-2">
                     <input
                       value={publishNote[a.id] ?? ""}
@@ -949,6 +1016,7 @@ export default function AgentsPage() {
                       {publishBusy[a.id] ? "Publishing…" : "Publish current"}
                     </button>
                   </div>
+                  )}
 
                   {versionStatus[a.id] && (
                     <p className="font-mono text-xs text-muted">{versionStatus[a.id]}</p>
@@ -967,13 +1035,16 @@ export default function AgentsPage() {
                             {new Date(v.created_at).toLocaleString()}
                           </span>
                         </div>
+                        {!a.is_builtin && (
                         <button
+                          type="button"
                           onClick={() => rollbackVersion(a.id, v)}
                           disabled={rollbackBusy[a.id]}
                           className="shrink-0 rounded-md border border-hairline px-2.5 py-1 text-[11px] text-muted hover:text-foreground disabled:opacity-40"
                         >
                           Roll back
                         </button>
+                        )}
                       </li>
                     ))}
                     {(versionsByAgent[a.id] ?? []).length === 0 && (

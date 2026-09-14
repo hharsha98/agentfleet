@@ -90,6 +90,72 @@ jobs:
         working-directory: apps/api
         run: uv run pytest -q
 
+  # Public-demo feature gate: Chat-only is a failed deploy. This job boots
+  # the API the way a single-instance host does (migrate + demo seed) and
+  # fails if builder / missions / RAG / evals / ops / MCP settings 404 or 5xx.
+  demo-smoke:
+    name: demo-smoke
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: agentfleet
+          POSTGRES_PASSWORD: agentfleet
+          POSTGRES_DB: agentfleet
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U agentfleet"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql+asyncpg://agentfleet:agentfleet@localhost:5432/agentfleet
+      AUTH_SECRET: demo-smoke-secret-not-a-real-credential
+      DEMO_LOGIN_ENABLED: "1"
+      SEED_DEMO_DATA: "1"
+      # Hosted Cloudflare path uses schema `agentfleet`, not `public`.
+      DATABASE_SCHEMA: agentfleet
+      EMBEDDINGS_PREWARM: "0"
+      RATE_LIMIT_DISABLED: "1"
+      ORCHESTRATOR_MODE: inprocess
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v9.0.0
+
+      - name: Install dependencies
+        working-directory: apps/api
+        run: uv sync
+
+      - name: Boot the way a single-instance demo host does
+        working-directory: apps/api
+        run: uv run python -m scripts.space_boot
+
+      - name: Start API
+        working-directory: apps/api
+        run: |
+          nohup uv run uvicorn app.main:app --host 127.0.0.1 --port 8000 \
+            > /tmp/agentfleet-api.log 2>&1 &
+          echo $! > /tmp/agentfleet-api.pid
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:8000/health/ready > /dev/null; then
+              echo "api ready after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "api did not become ready" >&2
+          echo "--- agentfleet-api.log ---" >&2
+          cat /tmp/agentfleet-api.log >&2 || true
+          exit 1
+
+      - name: Demo feature smoke
+        working-directory: apps/api
+        run: uv run python -m scripts.demo_smoke --base-url http://127.0.0.1:8000 --require-seeded --retries 4
+
   # The real eval gate, offline half. No secrets anywhere in this job, so it
   # runs — and must pass — on every PR, including from forks that can never
   # see FREE_LLM_KEY. It exercises the same check_case/judge() parsing code

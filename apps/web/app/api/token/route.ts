@@ -18,12 +18,13 @@ import { signApiToken } from "@/lib/api";
 
 export async function GET() {
   const session = await auth();
-  if (!session?.user?.email) {
+  const email = session?.user?.email;
+  if (!email) {
     return Response.json({ error: "Not authenticated" }, { status: 401 });
   }
 
   try {
-    const { token, expires_at } = await signApiToken(session.user.email, session.user.name);
+    const { token, expires_at } = await signApiToken(email, session?.user?.name);
     return Response.json({ token, expires_at });
   } catch {
     // Fail closed, matching the API's own "auth not configured" behavior.

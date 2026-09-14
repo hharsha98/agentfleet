@@ -14,12 +14,10 @@ RUN npm ci
 
 COPY . .
 
-# Baked into the client bundle at build time (Next.js public env var
-# convention: NEXT_PUBLIC_* is inlined during `next build`). Override with
-# --build-arg for non-default API locations.
-ARG NEXT_PUBLIC_API_URL=http://localhost:8000
-ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
-
+# Browser calls same-origin /backend (runtime proxy). Do not bake
+# NEXT_PUBLIC_API_URL=http://localhost:8000 — that is the hosted-demo
+# failure mode where SSR Chat works and every client page talks to the
+# visitor's laptop. INTERNAL_API_URL is a *runtime* env on the next stage.
 RUN npm run build
 
 # ---- Stage 2: runtime -------------------------------------------------

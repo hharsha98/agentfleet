@@ -27,7 +27,7 @@ import uuid
 from sqlalchemy import select
 
 from app.db import SessionLocal, engine
-from app.models import Agent, Budget, Conversation, Message, User
+from app.models import Agent, AgentVersion, Budget, Conversation, Message, User
 from app.services.budget import check_budget
 from app.services.chat import stream_chat
 from scripts.seed_demo_user import (
@@ -76,7 +76,7 @@ async def test_seed_is_idempotent_and_sets_global_budget() -> None:
     await engine.dispose()
     async with SessionLocal() as session:
         first = await _seed(session)
-    assert first == {"user": True, "budget": True}
+    assert first == {"user": True, "budget": True, "sandbox_agent": True}
 
     # Re-running must not create a second row of either kind, and must
     # converge the budget back to the declared caps even if something else
@@ -91,7 +91,7 @@ async def test_seed_is_idempotent_and_sets_global_budget() -> None:
 
     async with SessionLocal() as session:
         second = await _seed(session)
-    assert second == {"user": False, "budget": False}
+    assert second == {"user": False, "budget": False, "sandbox_agent": False}
 
     async with SessionLocal() as session:
         user = (await session.execute(select(User).where(User.email == DEMO_EMAIL))).scalar_one()
@@ -104,6 +104,16 @@ async def test_seed_is_idempotent_and_sets_global_budget() -> None:
         assert len(budgets) == 1  # never duplicated
         assert budgets[0].daily_token_limit == DEMO_DAILY_TOKEN_LIMIT
         assert float(budgets[0].daily_usd_limit) == DEMO_DAILY_USD_LIMIT
+
+        sandbox = (
+            await session.execute(select(Agent).where(Agent.slug == "demo-sandbox"))
+        ).scalar_one()
+        assert sandbox.is_builtin is False
+        assert sandbox.user_id == user.id
+        versions = (
+            await session.execute(select(AgentVersion).where(AgentVersion.agent_id == sandbox.id))
+        ).scalars().all()
+        assert len(versions) >= 1
     await engine.dispose()
 
 
@@ -125,6 +135,47 @@ async def test_seed_keeps_existing_id_if_user_already_auto_created() -> None:
     async with SessionLocal() as session:
         user = (await session.execute(select(User).where(User.email == DEMO_EMAIL))).scalar_one()
         assert user.id == pre_existing_id
+    await engine.dispose()
+
+
+async def test_seed_repairs_builtin_sandbox_and_missing_versions() -> None:
+    """A leftover builtin demo-sandbox (or no version row) must become a
+    mutable published agent — otherwise the hosted builder 403s."""
+    await engine.dispose()
+    async with SessionLocal() as session:
+        user = User(id=uuid.uuid4(), email="other@example.com", name="Other")
+        session.add(user)
+        await session.flush()
+        session.add(
+            Agent(
+                slug="demo-sandbox",
+                name="Broken sandbox",
+                description="leftover",
+                system_prompt="x",
+                model="test-model",
+                is_builtin=True,
+                user_id=user.id,
+            )
+        )
+        await session.commit()
+
+    async with SessionLocal() as session:
+        result = await _seed(session)
+    assert result["sandbox_agent"] is True
+
+    async with SessionLocal() as session:
+        demo_user = (
+            await session.execute(select(User).where(User.email == DEMO_EMAIL))
+        ).scalar_one()
+        sandbox = (
+            await session.execute(select(Agent).where(Agent.slug == "demo-sandbox"))
+        ).scalar_one()
+        assert sandbox.is_builtin is False
+        assert sandbox.user_id == demo_user.id
+        versions = (
+            await session.execute(select(AgentVersion).where(AgentVersion.agent_id == sandbox.id))
+        ).scalars().all()
+        assert len(versions) >= 1
     await engine.dispose()
 
 

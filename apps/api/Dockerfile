@@ -78,6 +78,15 @@ RUN mkdir -p "$FASTEMBED_CACHE_PATH" "$HF_HOME" && \
 
 USER app
 
+# Optional: bake the ~130MB fastembed model into the image so a Cloudflare
+# Container cold start (ephemeral disk — the cache dies when the instance
+# sleeps) does not pay a download on the first RAG request. Compose/k8s
+# leave this unset (0). Wrangler passes it as a build-arg via image_vars.
+ARG BAKE_EMBEDDINGS=0
+RUN if [ "$BAKE_EMBEDDINGS" = "1" ]; then \
+      python -c "from fastembed import TextEmbedding; TextEmbedding('BAAI/bge-small-en-v1.5')"; \
+    fi
+
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \

@@ -5,11 +5,12 @@ A 3–5 minute walkthrough for a portfolio recording. Follow the scenes in order
 ## Before you record
 
 - [ ] Provider ready: either the free proxy is running and `FREE_LLM_KEY` is set in `.env`, **or** you've switched `FREE_LLM_BASE_URL`/`FREE_LLM_KEY` (or `ANTHROPIC_API_KEY`, see ADR-005) to a paid provider for a smoother take — free-tier models can 429 mid-recording.
-- [ ] `cp .env.example .env` and fill in keys, if you haven't already.
-- [ ] `docker compose -f docker/compose.full.yaml up --build` — wait for all containers healthy. The api container migrates the DB and seeds the built-in agent roster automatically; no manual seed step needed.
+- [ ] `cp .env.example .env` and fill in keys, if you haven't already. For a **hosted** recording set `DEMO_LOGIN_ENABLED=1` on **both** API and web (see [DEPLOY.md](DEPLOY.md)).
+- [ ] `docker compose -f docker/compose.full.yaml up --build` — wait for all containers healthy. The `migrate` service applies schema; the api container seeds the built-in roster. For a demo-login walkthrough also run `uv run python -m scripts.seed_demo_user` and `uv run python -m scripts.seed_demo --seed` in `apps/api` (or set `DEMO_LOGIN_ENABLED=1` / `SEED_DEMO_DATA=1` / `RUN_MIGRATIONS_ON_BOOT=1` on a single-instance host).
 - [ ] Open `http://localhost:3002` once and confirm the landing page loads before you hit record — first load can be slow while fastembed downloads its model (~130MB, one time).
 - [ ] Have a short PDF or text file on hand for the document-upload scene.
 - [ ] Clear browser console / close dev tools so the recording is clean.
+- [ ] Hosted verify (after redeploy): `AUTH_SECRET=… uv run python -m scripts.demo_smoke --base-url <api-url> --require-seeded` must exit 0 **before** you record. Chat-only is a failed demo.
 
 ## Scene 1 — Landing page (20s)
 
@@ -19,9 +20,9 @@ A 3–5 minute walkthrough for a portfolio recording. Follow the scenes in order
 
 ## Scene 2 — Sign in (10s)
 
-1. Click **Launch app** (top right).
-2. Sign in with Google via the Auth.js flow.
-3. **Say:** "Auth is Google OAuth via Auth.js v5 — nothing custom to maintain."
+1. Click **Launch app** / **Sign in** (top right).
+2. On the hosted demo, click **Try the demo** (shared identity `demo@agentfleet.local`, daily token cap). Locally, Google OAuth via Auth.js v5 if `AUTH_GOOGLE_ID` is set.
+3. **Say:** "Auth is Auth.js — Google when you self-host, one-click demo on the public instance. After demo login the nav is the whole product: Chat, Missions, Workflows, Agents, Documents — not a Chat-only shell."
 
 ## Scene 3 — Chat with a tool-using agent (45–60s)
 
@@ -47,7 +48,7 @@ A 3–5 minute walkthrough for a portfolio recording. Follow the scenes in order
 
 ## Scene 6 — Agents: build one, then red-team it (60s)
 
-1. Go to **Agents**, click **New agent**. Give it a name, a short system prompt, pick a model, enable one tool.
+1. Go to **Agents**. Built-in roster agents cannot be edited (403) — that is ownership. Open **Demo sandbox agent** (or click **New agent**). Give it a name, a short system prompt, pick a model, enable one tool. MCP servers are optional URLs on the same form.
 2. Save, then click **Publish** — show the version number tick up.
 3. Click into the agent's **Red-team** action. Watch it run the adversarial suite (prompt-injection, "reveal your system prompt," fake `[system]` override, base64-smuggled instruction, etc.).
 4. **Point at a passed case** — the agent declining to leak its prompt or obey the injected instruction.

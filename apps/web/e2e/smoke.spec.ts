@@ -1,5 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 
+import { OVERFLOW_NAV_ITEMS, PRIMARY_NAV_ITEMS } from "../lib/app-nav-items";
+
 // Deterministic project: no LLM calls, just page loads and static content.
 //
 // NOTE (Phase 12 B2): every /chat.../voice page below is now auth-gated
@@ -35,9 +37,7 @@ test("landing page renders the hero and a sign-in affordance", async ({ browser 
   await expect(page.getByRole("heading", { level: 1 })).toContainText(
     "team of AI agents",
   );
-  await expect(
-    page.getByRole("button", { name: "Continue with Google" }),
-  ).toBeVisible();
+  await expect(page.getByRole("link", { name: "Sign in" })).toBeVisible();
   await expectNoNextErrorOverlay(page);
   await context.close();
 });
@@ -117,3 +117,110 @@ for (const { path, check } of pageChecks) {
     await expectNoNextErrorOverlay(page);
   });
 }
+
+test("browser API config is same-origin /backend, not localhost", async ({
+  request,
+  page,
+}) => {
+  // Hosted-demo regression: if public-config tells the browser to call
+  // localhost:8000, Chat (RSC) still works and every client page is dead.
+  const res = await request.get("/api/public-config");
+  expect(res.ok()).toBeTruthy();
+  const body = (await res.json()) as { apiUrl: string };
+  expect(body.apiUrl).toBe("/backend");
+  expect(body.apiUrl).not.toContain("localhost");
+
+  const hitsLocalApi: string[] = [];
+  const backendHits: string[] = [];
+  page.on("request", (req) => {
+    if (req.url().includes("localhost:8000")) hitsLocalApi.push(req.url());
+    if (req.url().includes("/backend/")) backendHits.push(req.url());
+  });
+  await page.goto("/missions");
+  await expect(page.getByPlaceholder(/Give the fleet a goal/)).toBeVisible();
+  await expect
+    .poll(() => backendHits.some((u) => u.includes("/backend/api/v1/runs")))
+    .toBeTruthy();
+  expect(hitsLocalApi).toEqual([]);
+});
+
+test("signed-in primary nav exposes Chat, Missions, Workflows, Agents, Documents", async ({
+  page,
+}) => {
+  // Hosted-demo regression: Chat SSE can work while the rest of the product
+  // is missing from the shell (older web image, or a header that only
+  // painted Chat). Desktop viewport matches this project's Playwright
+  // config; phones use the Menu disclosure instead.
+  await page.goto("/chat");
+  const nav = page.getByRole("navigation", { name: "Primary" });
+  for (const item of PRIMARY_NAV_ITEMS) {
+    await expect(
+      nav.getByRole("link", { name: item.label, exact: true }),
+    ).toBeVisible();
+  }
+
+  await nav.getByRole("link", { name: "Workflows", exact: true }).click();
+  await expect(page).toHaveURL(/\/workflows\/?$/);
+  await expect(
+    page.getByRole("heading", { name: "Workflows", level: 1 }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("navigation", { name: "Primary" }).getByRole("link", {
+      name: "Workflows",
+      exact: true,
+    }),
+  ).toHaveAttribute("aria-current", "page");
+
+  await page
+    .getByRole("navigation", { name: "Primary" })
+    .getByRole("link", { name: "Agents", exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/agents\/?$/);
+  await expect(
+    page.getByRole("heading", { name: "Agent builder", level: 1 }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "New agent" })).toBeVisible();
+});
+
+test("More menu lists ops destinations the primary row does not", async ({
+  page,
+}) => {
+  await page.goto("/chat");
+  await page.getByRole("button", { name: "More" }).click();
+  const more = page.getByRole("navigation", { name: "More destinations" });
+  for (const item of OVERFLOW_NAV_ITEMS) {
+    await expect(
+      more.getByRole("link", { name: item.label, exact: true }),
+    ).toBeVisible();
+  }
+});
+
+test("agent builder uses View for builtins so Edit is not a 403 trap", async ({
+  page,
+}) => {
+  await page.goto("/agents");
+  await expect(
+    page.getByRole("heading", { name: "Agent builder", level: 1 }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "New agent" })).toBeVisible();
+  await page.getByRole("button", { name: "View" }).first().click();
+  await expect(
+    page.getByRole("heading", { name: "Built-in agent (read-only)" }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Save changes" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Publish current" })).toHaveCount(0);
+});
+
+test("phone Menu lists every primary destination", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/chat");
+  await expect(page.getByRole("navigation", { name: "Primary" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Menu" }).click();
+  const menu = page.getByRole("navigation", { name: "App destinations" });
+  for (const item of PRIMARY_NAV_ITEMS) {
+    await expect(
+      menu.getByRole("link", { name: item.label, exact: true }),
+    ).toBeVisible();
+  }
+});
+

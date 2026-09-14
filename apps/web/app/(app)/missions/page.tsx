@@ -501,6 +501,8 @@ export default function MissionsPage() {
   const [dragOverColumn, setDragOverColumn] = useState<Task["status"] | null>(null);
   const [dndError, setDndError] = useState<string | null>(null);
 
+  const [loadError, setLoadError] = useState<string | null>(null);
+
   async function refreshRuns() {
     try {
       // limit=200 (the API's max — apps/api/app/routes/runs.py caps `le=200`)
@@ -515,9 +517,16 @@ export default function MissionsPage() {
         setRuns(await res.json());
         const total = res.headers.get("X-Total-Count");
         setTotalRuns(total ? Number(total) : null);
+        setLoadError(null);
+      } else {
+        setLoadError(
+          `Missions API returned ${res.status}. Chat can still work while /runs is missing or unauthorized — reload after the API finishes migrating, or check AUTH_SECRET.`,
+        );
       }
     } catch {
-      /* API offline — page shows empty state */
+      setLoadError(
+        "Missions API unreachable. If Chat still answers, this page is using a different client call — check the browser is not hitting localhost:8000.",
+      );
     }
   }
 
@@ -759,6 +768,12 @@ export default function MissionsPage() {
           it matters.
         </p>
       </Reveal>
+
+      {loadError && (
+        <p role="alert" className="mt-3 font-mono text-xs text-red-300">
+          {loadError}
+        </p>
+      )}
 
       <form
         onSubmit={(e) => {
@@ -1073,8 +1088,12 @@ export default function MissionsPage() {
             <div>
               <EmptyState
                 glyph={<RocketIcon className="h-7 w-7" />}
-                title="No mission running"
-                description="Launch a goal above — tasks appear here as a live board, agent by agent."
+                title={loadError ? "Missions unavailable" : "No mission running"}
+                description={
+                  loadError
+                    ? loadError
+                    : "Launch a goal above — tasks appear here as a live board, agent by agent."
+                }
               />
               {/* A composed idle state instead of a message alone in a big
                   empty rectangle: the same five columns COLUMNS defines for

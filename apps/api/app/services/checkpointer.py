@@ -24,6 +24,7 @@ import logging
 from langgraph.checkpoint.memory import MemorySaver
 
 from app.config import get_settings
+from app.database_url import prepare_database_url
 
 logger = logging.getLogger(__name__)
 
@@ -35,13 +36,16 @@ def _psycopg_dsn(database_url: str) -> str:
     """Convert a SQLAlchemy-style database URL into a psycopg v3 DSN.
 
     langgraph-checkpoint-postgres talks to Postgres via psycopg (v3), not
-    the asyncpg driver our SQLAlchemy engine uses, so the `+asyncpg` driver
-    tag has to come out. A plain `postgresql://...` URL (no driver tag)
-    passes through unchanged.
+    the asyncpg driver our SQLAlchemy engine uses. Neon TLS and the pooled
+    endpoint are handled in app.database_url — this wrapper keeps the
+    existing call sites and unit tests stable.
     """
-    if database_url.startswith("postgresql+asyncpg://"):
-        return "postgresql://" + database_url[len("postgresql+asyncpg://") :]
-    return database_url
+    settings = get_settings()
+    return prepare_database_url(
+        database_url,
+        schema=settings.database_schema,
+        ssl=True if settings.database_ssl else None,
+    ).psycopg_dsn
 
 
 async def get_checkpointer():
@@ -74,8 +78,16 @@ async def get_checkpointer():
             from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
             from psycopg_pool import AsyncConnectionPool
 
-            dsn = _psycopg_dsn(settings.database_url)
-            pool = AsyncConnectionPool(dsn, open=False, kwargs={"autocommit": True})
+            prepared = prepare_database_url(
+                settings.database_url,
+                schema=settings.database_schema,
+                ssl=True if settings.database_ssl else None,
+            )
+            pool = AsyncConnectionPool(
+                prepared.psycopg_dsn,
+                open=False,
+                kwargs=prepared.psycopg_connect_args,
+            )
             await pool.open()
             saver = AsyncPostgresSaver(pool)
             # Idempotent: creates the checkpoint tables if they don't exist

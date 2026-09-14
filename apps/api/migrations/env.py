@@ -3,7 +3,7 @@ from logging.config import fileConfig
 
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
-from sqlalchemy.ext.asyncio import async_engine_from_config
+from sqlalchemy.ext.asyncio import create_async_engine
 
 from alembic import context
 
@@ -19,10 +19,25 @@ if config.config_file_name is not None:
 # Our app's models drive autogenerate; the DB URL comes from settings/.env
 # so it is never duplicated in alembic.ini.
 from app.config import get_settings
+from app.database_url import settings_prepared_url
 from app.models import Base
 
-config.set_main_option("sqlalchemy.url", get_settings().database_url)
+_settings = get_settings()
+_prepared_url = settings_prepared_url()
+# Never config.set_main_option("sqlalchemy.url", ...): Alembic.ini uses
+# ConfigParser interpolation (%(here)s). SQLAlchemy's render_as_string
+# percent-encodes passwords containing /, %, @ — that becomes
+# `ValueError: invalid interpolation syntax` and `RUN_MIGRATIONS_ON_BOOT`
+# dies before uvicorn starts.
 target_metadata = Base.metadata
+
+# Cloudflare/Supabase: DATABASE_SCHEMA=agentfleet. Local compose stays `public`
+# (None here so Alembic uses the connection default, matching existing DBs).
+_VERSION_TABLE_SCHEMA = (
+    None
+    if (_settings.database_schema or "public").strip() in ("", "public")
+    else _settings.database_schema.strip()
+)
 
 # Tables created OUTSIDE Alembic (LangGraph's AsyncPostgresSaver manages its own
 # `checkpoint*` tables via setup(); `analytics_*` are seeded demo data). They are
@@ -54,13 +69,14 @@ def run_migrations_offline() -> None:
     script output.
 
     """
-    url = config.get_main_option("sqlalchemy.url")
+    url = _prepared_url.sqlalchemy_url
     context.configure(
         url=url,
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         include_object=_include_object,
+        version_table_schema=_VERSION_TABLE_SCHEMA,
     )
 
     with context.begin_transaction():
@@ -72,6 +88,7 @@ def do_run_migrations(connection: Connection) -> None:
         connection=connection,
         target_metadata=target_metadata,
         include_object=_include_object,
+        version_table_schema=_VERSION_TABLE_SCHEMA,
     )
 
     with context.begin_transaction():
@@ -84,10 +101,10 @@ async def run_async_migrations() -> None:
 
     """
 
-    connectable = async_engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
+    connectable = create_async_engine(
+        _prepared_url.sqlalchemy_url,
         poolclass=pool.NullPool,
+        connect_args=_prepared_url.connect_args,
     )
 
     async with connectable.connect() as connection:

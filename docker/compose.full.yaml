@@ -4,11 +4,12 @@
 #   docker compose -f docker/compose.full.yaml up --build
 #   open http://localhost:3002
 #
-# Networking note: the browser talks to the api at http://localhost:8000
-# (published port, NEXT_PUBLIC_API_URL baked into the client bundle), while
-# the web container's *server-side* (SSR) fetches go straight to the api
-# container over the compose network via INTERNAL_API_URL=http://api:8000
-# (Phase 12 F2 — read at runtime by apiFetchServer in apps/web/lib/api.ts).
+# Networking note: the browser talks to the API through same-origin
+# `/backend` (apps/web/app/backend/[...path]/route.ts), which the web
+# container proxies to INTERNAL_API_URL=http://api:8000. Do not bake
+# NEXT_PUBLIC_API_URL=http://localhost:8000 into the image — that is how
+# a hosted demo ends up with Chat (SSR) working and every other page
+# calling the visitor's laptop.
 #
 # Migrations (Phase 12 F2): the one-shot `migrate` service runs
 # `alembic upgrade head` exactly once; api and worker only start after it
@@ -130,8 +131,6 @@ services:
   web:
     build:
       context: ../apps/web
-      args:
-        NEXT_PUBLIC_API_URL: http://localhost:8000
     ports:
       - "3002:3002"
     # The web app MINTS the API JWT (apps/web/lib/api.ts signApiToken) and the
