@@ -19,6 +19,21 @@ import { test, expect } from "@playwright/test";
 // option text "Choose a node…") — both silently break on a restyle, and there
 // are four other `space-y-1.5` lists in the app.
 
+test("/workflows/new creates a blank workflow and redirects to the builder", async ({ page }) => {
+  page.on("dialog", (dialog) => dialog.accept());
+
+  await page.goto("/workflows/new");
+  await expect(page).toHaveURL(/\/workflows\/([^/]+)$/);
+  const workflowId = new URL(page.url()).pathname.split("/").pop()!;
+  await expect(page.locator(".react-flow")).toBeVisible();
+  await expect(page.getByPlaceholder("Workflow name")).toHaveValue("Untitled workflow");
+
+  await page.getByRole("link", { name: "← All workflows" }).click();
+  const card = page.locator(`div.af-hover-nav:has(a[href="/workflows/${workflowId}"])`);
+  await card.getByRole("button", { name: "Delete" }).click();
+  await expect(card).not.toBeVisible();
+});
+
 test("builds a two-node graph, saves, and validates successfully", async ({ page }) => {
   page.on("dialog", (dialog) => dialog.accept());
   const name = `E2E workflow ${Date.now()}`;

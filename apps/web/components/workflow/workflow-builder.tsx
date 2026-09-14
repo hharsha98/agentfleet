@@ -171,6 +171,7 @@ export default function WorkflowBuilder({ workflowId }: { workflowId: string }) 
   const [validateError, setValidateError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -183,11 +184,16 @@ export default function WorkflowBuilder({ workflowId }: { workflowId: string }) 
         ]);
         if (cancelled) return;
 
-        if (wfRes.status === 404) {
+        if (wfRes.status === 404 || wfRes.status === 422) {
           setStatus("not-found");
           return;
         }
         if (!wfRes.ok) {
+          setLoadError(
+            wfRes.status >= 500
+              ? "API offline — it may be waking up from sleep (~10-20s on the hosted demo) or not running locally. Reload in a moment."
+              : `Could not load this workflow (${wfRes.status}).`,
+          );
           setStatus("error");
           return;
         }
@@ -208,7 +214,12 @@ export default function WorkflowBuilder({ workflowId }: { workflowId: string }) 
         });
         setStatus("ready");
       } catch {
-        if (!cancelled) setStatus("error");
+        if (!cancelled) {
+          setLoadError(
+            "API offline — it may be waking up from sleep (~10-20s on the hosted demo) or not running locally. Reload in a moment.",
+          );
+          setStatus("error");
+        }
       }
     }
 
@@ -575,7 +586,10 @@ export default function WorkflowBuilder({ workflowId }: { workflowId: string }) 
         <EmptyState
           glyph={<Icon name="workflow" className="h-7 w-7" />}
           title="Couldn't load this workflow"
-          description="API offline — it may be waking up from sleep (~10-20s on the hosted demo) or not running locally. Reload in a moment."
+          description={
+            loadError ??
+            "API offline — it may be waking up from sleep (~10-20s on the hosted demo) or not running locally. Reload in a moment."
+          }
           action={{ href: "/workflows", label: "Back to workflows" }}
         />
       </main>
