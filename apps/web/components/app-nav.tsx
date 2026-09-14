@@ -6,6 +6,11 @@ import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 
 import { Wordmark } from "@/components/brand/logo";
 import { GLOW_HOVER, HUE_TONE } from "@/components/ui/glow";
+import {
+  ALL_APP_NAV_ITEMS,
+  OVERFLOW_NAV_ITEMS,
+  PRIMARY_NAV_ITEMS,
+} from "@/lib/app-nav-items";
 
 // Shared top nav for every app-shell page (chat, documents, missions, …).
 // Mounted once by app/(app)/layout.tsx — NOT re-declared per page — so this
@@ -13,37 +18,8 @@ import { GLOW_HOVER, HUE_TONE } from "@/components/ui/glow";
 // backdrop-blur, hairline border) that matches the landing page's header.
 type NavItem = { href: string; label: string };
 
-// The split below is the whole point of this component's second draft. All
-// 13 destinations used to sit in one row; at 1280px the tail was sliced
-// mid-word, which is a bad first impression for the first thing anyone sees.
-//
-// PRIMARY is "what the fleet does", in the order you'd actually use it:
-// talk to it (Chat), give it work (Missions), shape that work (Workflows),
-// staff it (Agents), feed it (Documents).
-const PRIMARY_ITEMS: NavItem[] = [
-  { href: "/chat", label: "Chat" },
-  { href: "/missions", label: "Missions" },
-  { href: "/workflows", label: "Workflows" },
-  { href: "/agents", label: "Agents" },
-  { href: "/documents", label: "Documents" },
-];
-
-// OVERFLOW is everything you visit deliberately rather than constantly —
-// measurement, policy, and reference. Nothing is lost by moving it here:
-// every one of these is also a row in the ⌘K palette (see the COMMANDS
-// array in components/command-palette.tsx, which lists all 13 plus Home),
-// so the palette stays the complete index and this menu is a shortcut, not
-// the only door.
-const OVERFLOW_ITEMS: NavItem[] = [
-  { href: "/evals", label: "Evals" },
-  { href: "/guardrails", label: "Guardrails" },
-  { href: "/usage", label: "Usage" },
-  { href: "/automations", label: "Automations" },
-  { href: "/playground", label: "Playground" },
-  { href: "/voice", label: "Voice" },
-  { href: "/templates", label: "Templates" },
-  { href: "/changelog", label: "Changelog" },
-];
+const PRIMARY_ITEMS: NavItem[] = [...PRIMARY_NAV_ITEMS];
+const OVERFLOW_ITEMS: NavItem[] = [...OVERFLOW_NAV_ITEMS];
 
 // Opens the existing global CommandPalette (mounted once in the root
 // layout) by dispatching the exact same synthetic keydown it already
@@ -60,6 +36,10 @@ function openCommandPalette() {
 // absolutely-positioned hairline that lands on the header's own bottom
 // border (-bottom-[13px] = the header's py-3 plus its 1px border), so it
 // reads as the tab-strip idiom rather than a second line inside the row.
+function pathMatches(pathname: string, href: string): boolean {
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
 function NavLink({ item, active }: { item: NavItem; active: boolean }) {
   return (
     <Link
@@ -87,9 +67,22 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
 // expects, and the arrow keys below are an addition rather than the only
 // way through.
 //
-// `items` arrives already filtered by the parent — see the promotion note
-// there. This component never has to render an active item.
-function MoreMenu({ items, pathname }: { items: NavItem[]; pathname: string }) {
+// `items` arrives already filtered by the parent on desktop (the current
+// page is promoted into the primary row). On phones this same disclosure
+// lists every destination and marks the active one with aria-current.
+function MoreMenu({
+  items,
+  pathname,
+  triggerLabel = "More",
+  panelLabel = "More destinations",
+  align = "right",
+}: {
+  items: NavItem[];
+  pathname: string;
+  triggerLabel?: string;
+  panelLabel?: string;
+  align?: "left" | "right";
+}) {
   const [open, setOpen] = useState(false);
   const [prevPathname, setPrevPathname] = useState(pathname);
   const panelId = useId();
@@ -203,7 +196,7 @@ function MoreMenu({ items, pathname }: { items: NavItem[]; pathname: string }) {
           open ? "bg-accent/15 text-foreground" : "text-muted hover:text-foreground"
         }`}
       >
-        More
+        {triggerLabel}
         <span
           aria-hidden="true"
           className={`af-menu-chevron text-[9px] transition-transform duration-200 ${
@@ -217,22 +210,30 @@ function MoreMenu({ items, pathname }: { items: NavItem[]; pathname: string }) {
       {open && (
         <nav
           id={panelId}
-          aria-label="More destinations"
-          className="animate-menu-in absolute right-0 top-full z-50 mt-2 flex w-44 flex-col rounded-md border border-hairline bg-background p-1 shadow-lg"
+          aria-label={panelLabel}
+          className={`animate-menu-in absolute top-full z-50 mt-2 flex max-h-[70vh] w-52 flex-col overflow-y-auto rounded-md border border-hairline bg-background p-1 shadow-lg ${
+            align === "left" ? "left-0" : "right-0"
+          }`}
         >
-          {items.map((item, i) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              ref={(el) => {
-                itemRefs.current[i] = el;
-              }}
-              onClick={() => setOpen(false)}
-              className="cursor-pointer rounded-md px-2.5 py-1.5 text-muted transition-colors duration-200 hover:bg-accent/15 hover:text-foreground focus-visible:bg-accent/15 focus-visible:text-foreground focus-visible:outline-none"
-            >
-              {item.label}
-            </Link>
-          ))}
+          {items.map((item, i) => {
+            const active = pathMatches(pathname, item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                ref={(el) => {
+                  itemRefs.current[i] = el;
+                }}
+                aria-current={active ? "page" : undefined}
+                onClick={() => setOpen(false)}
+                className={`cursor-pointer rounded-md px-2.5 py-1.5 transition-colors duration-200 hover:bg-accent/15 hover:text-foreground focus-visible:bg-accent/15 focus-visible:text-foreground focus-visible:outline-none ${
+                  active ? "text-foreground" : "text-muted"
+                }`}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
         </nav>
       )}
     </div>
@@ -276,38 +277,35 @@ export function AppNav({ userMenu }: { userMenu?: ReactNode }) {
           </Link>
         </span>
 
-        {/* Five destinations (six on an overflow route, see the promotion
-            above) plus a menu, instead of the 13-wide scrolling row this
-            used to be. An earlier draft of this file argued against a menu
-            on the grounds that it would hide link names from selector-based
-            E2E specs; that was never true and is not true now — `grep -rn`
-            over apps/web/e2e/ finds no spec that selects a nav link. The
-            suite reaches pages with page.goto() and asserts on each page's
-            own <h1> (e2e/smoke.spec.ts), and the only getByRole("link")
-            calls in the whole directory are for the workflow detail page's
-            "← All workflows" back link.
-
-            The row keeps overflow-x-auto and the fade below for narrow
-            phones, where even five items can outrun the viewport. The fade
-            is painted over the END of the row, so when everything fits it
-            covers empty background and is invisible — no width measurement,
-            no resize listener, no state. */}
-        <div className="flex min-w-0 flex-1 items-center gap-1">
-          <div className="relative flex min-w-0 flex-1 items-center">
-            <nav
-              aria-label="Primary"
-              className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto font-mono text-xs [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-            >
-              {primaryItems.map((item) => (
-                <NavLink key={item.href} item={item} active={pathname === item.href} />
-              ))}
-            </nav>
-            <span
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-background to-transparent"
+        {/* Phone: one disclosure with every destination. A horizontal
+            primary row plus a right-edge fade made Chat look like the only
+            product surface after demo login. md+: Chat / Missions /
+            Workflows / Agents / Documents stay in the Primary nav; e2e
+            smoke.spec.ts asserts that list by role. */}
+        <div className="flex min-w-0 flex-1 items-center md:hidden">
+          <div className="font-mono text-xs">
+            <MoreMenu
+              items={[...ALL_APP_NAV_ITEMS]}
+              pathname={pathname}
+              triggerLabel="Menu"
+              panelLabel="App destinations"
+              align="left"
             />
           </div>
-
+        </div>
+        <div className="hidden min-w-0 flex-1 items-center gap-1 md:flex">
+          <nav
+            aria-label="Primary"
+            className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto font-mono text-xs"
+          >
+            {primaryItems.map((item) => (
+              <NavLink
+                key={item.href}
+                item={item}
+                active={pathMatches(pathname, item.href)}
+              />
+            ))}
+          </nav>
           <div className="font-mono text-xs">
             <MoreMenu items={menuItems} pathname={pathname} />
           </div>

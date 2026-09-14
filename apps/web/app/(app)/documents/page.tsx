@@ -73,6 +73,10 @@ export default function DocumentsPage() {
         setDocs(await res.json());
         const total = res.headers.get("X-Total-Count");
         setTotalCount(total ? Number(total) : null);
+      } else {
+        setNote(
+          `Documents API returned ${res.status}. Chat can still work while this page is unauthorized or the schema is mid-migrate.`,
+        );
       }
     } catch {
       setNote("API offline — it may be waking up from sleep (~10-20s on the hosted demo) or not running locally. Reload in a moment.");

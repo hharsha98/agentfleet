@@ -1,5 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 
+import { OVERFLOW_NAV_ITEMS, PRIMARY_NAV_ITEMS } from "../lib/app-nav-items";
+
 // Deterministic project: no LLM calls, just page loads and static content.
 //
 // NOTE (Phase 12 B2): every /chat.../voice page below is now auth-gated
@@ -140,5 +142,69 @@ test("browser API config is same-origin /backend, not localhost", async ({
     .poll(() => backendHits.some((u) => u.includes("/backend/api/v1/runs")))
     .toBeTruthy();
   expect(hitsLocalApi).toEqual([]);
+});
+
+test("signed-in primary nav exposes Chat, Missions, Workflows, Agents, Documents", async ({
+  page,
+}) => {
+  // Hosted-demo regression: Chat SSE can work while the rest of the product
+  // is missing from the shell (older web image, or a header that only
+  // painted Chat). Desktop viewport matches this project's Playwright
+  // config; phones use the Menu disclosure instead.
+  await page.goto("/chat");
+  const nav = page.getByRole("navigation", { name: "Primary" });
+  for (const item of PRIMARY_NAV_ITEMS) {
+    await expect(
+      nav.getByRole("link", { name: item.label, exact: true }),
+    ).toBeVisible();
+  }
+
+  await nav.getByRole("link", { name: "Workflows", exact: true }).click();
+  await expect(page).toHaveURL(/\/workflows\/?$/);
+  await expect(
+    page.getByRole("heading", { name: "Workflows", level: 1 }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("navigation", { name: "Primary" }).getByRole("link", {
+      name: "Workflows",
+      exact: true,
+    }),
+  ).toHaveAttribute("aria-current", "page");
+
+  await page
+    .getByRole("navigation", { name: "Primary" })
+    .getByRole("link", { name: "Agents", exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/agents\/?$/);
+  await expect(
+    page.getByRole("heading", { name: "Agent builder", level: 1 }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "New agent" })).toBeVisible();
+});
+
+test("More menu lists ops destinations the primary row does not", async ({
+  page,
+}) => {
+  await page.goto("/chat");
+  await page.getByRole("button", { name: "More" }).click();
+  const more = page.getByRole("navigation", { name: "More destinations" });
+  for (const item of OVERFLOW_NAV_ITEMS) {
+    await expect(
+      more.getByRole("link", { name: item.label, exact: true }),
+    ).toBeVisible();
+  }
+});
+
+test("agent builder uses View for builtins so Edit is not a 403 trap", async ({
+  page,
+}) => {
+  await page.goto("/agents");
+  await expect(
+    page.getByRole("heading", { name: "Agent builder", level: 1 }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "New agent" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "View" }).first()).toBeVisible({
+    timeout: 10_000,
+  });
 });
 

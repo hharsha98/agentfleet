@@ -296,6 +296,8 @@ Private window, no session:
       `agentfleet.pages.dev` / `agentfleet.vercel.app` (those are not this
       project).
 - [ ] Demo login works without Google (`Try the demo`).
+- [ ] After sign-in, **Primary** nav shows Chat, Missions, Workflows,
+      Agents, Documents (phone: **Menu**). Not Chat-only.
 - [ ] `/chat` — send one message, get a streamed reply.
 - [ ] `/agents` — built-in roster **and** `demo-sandbox` (mutable). Create
       or edit the sandbox agent, **Publish**, open version history.

@@ -22,7 +22,7 @@ A 3–5 minute walkthrough for a portfolio recording. Follow the scenes in order
 
 1. Click **Launch app** / **Sign in** (top right).
 2. On the hosted demo, click **Try the demo** (shared identity `demo@agentfleet.local`, daily token cap). Locally, Google OAuth via Auth.js v5 if `AUTH_GOOGLE_ID` is set.
-3. **Say:** "Auth is Auth.js — Google when you self-host, one-click demo on the public instance. Same fleet either way."
+3. **Say:** "Auth is Auth.js — Google when you self-host, one-click demo on the public instance. After demo login the nav is the whole product: Chat, Missions, Workflows, Agents, Documents — not a Chat-only shell."
 
 ## Scene 3 — Chat with a tool-using agent (45–60s)
 

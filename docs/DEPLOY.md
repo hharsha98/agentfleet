@@ -177,19 +177,22 @@ docker compose -f docker/compose.full.yaml up --build
 Private window:
 
 1. Landing loads. **Try the demo** (no Google required).
-2. **Chat** — pick an agent, send a message, stream + tool cards.
-3. **Agents** — open **Demo sandbox agent** (not a built-in). Edit prompt,
+2. **Primary nav** shows Chat, Missions, Workflows, Agents, Documents
+   (on a phone, **Menu** lists the same destinations). A Chat-only header
+   means an older web image — redeploy `agentfleet-app` from this branch.
+3. **Chat** — pick an agent, send a message, stream + tool cards.
+4. **Agents** — open **Demo sandbox agent** (not a built-in). Edit prompt,
    add an MCP server URL, **Publish**, open versions, rollback.
    Built-ins stay 403 on mutate — that is ownership, not a broken builder.
-4. **Workflows** — open the visual builder, save, **Run**.
-5. **Missions** — seeded board visible. New mission with a short goal.
+5. **Workflows** — open the visual builder, save, **Run**.
+6. **Missions** — seeded board visible. New mission with a short goal.
    When a task is in **Needs approval**, Approve.
-6. **Documents** — upload a `.txt`, wait for `ready`, ask Chat with
+7. **Documents** — upload a `.txt`, wait for `ready`, ask Chat with
    `search_documents`.
-7. **Evals** — pick an agent with cases, **Run eval**.
-8. **Usage / Guardrails / Automations** — pages load live data, not empty
+8. **Evals** — pick an agent with cases, **Run eval**.
+9. **Usage / Guardrails / Automations** — pages load live data, not empty
    stubs. Guardrails scan flags injection/PII without an LLM.
-9. Browser console: no `localhost:8000`, no CORS errors.
+10. Browser console: no `localhost:8000`, no CORS errors.
 
 CI already fails the PR if those API surfaces are missing
 (`demo-smoke` + `test_demo_feature_surface.py`).
@@ -202,6 +205,7 @@ CI already fails the PR if those API surfaces are missing
 |---|---|
 | Sign-in works, client pages empty / 401 | `AUTH_SECRET` mismatch, **or** Auth.js Credentials JWT missing `email` (fixed in `apps/web/auth.ts` jwt/session callbacks) |
 | Chat works, missions/agents/evals do not | Browser calling `localhost:8000` (`NEXT_PUBLIC_API_URL` baked). Leave `PUBLIC_API_URL` unset; use `/backend` + `INTERNAL_API_URL` |
+| Chat works, nav is Chat-only or `/workflows` `/agents` 404 | Older web image missing UI-8. Deploy **`agentfleet-app`** from this branch (`npm run cf:deploy`). `agentfleet-api` alone is not the product UI. |
 | `/runs` `/workflows` `/documents` 500 missing relation | `RUN_MIGRATIONS_ON_BOOT` ignored by the image, or schema `search_path` wrong (`DATABASE_SCHEMA`) |
 | SSL errors against Supabase pooler | `DATABASE_SSL=1` (require-style). `asyncpg ssl=True` is verify-full and fails |
 | Publish 403 on a built-in agent | Expected. Use **Demo sandbox agent** or **New agent** |

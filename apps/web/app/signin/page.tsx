@@ -34,7 +34,7 @@ export default async function SignInPage({
         <h1 className="text-2xl font-medium tracking-tight">Sign in</h1>
         <p className="mt-2 text-sm text-muted">
           {demoLogin
-            ? "One-click demo uses a shared identity with a daily token cap. Google is optional."
+            ? "One-click demo uses a shared identity with a daily token cap. After sign-in, Chat, Missions, Workflows, Agents, and Documents are all in the nav — not Chat-only. Google is optional."
             : "Sign in to run the fleet. Self-host for a private instance."}
         </p>
 
