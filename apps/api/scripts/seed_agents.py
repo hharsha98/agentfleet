@@ -1,9 +1,28 @@
 """Seed the built-in agent roster. Idempotent: run it any number of times —
-existing slugs get their prompt/description refreshed, custom fields kept."""
+existing slugs get their prompt/description refreshed, custom fields kept.
+
+Status (2026-09-01): idempotent across SEQUENTIAL runs was never enough.
+docker-entrypoint.sh runs this on every api container start and
+k8s/overlays/prod/kustomization.yaml runs the api Deployment at 2 replicas,
+so two rollout-overlapping pods ran it CONCURRENTLY. Both took the old
+read-then-write path (SELECT the slug, INSERT if absent, commit once at the
+very end), both read "absent", and the second commit died on the
+`ix_agents_slug` unique index — a crash-looping pod on every prod rollout.
+Observed on a live kind cluster during Wave 3C verification.
+
+`main()` below is now a single `INSERT ... ON CONFLICT (slug) DO UPDATE`:
+the read and the write are one atomic statement that Postgres itself
+serialises against that unique index, so any number of concurrent seeders
+converge without raising — no advisory lock, and no need to move seeding
+out of the entrypoint. tests/test_seed_agents_concurrency.py runs two
+seeders at once against a real database; it fails against the old version
+with exactly the duplicate-key error seen on the cluster.
+"""
 
 import asyncio
 
-from sqlalchemy import select
+from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.config import get_settings
 from app.db import SessionLocal
@@ -379,23 +398,56 @@ BUILTIN: list[dict] = [
 
 async def main() -> None:
     default_model = get_settings().default_model
+
+    # Every row carries the SAME set of keys, including the ones some
+    # BUILTIN entries omit ("tools", "runtime"), because a multi-row VALUES
+    # insert compiles to one statement with one column list — heterogeneous
+    # dicts are the one thing that trips it up. Columns left out entirely
+    # (id, temperature, mcp_servers, created_at/updated_at) still get their
+    # model-level defaults, and deliberately so: see the ON CONFLICT set_
+    # below for which fields the roster owns.
+    rows = [
+        {
+            "slug": spec["slug"],
+            "name": spec["name"],
+            "description": spec["description"],
+            "system_prompt": spec["system_prompt"],
+            "model": default_model,
+            "tools": spec.get("tools", []),
+            "runtime": spec.get("runtime", "langgraph"),
+            "is_builtin": True,
+        }
+        for spec in _harden(BUILTIN)
+    ]
+
+    stmt = pg_insert(Agent).values(rows)
+    # DO UPDATE, not DO NOTHING: re-seeding an existing roster must still
+    # push prompt/description/tool changes out to already-deployed rows —
+    # that is the whole point of running this on every container start.
+    #
+    # The set_ list is exactly what the previous update branch assigned, so
+    # the "custom fields kept" contract in the docstring above is unchanged:
+    # `model`, `temperature`, `mcp_servers` and `user_id` are NOT listed, so
+    # an operator's runtime edits to them survive a re-seed. `updated_at` is
+    # set explicitly because a Core ON CONFLICT DO UPDATE does not fire the
+    # column's `onupdate=func.now()` the way the ORM update path did.
+    stmt = stmt.on_conflict_do_update(
+        index_elements=[Agent.slug],
+        set_={
+            "name": stmt.excluded.name,
+            "description": stmt.excluded.description,
+            "system_prompt": stmt.excluded.system_prompt,
+            "tools": stmt.excluded.tools,
+            "runtime": stmt.excluded.runtime,
+            "is_builtin": stmt.excluded.is_builtin,
+            "updated_at": func.now(),
+        },
+    )
+
     async with SessionLocal() as session:
-        for spec in _harden(BUILTIN):
-            existing = (
-                await session.execute(select(Agent).where(Agent.slug == spec["slug"]))
-            ).scalar_one_or_none()
-            spec.setdefault("runtime", "langgraph")
-            if existing:
-                existing.name = spec["name"]
-                existing.description = spec["description"]
-                existing.system_prompt = spec["system_prompt"]
-                existing.tools = spec.get("tools", [])
-                existing.runtime = spec["runtime"]
-                existing.is_builtin = True
-            else:
-                session.add(Agent(**spec, model=default_model, is_builtin=True))
+        await session.execute(stmt)
         await session.commit()
-        total = len((await session.execute(select(Agent))).scalars().all())
+        total = (await session.execute(select(func.count()).select_from(Agent))).scalar_one()
     print(f"Seeded {len(BUILTIN)} built-in agents (total in DB: {total})")
 
 
