@@ -856,9 +856,9 @@ export default function WorkflowBuilder({ workflowId }: { workflowId: string }) 
                   <ol className="mt-3 space-y-1.5 text-left text-xs text-muted">
                     <li>1. Click an agent on the left to add a step.</li>
                     <li>
-                      2. Drag from a step&apos;s <span className="text-accent">right dot</span> to
-                      another step&apos;s <span className="text-accent">left dot</span> to make the
-                      second one wait for the first.
+                      2. Drag from a step&apos;s <span className="text-accent">right dot</span>{" "}
+                      to another step&apos;s <span className="text-accent">left dot</span> to make
+                      the second one wait for the first.
                     </li>
                     <li>3. Save, then Validate to check the graph before running it.</li>
                   </ol>

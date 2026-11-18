@@ -13,20 +13,15 @@ export default async function ChatPage() {
   }
 
   return (
-    // Bounded to the viewport minus the app nav's own height (--app-nav-h,
-    // globals.css), NOT `flex-1` on a `min-h-full` ancestor — every ancestor
-    // up to <body> only sets a MINIMUM height (see app/(app)/layout.tsx and
-    // app/layout.tsx), on purpose, so the other 12 app pages keep scrolling
-    // as a normal document behind the sticky nav. flex-1 in that chain has
-    // nothing bounded to grow into, so this page's content used to just
-    // keep growing the whole document — which is exactly why the composer
-    // rendered ~450px below the fold (see the chat UX pass this fixed).
-    // Giving THIS ONE route a real height, instead, makes ChatUI's own
-    // `overflow-y-auto` message pane (chat-ui.tsx) the thing that scrolls,
-    // so the composer stays on screen without touching the shared layout
-    // every other page relies on. `var(..., 59px)` repeats the CSS var's own
-    // fallback so this still degrades sanely if the var is ever missing.
-    <div className="flex h-[calc(100dvh-var(--app-nav-h,59px))] flex-col overflow-hidden">
+    // .af-fill-viewport (app/globals.css) bounds the (app) shell to exactly
+    // one viewport while this page is mounted, and flex-1 hands this root
+    // whatever height is left under the demo banner, API status strip and
+    // nav. Every other app page keeps scrolling as a normal document. That
+    // makes ChatUI's own `overflow-y-auto` message pane (chat-ui.tsx) the
+    // thing that scrolls, so the composer and Send stay on screen. (This
+    // used to be calc(100dvh - 59px), which only subtracted the nav — the
+    // demo banner pushed the composer below the fold.)
+    <div className="af-fill-viewport flex min-h-0 flex-1 flex-col overflow-hidden">
       {/* Chat has no visible page title in the design (the agent chips row
           reads as the header) — smoke.spec.ts only asserts the "agents
           online" text below, but every page still gets a real h1 for a11y.

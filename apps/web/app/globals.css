@@ -115,19 +115,23 @@ body {
      so the whole app settles at the same rate. */
   --ease-ui: cubic-bezier(0.4, 0, 0.2, 1);
   --dur-ui: 150ms;
+}
 
-  /* AppNav's rendered height (components/app-nav.tsx's <header>): a single
-     row (py-3 + its icon-height content + the 1px bottom hairline) that
-     never wraps to two lines at any width the app is used at — measured,
-     not guessed. The one consumer today is app/(app)/chat/page.tsx, which
-     needs a real (not `min-h-*`) height for its own root so ChatUI's
-     message pane can scroll internally instead of the whole document
-     scrolling past the composer (see that file's comment for why this
-     couldn't just be `flex-1` like every other app page). Chat's own
-     `h-[calc(100dvh-var(--app-nav-h,59px))]` repeats 59px as a literal
-     fallback, so a missing var degrades instead of producing an invalid
-     calc(). If AppNav's header row ever changes height, update both. */
-  --app-nav-h: 59px;
+/* Viewport-bound app pages (today: Chat). The (app) shell
+   (app/(app)/layout.tsx, .af-app-shell) is min-h-full and grows with its
+   content, so every other page scrolls as a normal document. A page whose
+   root carries .af-fill-viewport instead needs EXACTLY the height left under
+   the shell's chrome, so its own message pane scrolls and the composer stays
+   on screen. That chrome is not just AppNav: the demo banner and the API
+   status strip sit above it, and the banner wraps to two or three lines on a
+   phone. Chat used to subtract a fixed 59px (AppNav alone), which pushed the
+   composer and Send button below the fold whenever the demo banner showed.
+   Bounding the shell to one viewport and letting the page take flex-1 makes
+   the browser do that arithmetic, whatever the chrome measures. */
+.af-app-shell:has(.af-fill-viewport) {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
 }
 
 /* Everything below is deliberately UNLAYERED plain CSS (not inside

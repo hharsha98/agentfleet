@@ -31,9 +31,16 @@ type Run = {
   id: string;
   goal: string;
   status: string;
+  // Plain-English reason the whole run failed (e.g. planning couldn't reach
+  // the AI provider). Per-task failures stay on Task.error.
+  error?: string | null;
   created_at: string;
   tasks?: Task[];
 };
+
+// Statuses after which nothing changes on its own any more (an approval or
+// a drag-to-requeue restarts polling via a fresh `selected` effect run).
+const SETTLED_RUN_STATUSES = ["done", "done_with_issues", "failed"];
 
 // "muted" (superseded only) isn't a real Hue — see nodes.tsx's STATUS_HUE
 // comment for why this reuses that same bypass instead of widening the
@@ -489,6 +496,7 @@ export default function MissionsPage() {
   const [detail, setDetail] = useState<Run | null>(null);
   const [goal, setGoal] = useState("");
   const [busy, setBusy] = useState(false);
+  const [launchError, setLaunchError] = useState<string | null>(null);
   // Board | Graph toggle (Stage 1 of the visual workflow feature) — the
   // graph is a read-only alternate view of the same already-fetched tasks,
   // no new state or requests needed to drive it.
@@ -569,7 +577,14 @@ export default function MissionsPage() {
         if (!res.ok || cancelled) return;
         const r: Run = await res.json();
         setDetail(r);
-        if (["done", "failed"].includes(r.status) && timer) {
+        // Keep the mission list's badge in step with the board — it used
+        // to keep saying "planning" next to a board that said "failed".
+        // Patched in place from this same response: no extra request.
+        setRuns((all) =>
+          all.map((x) => (x.id === r.id ? { ...x, status: r.status, error: r.error } : x)),
+        );
+        // done_with_issues is settled too; it used to poll every 3s forever.
+        if (SETTLED_RUN_STATUSES.includes(r.status) && timer) {
           clearInterval(timer);
           timer = null;
         }
@@ -589,6 +604,7 @@ export default function MissionsPage() {
     const text = goal.trim();
     if (!text || busy) return;
     setBusy(true);
+    setLaunchError(null);
     try {
       const res = await apiFetch("/api/v1/runs", {
         method: "POST",
@@ -601,7 +617,21 @@ export default function MissionsPage() {
         setSelected(run.id);
         setDetail(null);
         refreshRuns();
+      } else {
+        // A failed Launch used to do nothing at all.
+        let detailText = "";
+        try {
+          const body = await res.json();
+          if (typeof body?.detail === "string") detailText = body.detail;
+        } catch {
+          /* non-JSON body */
+        }
+        setLaunchError(
+          `Couldn't launch that mission${detailText ? `: ${detailText}` : ` (HTTP ${res.status})`}.`,
+        );
       }
+    } catch {
+      setLaunchError("Couldn't reach the server to launch that mission. Please try again.");
     } finally {
       setBusy(false);
     }
@@ -797,6 +827,11 @@ export default function MissionsPage() {
           {busy ? "Launching…" : "Launch"}
         </button>
       </form>
+      {launchError && (
+        <p role="alert" className="mt-2 font-mono text-xs text-red-300">
+          {launchError}
+        </p>
+      )}
 
       {/* Fleet-wide (no mission selected) shows 2 cards, not 4 — the other
           two (Tasks, Tokens spent) need per-task data the /runs LIST
@@ -992,6 +1027,16 @@ export default function MissionsPage() {
                 <p className="truncate text-sm text-muted">{detail.goal}</p>
               </div>
 
+              {detail.error && (
+                <div
+                  role="alert"
+                  className="mt-3 rounded-md border border-hue-red/40 bg-hue-red/10 px-3 py-2.5 text-sm leading-relaxed text-foreground"
+                >
+                  <p className="font-medium">Why this mission stopped</p>
+                  <p className="mt-0.5 text-muted">{detail.error}</p>
+                </div>
+              )}
+
               <StatusLegend />
 
               {dndError && (
@@ -1105,7 +1150,9 @@ export default function MissionsPage() {
                   the live board itself only draws once non-empty (see
                   boardColumns above), so a preview that showed all 7 would
                   promise two columns idle-state visitors will rarely see. */}
-              <div className="mt-6 grid grid-cols-2 gap-3 opacity-50 sm:grid-cols-5">
+              {/* Faded via the dots only: opacity-50 on the whole grid took
+                  the labels to 2.7:1 contrast, below the 4.5:1 minimum. */}
+              <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-5">
                 {COLUMNS.slice(0, 5).map((col) => (
                   <div
                     key={col.key}
@@ -1115,7 +1162,7 @@ export default function MissionsPage() {
                       aria-hidden="true"
                       // Slice(0, 5) never reaches "superseded" (index 5), the
                       // only entry typed "muted" — safe to assume Hue here.
-                      className={`inline-block h-1.5 w-1.5 rounded-full ${HUE_DOT[col.hue as Hue]}`}
+                      className={`inline-block h-1.5 w-1.5 rounded-full opacity-50 ${HUE_DOT[col.hue as Hue]}`}
                     />
                     <span className="ml-1.5 font-mono text-[10px] text-muted">{col.label}</span>
                   </div>

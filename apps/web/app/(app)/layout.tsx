@@ -20,7 +20,7 @@ import { UserMenu } from "@/components/user-menu";
 // for their own data fetching) no longer needs to know UserMenu exists.
 export default function AppShellLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="flex min-h-full flex-1 flex-col">
+    <div className="af-app-shell flex min-h-full flex-1 flex-col">
       {/* Ambient ground (UI-7) — a SIBLING of <AppNav/> and {children}, never
           an ancestor wrapping either: e2e/workflows.spec.ts locates cards via
           page.locator("div", { hasText: name }).last(), which silently

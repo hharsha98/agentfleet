@@ -23,7 +23,9 @@ test("/workflows/new creates a blank workflow and redirects to the builder", asy
   page.on("dialog", (dialog) => dialog.accept());
 
   await page.goto("/workflows/new");
-  await expect(page).toHaveURL(/\/workflows\/([^/]+)$/);
+  // Must exclude "new" itself: /workflows/new already matches /workflows/[^/]+,
+  // so the old pattern passed BEFORE the redirect and read "new" as the id.
+  await expect(page).toHaveURL(/\/workflows\/(?!new$)[^/]+$/);
   const workflowId = new URL(page.url()).pathname.split("/").pop()!;
   await expect(page.locator(".react-flow")).toBeVisible();
   await expect(page.getByPlaceholder("Workflow name")).toHaveValue("Untitled workflow");

@@ -308,7 +308,18 @@ export default function AgentsPage() {
 
   async function deleteAgent(agent: Agent) {
     if (!confirm(`Delete agent "${agent.name}"? This cannot be undone.`)) return;
-    await apiFetch(`/api/v1/agents/${agent.id}`, { method: "DELETE" });
+    const res = await apiFetch(`/api/v1/agents/${agent.id}`, { method: "DELETE" });
+    if (!res.ok) {
+      // A refused delete used to look exactly like a successful one.
+      let detail = `HTTP ${res.status}`;
+      try {
+        const body = await res.json();
+        if (typeof body?.detail === "string") detail = body.detail;
+      } catch {
+        /* non-JSON body */
+      }
+      alert(`Couldn't delete "${agent.name}": ${detail}`);
+    }
     refresh();
   }
 
@@ -787,7 +798,7 @@ export default function AgentsPage() {
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium">{a.name}</span>
                       {a.slug === DEMO_SANDBOX_SLUG && (
-                        <span className="rounded-full border border-accent/40 px-2 py-0.5 font-mono text-[10px] text-accent">
+                        <span className="rounded-full border border-accent/40 px-2 py-0.5 font-mono text-[10px] text-foreground">
                           demo sandbox
                         </span>
                       )}
@@ -808,7 +819,11 @@ export default function AgentsPage() {
                   >
                     {a.is_builtin ? "View" : "Edit"}
                   </button>
-                  {!a.is_builtin && (
+                  {/* The shared sandbox (it only exists on the public demo,
+                      where every visitor is one identity) is not deletable:
+                      the API refuses with 403 so one visitor can't remove it
+                      for everyone after them. */}
+                  {!a.is_builtin && a.slug !== DEMO_SANDBOX_SLUG && (
                     <button
                       onClick={() => deleteAgent(a)}
                       className="cursor-pointer rounded-md border border-hairline px-3 py-1.5 text-xs text-muted transition-colors duration-200 hover:text-foreground"
