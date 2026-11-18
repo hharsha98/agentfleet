@@ -73,18 +73,22 @@ services:
       - "8000:8000"
     env_file:
       - ../.env
+    # Only values that must DIFFER inside the compose network belong here.
+    # The LLM provider, key and model names, Langfuse, demo flags and
+    # AUTH_SECRET all come from ../.env via env_file above.
+    #
+    # Never add `FOO: ${FOO:-}` lines for those. Compose fills ${...} from
+    # docker/.env or the host shell -- NOT from ../.env -- and `environment:`
+    # wins over `env_file:`, so such a line silently replaces the real value
+    # from ../.env with an empty string. That is exactly how the api and
+    # worker used to receive a blank FREE_LLM_KEY / FREE_LLM_BASE_URL /
+    # DEFAULT_MODEL and fail every agent run while the web container (which
+    # has no such lines) looked healthy. apps/api/tests/test_compose_env.py
+    # fails the build if one comes back.
     environment:
       DATABASE_URL: postgresql+asyncpg://agentfleet:agentfleet@postgres:5432/agentfleet
       REDIS_URL: redis://redis:6379/0
       SEARXNG_URL: http://searxng:8080
-      FREE_LLM_BASE_URL: ${FREE_LLM_BASE_URL:-}
-      FREE_LLM_KEY: ${FREE_LLM_KEY:-}
-      DEFAULT_MODEL: ${DEFAULT_MODEL:-}
-      PLANNER_MODEL: ${PLANNER_MODEL:-}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
-      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
-      LANGFUSE_HOST: ${LANGFUSE_HOST:-}
       # Full-stack compose run: mission runs execute durably on the `worker`
       # service instead of dying with the api container (ADR-004).
       ORCHESTRATOR_MODE: arq
@@ -107,18 +111,11 @@ services:
     command: ["arq", "app.worker.WorkerSettings"]
     env_file:
       - ../.env
+    # Same rule as the api service above: no `FOO: ${FOO:-}` lines here.
     environment:
       DATABASE_URL: postgresql+asyncpg://agentfleet:agentfleet@postgres:5432/agentfleet
       REDIS_URL: redis://redis:6379/0
       SEARXNG_URL: http://searxng:8080
-      FREE_LLM_BASE_URL: ${FREE_LLM_BASE_URL:-}
-      FREE_LLM_KEY: ${FREE_LLM_KEY:-}
-      DEFAULT_MODEL: ${DEFAULT_MODEL:-}
-      PLANNER_MODEL: ${PLANNER_MODEL:-}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
-      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
-      LANGFUSE_HOST: ${LANGFUSE_HOST:-}
       ORCHESTRATOR_MODE: arq
     depends_on:
       migrate:
