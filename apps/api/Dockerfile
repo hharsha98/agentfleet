@@ -1,5 +1,5 @@
 # AgentFleet API container.
-# Base: python:3.12.14-slim — matches requires-python = ">=3.12" in
+# Base: python:3.12.16-slim — matches requires-python = ">=3.12" in
 # pyproject.toml, pinned to a specific patch tag for reproducible builds.
 # TODO(follow-up): pin by @sha256 digest too. Not done here because this
 # environment has no Docker/registry access to resolve a real digest
@@ -15,7 +15,7 @@
 # CMD, port) is unchanged from the previous single-stage version.
 
 # ---- Stage 1: builder ------------------------------------------------------
-FROM python:3.12.14-slim AS builder
+FROM python:3.12.16-slim AS builder
 
 # Pinned, not :latest — a floating tag here silently changes the resolver
 # that produces uv.lock's install plan, which is the opposite of what
@@ -34,7 +34,17 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev
 
 # ---- Stage 2: runtime -------------------------------------------------
-FROM python:3.12.14-slim AS runtime
+FROM python:3.12.16-slim AS runtime
+
+# Debian security fixes published after the base image was built. The newest
+# python:3.12.16-slim (2026-11-08) predates DSA-6613-1 (zlib1g,
+# CVE-2026-85091), so without this the Trivy gate stays red until the base
+# is rebuilt upstream, which can take weeks. `upgrade` only replaces packages
+# the base already ships and never installs a new one, so the no-new-packages
+# rule further down still holds.
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y \
+    && rm -rf /var/lib/apt/lists/*
 
 # Non-root user the process runs as. UID/GID 1000 is a fixed contract with
 # the Kubernetes manifests (k8s/) being written in parallel — do not change
@@ -42,11 +52,12 @@ FROM python:3.12.14-slim AS runtime
 # crash-loop on permission errors.
 RUN groupadd -g 1000 app && useradd -m -u 1000 -g 1000 app
 
-# No apt layer in the runtime stage on purpose. The HEALTHCHECK below uses
-# the interpreter that already ships in this image rather than installing
-# curl for it — adding a package to an image whose whole point is a reduced
-# attack surface is a bad trade, and it measurably grew the sibling web
-# image by ~25MB before this was fixed.
+# No package is installed in the runtime stage on purpose (the security
+# upgrade above adds none). The HEALTHCHECK below uses the interpreter that
+# already ships in this image rather than installing curl for it — adding a
+# package to an image whose whole point is a reduced attack surface is a bad
+# trade, and it measurably grew the sibling web image by ~25MB before this
+# was fixed.
 
 WORKDIR /app
 

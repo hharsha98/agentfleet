@@ -7,8 +7,7 @@ no code changes. See ARCHITECTURE.md ADR-005.
 
 import os
 
-import httpx
-from openai import AsyncOpenAI
+from openai import AsyncOpenAI, Timeout
 
 from app.config import get_settings
 
@@ -19,13 +18,20 @@ def _client_timeout_kwargs(settings) -> dict:
     the hottest path in the app, so an unresponsive free-tier endpoint
     could hang a request forever.
 
-    Asymmetric httpx.Timeout: `connect` fails fast (~5s — a dead endpoint
+    Asymmetric timeout: `connect` fails fast (~5s — a dead endpoint
     has no legitimate reason to take longer to refuse a TCP handshake),
     `read` is generous (~120s — a large model streaming a long completion
     can genuinely run past a minute) but MUST stay under Cloud Run's
     request timeout (default 300s, Wave 4's eventual deploy target): if
     Cloud Run kills the request first, this timeout never gets the chance
     to fire at all. See app/config.py for the exact values and reasoning.
+
+    Built with the openai SDK's own `Timeout` export, not `httpx.Timeout`:
+    the SDK re-exports the Timeout of whichever HTTP library it is built on
+    (httpx in openai 2.x, httpx2 in 3.x), so this stays the type the client
+    expects across that switch. Handed an `httpx.Timeout`, openai 3 left its
+    HTTP client's default timeout holding a Timeout object in each of
+    connect/read/write/pool instead of a number.
 
     max_retries is deliberately LOW: app.services.orchestrator's self-heal
     ladder (SELF_HEAL_* settings, see config.py) already retries failures
@@ -38,11 +44,11 @@ def _client_timeout_kwargs(settings) -> dict:
 
     Known gap, not worth engineering around here: a stream that connects
     and then trickles bytes very slowly evades `read` entirely, because
-    httpx resets the read-timeout clock on every chunk received. Catching
+    the HTTP client resets the read-timeout clock on every chunk received. Catching
     that needs an application-level "no progress in N seconds" watchdog
     around the stream consumer, not a client constructor kwarg.
     """
-    timeout = httpx.Timeout(
+    timeout = Timeout(
         connect=settings.llm_connect_timeout_seconds,
         read=settings.llm_read_timeout_seconds,
         write=settings.llm_write_timeout_seconds,
