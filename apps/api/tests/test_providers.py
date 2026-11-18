@@ -3,7 +3,7 @@ AsyncOpenAI and the Langfuse-traced client) must carry a timeout and a
 retry cap — previously neither had either, on the hottest path in the app.
 
 Hermetic: no real network call. Just inspects the constructed client's
-underlying httpx client / retry setting, which the openai SDK exposes as
+underlying HTTP client / retry setting, which the openai SDK exposes as
 `._client.timeout` / `.max_retries`.
 
 "Hermetic" has to include the API key, and originally it did not — which is
@@ -16,7 +16,7 @@ dummy value, so what is under test is the timeout/retry configuration and
 nothing about the ambient environment.
 """
 
-import httpx
+import openai
 
 from app.config import get_settings
 from app.providers import get_llm_client
@@ -36,7 +36,7 @@ def test_plain_client_has_asymmetric_timeout_and_low_retry_cap(monkeypatch) -> N
     settings = get_settings()
 
     timeout = client._client.timeout
-    assert isinstance(timeout, httpx.Timeout)
+    assert isinstance(timeout, openai.Timeout)
     assert timeout.connect == settings.llm_connect_timeout_seconds
     assert timeout.read == settings.llm_read_timeout_seconds
     # Asymmetric: read must be generous relative to connect, per the bug.
@@ -71,7 +71,7 @@ def test_langfuse_traced_client_also_has_timeout_and_retry_cap(monkeypatch) -> N
     client = get_llm_client()
 
     timeout = client._client.timeout
-    assert isinstance(timeout, httpx.Timeout)
+    assert isinstance(timeout, openai.Timeout)
     assert timeout.connect == settings.llm_connect_timeout_seconds
     assert timeout.read == settings.llm_read_timeout_seconds
     assert client.max_retries == settings.llm_max_retries

@@ -12,20 +12,12 @@
 #
 # Everything else was fixed rather than ignored. For the record, on
 # 2026-09-01 the two images went from 106 fixable HIGH/CRITICAL findings
-# (7 of them CRITICAL) down to this single entry, by bumping the base images
+# (7 of them CRITICAL) down to a single entry, by bumping the base images
 # (python:3.12.11-slim -> 3.12.14-slim, node:22.11.0-slim -> 22.23.2-slim),
 # deleting npm from the web runtime stage, and upgrading cryptography
 # (49.0.0 -> 50.0.1) and next (16.2.10 -> 16.2.11).
-
-# 2026-09-01 - sharp 0.34.5 in the web image. Fixed upstream in 0.35.0.
 #
-# Why it is not simply upgraded: next 16.2.11 declares sharp as an OPTIONAL
-# dependency pinned to ^0.34.5, and that range excludes 0.35.0. Forcing it
-# through an npm `overrides` entry would run sharp outside the range next
-# supports. apps/web/app/opengraph-image.tsx genuinely uses next/image, so
-# the cost is a broken Open Graph image pipeline - a real regression traded
-# for a tidier scan result.
-#
-# Unblocked when next widens its sharp range to admit >= 0.35.0. Re-check on
-# every next upgrade and delete this entry as soon as that lands.
-GHSA-f88m-g3jw-g9cj
+# 2026-11-18: that last entry (GHSA-f88m-g3jw-g9cj, sharp 0.34.5) was deleted
+# when its unblock condition landed: next 16.4.x requires sharp ^0.35.5, and
+# the web image scans clean with no ignore file at all. This file holds no
+# entries now; keep it, and the rules above, for the next unfixable finding.

@@ -1,12 +1,12 @@
 # AgentFleet web container — multi-stage build.
-# Base: node:22.23.2-slim — matches Node 22 installed for local dev, pinned
+# Base: node:22.23.5-slim — matches Node 22 installed for local dev, pinned
 # to a specific patch tag for reproducible builds.
 # TODO(follow-up): pin by @sha256 digest too. Not done here because this
 # environment has no Docker/registry access to resolve a real digest
 # offline, and inventing one would be worse than a tag pin.
 
 # ---- Stage 1: build -------------------------------------------------------
-FROM node:22.23.2-slim AS build
+FROM node:22.23.5-slim AS build
 WORKDIR /app
 
 COPY package.json package-lock.json ./
@@ -21,7 +21,7 @@ COPY . .
 RUN npm run build
 
 # ---- Stage 2: runtime -------------------------------------------------
-FROM node:22.23.2-slim AS runtime
+FROM node:22.23.5-slim AS runtime
 
 # Non-root user the process runs as. UID/GID 1000 is a fixed contract with
 # the Kubernetes manifests (k8s/) — do not change either value without

@@ -35,11 +35,11 @@ name: trivy
 # node:22-alpine was measured as an alternative and rejected: 13 fixable
 # HIGH/CRITICAL versus slim's 11 -- a downgrade wearing a fix's clothes.
 #
-# The single remaining finding is documented, with its reason and its unblock
-# condition, in .trivyignore at the repo root. That file is mounted into the
-# container below: Trivy reads it from its own working directory, so without
-# the mount it would be silently ignored and this gate would fail in CI while
-# passing locally.
+# Any finding that cannot be fixed yet is documented, with its reason and its
+# unblock condition, in .trivyignore at the repo root (none as of 2026-11-18).
+# That file is mounted into the container below: Trivy reads it from its own
+# working directory, so without the mount it would be silently ignored and
+# this gate would fail in CI while passing locally.
 
 on:
   push:
