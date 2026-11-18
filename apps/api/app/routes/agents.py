@@ -21,6 +21,9 @@ from app.schemas import (
 from app.services.versioning import publish_version, restore_version
 from app.tools import TOOLS
 
+# Must equal scripts/seed_demo_user.py's SANDBOX_AGENT_SLUG (a test pins it).
+DEMO_SANDBOX_SLUG = "demo-sandbox"
+
 router = APIRouter()
 
 MCP_SERVER_NAME_RE = re.compile(r"^[a-z0-9-]{1,30}$")
@@ -154,6 +157,17 @@ async def delete_agent(
         raise HTTPException(status_code=404, detail="Agent not found")
     if not is_mutable(agent, user):
         raise HTTPException(status_code=403, detail="Built-in agents cannot be deleted")
+    if get_settings().demo_login_enabled and agent.slug == DEMO_SANDBOX_SLUG:
+        # Every public-demo visitor is the same identity, so one visitor
+        # deleting the shared sandbox removed it for everyone after them
+        # (it only came back on the next API restart's seed).
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "The shared demo sandbox can't be deleted: it's what the next visitor "
+                "builds on. Create your own agent with New agent, then delete that one."
+            ),
+        )
     await session.delete(agent)
     await session.commit()
     return {"ok": True}

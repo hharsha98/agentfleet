@@ -1,6 +1,11 @@
 from functools import lru_cache
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# The declared default for DEFAULT_MODEL, named so the blank-value guard on
+# Settings.default_model below can fall back to it.
+DEFAULT_MODEL_FALLBACK = "openai/gpt-oss-120b"
 
 
 class Settings(BaseSettings):
@@ -75,7 +80,7 @@ class Settings(BaseSettings):
 
     free_llm_base_url: str = "http://localhost:3001/v1"
     free_llm_key: str = ""
-    default_model: str = "openai/gpt-oss-120b"
+    default_model: str = DEFAULT_MODEL_FALLBACK
     # Tiered routing: strong model plans (the "brain"), cheap models execute.
     # Empty -> planning falls back to default_model.
     planner_model: str = ""
@@ -122,6 +127,11 @@ class Settings(BaseSettings):
     # automatically on connection failure — this setting forces it
     # explicitly, e.g. for tests or a DB-less dev laptop).
     checkpointer: str = "postgres"  # "postgres" | "memory"
+    # Upper bound on the Postgres checkpointer's one-time setup (pool open +
+    # saver.setup(), which runs CREATE INDEX CONCURRENTLY on a fresh DB and
+    # so waits for any long-open transaction). Past this, chat falls back to
+    # MemorySaver instead of hanging. See services/checkpointer.py.
+    checkpointer_setup_timeout_seconds: float = 20.0
 
     searxng_url: str = "http://localhost:8081"
 
@@ -232,6 +242,29 @@ class Settings(BaseSettings):
     # no escalation at all — every attempt uses the agent's own model,
     # identical to the behaviour before this setting existed.
     self_heal_escalation_models: str = ""
+
+    @field_validator("default_model", mode="before")
+    @classmethod
+    def _blank_default_model_means_unset(cls, value: object) -> object:
+        """DEFAULT_MODEL="" must not become the model id every agent is
+        seeded with. pydantic-settings treats an empty env var as a real
+        value, and an empty one is easy to end up with (a compose
+        `DEFAULT_MODEL: ${DEFAULT_MODEL:-}` line with nothing to
+        interpolate, a half-filled .env). A blank model id fails every
+        provider call, so fall back to the declared default instead."""
+        if value is None or (isinstance(value, str) and not value.strip()):
+            return DEFAULT_MODEL_FALLBACK
+        return value
+
+    @property
+    def llm_configured(self) -> bool:
+        """True when an LLM endpoint URL is present. Says nothing about
+        whether the provider accepts the key — a rejected key surfaces as a
+        clear 401 message (services/llm_errors.py). A blank key alone is not
+        "unconfigured": local OpenAI-compatible servers accept none. A blank
+        or scheme-less URL is, and otherwise surfaces as a cryptic
+        connection error on every agent run."""
+        return self.free_llm_base_url.strip().startswith(("http://", "https://"))
 
 
 @lru_cache

@@ -38,6 +38,7 @@ from app.db import SessionLocal
 from app.models import Agent, Conversation, Message
 from app.services.budget import check_budget
 from app.services.chat import MAX_HISTORY_MESSAGES
+from app.services.llm_errors import llm_unconfigured_message, provider_error_message
 from app.tools import TOOLS, run_tool
 
 logger = logging.getLogger(__name__)
@@ -128,6 +129,11 @@ async def stream_chat_pydantic(conversation_id: uuid.UUID, user_text: str) -> As
                 yield _sse({"type": "error", "message": violation})
                 return
 
+            unconfigured = llm_unconfigured_message()
+            if unconfigured:
+                yield _sse({"type": "error", "message": unconfigured})
+                return
+
             recent = (
                 (
                     await session.execute(
@@ -186,13 +192,7 @@ async def stream_chat_pydantic(conversation_id: uuid.UUID, user_text: str) -> As
             logger.warning(
                 "pydantic-ai provider error for conversation %s", conversation_id, exc_info=True
             )
-            yield _sse(
-                {
-                    "type": "error",
-                    "message": f"The model provider returned an error ({type(exc).__name__}). "
-                    "Please try again.",
-                }
-            )
+            yield _sse({"type": "error", "message": provider_error_message(exc, agent.model)})
         except (asyncio.CancelledError, GeneratorExit) as exc:
             # Client disconnected mid-stream — persist the partial turn
             # below, then re-raise so the ASGI layer sees the cancellation.
@@ -200,13 +200,7 @@ async def stream_chat_pydantic(conversation_id: uuid.UUID, user_text: str) -> As
         except Exception as exc:
             errored = True
             logger.exception("pydantic-ai run failed for conversation %s", conversation_id)
-            yield _sse(
-                {
-                    "type": "error",
-                    "message": f"The model provider returned an error ({type(exc).__name__}). "
-                    "Please try again.",
-                }
-            )
+            yield _sse({"type": "error", "message": provider_error_message(exc, agent.model)})
 
         full_text = "".join(parts)
         latency_ms = int((time.monotonic() - started) * 1000)

@@ -39,7 +39,8 @@ from app.db import SessionLocal
 from app.models import Agent, Conversation, Run, RunTask
 from app.providers import get_llm_client
 from app.services.budget import check_budget
-from app.services.chat import stream_chat
+from app.services.chat import _content_text, stream_chat
+from app.services.llm_errors import llm_unconfigured_message, provider_error_message
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +100,9 @@ _CAPABILITY_KEYWORDS = (
     "no such tool",
     "tool not found",
     "unrecognized tool",
+    # services/llm_errors.py's NOT_CONFIGURED_MESSAGE: no endpoint at all,
+    # so self-healing for minutes cannot help.
+    "ai provider is not configured",
 )
 
 _TRANSIENT_KEYWORDS = (
@@ -474,8 +478,64 @@ def parse_repair_plan(text: str, valid_slugs: set[str], next_ordinal: int) -> li
     return normalized
 
 
+PLAN_RETRY_PROMPT = (
+    "That answer could not be used: it must be ONE JSON object with a non-empty "
+    '"tasks" list, exactly in the format shown, with no text before or after it. '
+    "Reply again with only that JSON."
+)
+
+
+class PlanningError(Exception):
+    """Planning stopped for a reason that is already worded for the visitor."""
+
+
+async def _request_plan(client, planner: str, prompt: str, valid_slugs: set[str]) -> list[dict]:
+    """Ask the planner for a plan, with ONE corrective retry when the answer
+    isn't parseable. Chat models wrap JSON in prose or fences often enough
+    that a single bad answer used to fail the whole mission outright."""
+    messages = [{"role": "user", "content": prompt}]
+    response = await client.chat.completions.create(
+        model=planner, messages=messages, temperature=0.2
+    )
+    text = _content_text(response.choices[0].message.content)
+    try:
+        return parse_plan(text, valid_slugs)
+    except ValueError:  # includes json.JSONDecodeError
+        logger.warning("planner answer was not a usable plan; asking once more")
+    if text.strip():
+        messages.append({"role": "assistant", "content": text})
+    messages.append({"role": "user", "content": PLAN_RETRY_PROMPT})
+    response = await client.chat.completions.create(model=planner, messages=messages, temperature=0)
+    try:
+        return parse_plan(_content_text(response.choices[0].message.content), valid_slugs)
+    except ValueError as exc:
+        raise PlanningError(
+            "The Orchestrator couldn't turn this goal into a plan (its answer wasn't a "
+            "usable task list, even after a retry). Try a more concrete goal, e.g. "
+            '"Research X and write a two-paragraph summary".'
+        ) from exc
+
+
+def planning_failure_reason(exc: BaseException, planner: str | None = None) -> str:
+    """What the board shows when a run fails before it has any tasks."""
+    if isinstance(exc, PlanningError):
+        return str(exc)
+    reason = provider_error_message(exc, planner)
+    if reason.startswith("The model provider returned an error"):
+        return f"Planning failed unexpectedly ({type(exc).__name__}). Please try again."
+    return reason
+
+
 async def plan_and_execute(run_id: uuid.UUID) -> None:
-    """Background entrypoint: plan the goal, then drive execution."""
+    """Background entrypoint: plan the goal, then drive execution.
+
+    If planning fails, the run is marked failed WITH a plain-English
+    Run.error (shown on the board) — it used to be a bare "failed", 0 tasks,
+    and the reason only in the server log."""
+    settings = get_settings()
+    # The "brain" call: planning quality gates the whole run, so it may use a
+    # stronger model than the task executors (tiered routing).
+    planner = settings.planner_model or settings.default_model
     try:
         async with SessionLocal() as session:
             run = await session.get(Run, run_id)
@@ -483,34 +543,39 @@ async def plan_and_execute(run_id: uuid.UUID) -> None:
             roster = "\n".join(f"- {a.slug}: {a.description}" for a in agents)
             valid_slugs = {a.slug for a in agents}
 
-            client = get_llm_client()
-            settings = get_settings()
-            # The "brain" call: planning quality gates the whole run, so it may
-            # use a stronger model than the task executors (tiered routing).
-            planner = settings.planner_model or settings.default_model
-            response = await client.chat.completions.create(
-                model=planner,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": PLAN_PROMPT.format(
-                            max_tasks=MAX_PLAN_TASKS, roster=roster, goal=run.goal
-                        ),
-                    }
-                ],
-                temperature=0.2,
+            unconfigured = llm_unconfigured_message()
+            if unconfigured:
+                raise PlanningError(unconfigured)
+            # Planning spends tokens too: don't start a run the budget already
+            # forbids (every task would just fail with the same message).
+            orchestrator = next((a for a in agents if a.slug == "orchestrator"), None)
+            if orchestrator is not None:
+                violation = await check_budget(session, orchestrator.id)
+                if violation:
+                    raise PlanningError(violation)
+
+            goal = run.goal
+            # End the read transaction before the (slow) provider call so this
+            # connection isn't held idle-in-transaction while the model thinks.
+            await session.commit()
+
+            plan = await _request_plan(
+                get_llm_client(),
+                planner,
+                PLAN_PROMPT.format(max_tasks=MAX_PLAN_TASKS, roster=roster, goal=goal),
+                valid_slugs,
             )
-            plan = parse_plan(response.choices[0].message.content or "", valid_slugs)
             for i, spec in enumerate(plan):
                 session.add(RunTask(run_id=run.id, ordinal=i, **spec))
             run.status = "running"
             await session.commit()
-    except Exception:
+    except Exception as exc:
         logger.exception("planning failed for run %s", run_id)
         async with SessionLocal() as session:
             run = await session.get(Run, run_id)
             if run:
                 run.status = "failed"
+                run.error = planning_failure_reason(exc, planner)
                 await session.commit()
         return
 

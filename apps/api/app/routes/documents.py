@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, UploadFile
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -7,7 +9,9 @@ from app.db import get_session
 from app.models import Document, User
 from app.ownership import visibility_clause
 from app.ratelimit import limiter, upload_limit
-from app.services.ingest import ingest_document
+from app.services.ingest import EmbeddingUnavailableError, ingest_document
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -37,6 +41,18 @@ async def upload_document(
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except EmbeddingUnavailableError as exc:
+        # Used to surface as a bare 500 "Internal Server Error", which the
+        # page then failed to parse as JSON and showed as a SyntaxError.
+        logger.exception("embedding model unavailable during upload")
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Couldn't process the document: the embedding model isn't available on "
+                "this server right now (it downloads about 130 MB the first time). "
+                "Please try again in a minute."
+            ),
+        ) from exc
     return {"id": str(document.id), "filename": document.filename, "chunks": chunk_count}
 
 

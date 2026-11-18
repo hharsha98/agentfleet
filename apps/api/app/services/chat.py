@@ -24,6 +24,7 @@ from app.models import Agent, Conversation, Message
 from app.providers import get_llm_client
 from app.services.budget import check_budget
 from app.services.guardrails import wrap_tool_output
+from app.services.llm_errors import llm_unconfigured_message, provider_error_message
 from app.services.mcp_client import McpToolbox
 from app.tools import run_tool, specs_for
 
@@ -103,6 +104,11 @@ async def stream_chat(
             violation = await check_budget(session, agent.id)
             if violation:
                 yield _sse({"type": "error", "message": violation})
+                return
+
+            unconfigured = llm_unconfigured_message()
+            if unconfigured:
+                yield _sse({"type": "error", "message": unconfigured})
                 return
 
             recent = (
@@ -318,13 +324,7 @@ async def stream_chat(
                 # embed key fragments and internal URLs (review finding).
                 errored = True
                 logger.exception("provider stream failed for conversation %s", conversation_id)
-                yield _sse(
-                    {
-                        "type": "error",
-                        "message": f"The model provider returned an error ({type(exc).__name__}). "
-                        "Please try again.",
-                    }
-                )
+                yield _sse({"type": "error", "message": provider_error_message(exc, model)})
 
         full_text = "".join(parts)
         latency_ms = int((time.monotonic() - started) * 1000)
