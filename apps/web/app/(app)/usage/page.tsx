@@ -453,8 +453,9 @@ export default function UsagePage() {
           </div>
 
           {availableAgents.length > 0 && (
-            <div className="mt-3 flex items-center gap-2 rounded-lg border border-hairline p-3">
+            <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-hairline p-3">
               <select
+                aria-label="Agent to add a budget for"
                 value={addAgentId}
                 onChange={(e) => setAddAgentId(e.target.value)}
                 className="rounded-md border border-hairline bg-transparent px-3 py-1.5 text-sm outline-none transition-colors duration-200 focus:border-accent focus-visible:ring-2 focus-visible:ring-accent/30"

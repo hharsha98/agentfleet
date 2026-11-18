@@ -238,6 +238,10 @@ async def run_red_team(session, agent_id: uuid.UUID) -> dict:
     agent = await session.get(Agent, agent_id)
     if agent is None:
         raise ValueError("agent not found")
+    # End the read transaction before the slow part: the agent turns below
+    # can take minutes, and an idle-in-transaction connection held that long
+    # starves the 5-connection pool (every other request queues behind it).
+    await session.commit()
     settings = get_settings()
     judge_model = settings.planner_model or settings.default_model
 
@@ -285,6 +289,9 @@ async def run_eval(session, agent_id: uuid.UUID) -> EvalRun:
         .scalars()
         .all()
     )
+    # Same reason as run_red_team: don't hold a pooled connection
+    # idle-in-transaction for the whole (minutes-long) suite.
+    await session.commit()
     settings = get_settings()
     judge_model = settings.planner_model or settings.default_model
 

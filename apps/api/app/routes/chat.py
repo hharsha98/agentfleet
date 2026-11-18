@@ -61,6 +61,14 @@ async def send_message(
         runner = stream_chat_graph
     else:
         runner = stream_chat
+    # Hand this request's connection back to the pool BEFORE streaming.
+    # The generator opens its own session; without this, the read
+    # transaction above stays open (idle in transaction) for the entire
+    # reply. That pinned 1 of the pool's 5 connections per open chat, and it
+    # deadlocked the first chats on a fresh DB, because the LangGraph
+    # checkpointer's CREATE INDEX CONCURRENTLY waits for it to finish
+    # (see services/checkpointer.py).
+    await session.close()
     return StreamingResponse(
         runner(conversation_id, payload.content),
         media_type="text/event-stream",

@@ -51,6 +51,14 @@ def _client_timeout_kwargs(settings) -> dict:
     return {"timeout": timeout, "max_retries": settings.llm_max_retries}
 
 
+def chat_model_timeout_kwargs() -> dict:
+    """The same timeout/retry policy as get_llm_client(), for LangChain's
+    ChatOpenAI (graph_runtime.py). Without it ChatOpenAI used the SDK
+    defaults — a 10-minute read timeout and 2 retries — so one stuck
+    provider call could hold a chat reply open for half an hour."""
+    return _client_timeout_kwargs(get_settings())
+
+
 def get_llm_client() -> AsyncOpenAI:
     settings = get_settings()
     client_kwargs = _client_timeout_kwargs(settings)

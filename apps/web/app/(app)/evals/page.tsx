@@ -699,7 +699,7 @@ export default function EvalsPage() {
         personal data,{" "}
         <Link
           href="/guardrails"
-          className="cursor-pointer text-accent transition-opacity duration-200 hover:opacity-80"
+          className="cursor-pointer text-hue-blue underline underline-offset-4 transition-opacity duration-200 hover:opacity-80"
         >
           open the Guardrails sandbox
         </Link>

@@ -60,7 +60,10 @@ export function Panel({
     // something that reads as glass. Kept the flat fill.
     <Reveal
       delay={delay}
-      className={`af-card bg-surface-1 p-4 sm:p-5 ${hue ? HUE_CARD_BORDER[hue] : ""} ${className}`}
+      // min-w-0: as a grid/flex item a panel otherwise refuses to shrink
+      // below its widest child, which made Missions, Automations and
+      // Documents 100-1100px wider than a phone screen (sideways scroll).
+      className={`af-card min-w-0 bg-surface-1 p-4 sm:p-5 ${hue ? HUE_CARD_BORDER[hue] : ""} ${className}`}
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>

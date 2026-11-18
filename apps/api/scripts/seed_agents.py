@@ -392,6 +392,11 @@ async def main() -> None:
                 existing.tools = spec.get("tools", [])
                 existing.runtime = spec["runtime"]
                 existing.is_builtin = True
+                # Repair only — never override a model someone chose. A
+                # blank model id (seeded while DEFAULT_MODEL was empty)
+                # fails every provider call, and nothing else rewrites it.
+                if not (existing.model or "").strip():
+                    existing.model = default_model
             else:
                 session.add(Agent(**spec, model=default_model, is_builtin=True))
         await session.commit()

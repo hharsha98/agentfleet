@@ -178,6 +178,10 @@ async def _seed(session: AsyncSession) -> dict[str, bool]:
         if sandbox.user_id != user.id:
             sandbox.user_id = user.id
             repaired = True
+        if not (sandbox.model or "").strip():
+            # Same blank-model repair as scripts/seed_agents.py.
+            sandbox.model = get_settings().default_model
+            repaired = True
         version_count = (
             await session.execute(
                 select(func.count())

@@ -60,6 +60,13 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
     return [vector.tolist() for vector in _get_embedder().embed(texts)]
 
 
+class EmbeddingUnavailableError(RuntimeError):
+    """The embedding model could not be loaded or run (e.g. its one-time
+    ~130MB download failed). Distinct from ValueError — the FILE is fine,
+    the server just can't embed right now — so the route can answer 503
+    with a retry hint instead of a bare 500."""
+
+
 async def ingest_document(
     session: AsyncSession,
     filename: str,
@@ -72,7 +79,10 @@ async def ingest_document(
     if not pieces:
         raise ValueError("No extractable text in file")
     # CPU-bound embedding runs off the event loop so requests keep flowing.
-    vectors = await asyncio.to_thread(embed_texts, pieces)
+    try:
+        vectors = await asyncio.to_thread(embed_texts, pieces)
+    except Exception as exc:
+        raise EmbeddingUnavailableError(str(exc)) from exc
 
     document = Document(
         filename=filename, mime=mime, size_bytes=len(data), status="ready", user_id=user_id

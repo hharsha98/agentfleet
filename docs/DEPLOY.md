@@ -203,6 +203,7 @@ CI already fails the PR if those API surfaces are missing
 
 | Symptom | Cause |
 |---|---|
+| Site looks fine, but every agent run fails (Chat errors, missions fail at once) | The API has no LLM settings. `GET /backend/health` shows `"llm_configured": false` and the app shows an amber banner. Put `FREE_LLM_BASE_URL`, `FREE_LLM_KEY`, `DEFAULT_MODEL` in the repo-root `.env` and rebuild. (Older `docker/compose.full.yaml` blanked these with `${VAR:-}` lines; fixed.) |
 | Sign-in works, client pages empty / 401 | `AUTH_SECRET` mismatch, **or** Auth.js Credentials JWT missing `email` (fixed in `apps/web/auth.ts` jwt/session callbacks) |
 | Chat works, missions/agents/evals do not | Browser calling `localhost:8000` (`NEXT_PUBLIC_API_URL` baked). Leave `PUBLIC_API_URL` unset; use `/backend` + `INTERNAL_API_URL` |
 | Chat works, nav is Chat-only or `/workflows` `/agents` 404 | Older web image missing UI-8. Deploy **`agentfleet-app`** from this branch (`npm run cf:deploy`). `agentfleet-api` alone is not the product UI. |

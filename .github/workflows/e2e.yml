@@ -11,8 +11,8 @@ name: e2e
 # playground A/B — see apps/web/playwright.config.ts), so this job runs the
 # 26 "deterministic" specs with no LLM provider needed anywhere in the
 # stack. That is also why FREE_LLM_KEY/FREE_LLM_BASE_URL are never set
-# below: docker/compose.full.yaml already treats them as optional
-# (${FREE_LLM_BASE_URL:-} etc.) and the app's own escalation/self-heal
+# below: the api/worker only receive them through ../.env (env_file), the
+# stack boots fine without them, and the app's own escalation/self-heal
 # paths simply aren't exercised by the deterministic specs.
 
 on:

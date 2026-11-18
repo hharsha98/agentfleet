@@ -108,10 +108,78 @@ type ChatMessage = {
   content: string;
   usage?: Usage;
   tools?: ToolActivity[];
+  // Shown as its own callout under the reply, not mixed into the text.
+  error?: string;
 };
 
+// The agent a first-time visitor lands on. The list arrives sorted by name,
+// so agents[0] used to be "Clinical Research" — a narrow, slow, web-search
+// heavy pick for someone's very first message. Deep Research shows off tool
+// calls; the writers answer fast with no tools at all.
+const PREFERRED_DEFAULT_AGENTS = ["deep-research", "creative-writer", "system-architect"];
+
+function defaultAgent(agents: AgentInfo[]): AgentInfo | null {
+  for (const slug of PREFERRED_DEFAULT_AGENTS) {
+    const match = agents.find((a) => a.slug === slug);
+    if (match) return match;
+  }
+  return agents[0] ?? null;
+}
+
+// Turns what fetch/our API threw into one sentence a visitor can act on.
+function describeSendError(err: unknown): string {
+  if (err instanceof TypeError) {
+    return "Lost the connection to the server mid-reply. Check your connection, then send again.";
+  }
+  const text = err instanceof Error ? err.message : String(err);
+  return text || "Something went wrong sending that message. Please try again.";
+}
+
+// Reads the API's {"detail": "..."} on a failed request, so a 429 says
+// "Rate limit exceeded: 30 per 1 minute" instead of "send failed (429)".
+async function failureDetail(res: Response, fallback: string): Promise<string> {
+  try {
+    const body = await res.json();
+    if (typeof body?.detail === "string" && body.detail) return body.detail;
+  } catch {
+    // not JSON — use the fallback
+  }
+  return fallback;
+}
+
+// Live "the agent is working" feedback while a reply has produced nothing
+// yet. A free-tier model can take 10-30s before its first token, and a
+// silent blinking cursor reads as "broken" to someone seeing this for the
+// first time.
+function ThinkingIndicator({ since }: { since: number }) {
+  const [now, setNow] = useState(since);
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+  const seconds = Math.max(0, Math.floor((now - since) / 1000));
+  return (
+    <span role="status" aria-live="polite" className="flex flex-col gap-1 text-sm text-muted">
+      <span className="flex items-center gap-2">
+        <span aria-hidden="true" className="flex gap-1">
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent [animation-delay:150ms]" />
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent [animation-delay:300ms]" />
+        </span>
+        Thinking{seconds >= 2 ? ` · ${seconds}s` : "…"}
+      </span>
+      {seconds >= 25 && (
+        <span className="text-xs">
+          Still working. Free-tier models can be slow; you can press Stop and send again.
+        </span>
+      )}
+    </span>
+  );
+}
+
 export function ChatUI({ agents }: { agents: AgentInfo[] }) {
-  const [agent, setAgent] = useState<AgentInfo | null>(agents[0] ?? null);
+  const [agent, setAgent] = useState<AgentInfo | null>(() => defaultAgent(agents));
+  const [streamStartedAt, setStreamStartedAt] = useState<number | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -146,12 +214,15 @@ export function ChatUI({ agents }: { agents: AgentInfo[] }) {
     });
   }
 
-  async function send() {
-    const text = input.trim();
+  // `retryText` re-sends an earlier prompt (the "Try again" button on a
+  // failed reply) without touching whatever is in the message box.
+  async function send(retryText?: string) {
+    const text = (retryText ?? input).trim();
     if (!text || streaming || !agent) return;
-    setInput("");
+    if (retryText === undefined) setInput("");
     setMessages((m) => [...m, { role: "user", content: text }, { role: "assistant", content: "" }]);
     setStreaming(true);
+    setStreamStartedAt(Date.now());
     try {
       let convId = conversationId;
       if (!convId) {
@@ -160,7 +231,11 @@ export function ChatUI({ agents }: { agents: AgentInfo[] }) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ agent_id: agent.id }),
         });
-        if (!res.ok) throw new Error(`create conversation failed (${res.status})`);
+        if (!res.ok) {
+          throw new Error(
+            await failureDetail(res, `Couldn't start a conversation (HTTP ${res.status}).`),
+          );
+        }
         convId = (await res.json()).id as string;
         setConversationId(convId);
       }
@@ -173,7 +248,9 @@ export function ChatUI({ agents }: { agents: AgentInfo[] }) {
         body: JSON.stringify({ content: text }),
         signal: controller.signal,
       });
-      if (!res.ok || !res.body) throw new Error(`send failed (${res.status})`);
+      if (!res.ok || !res.body) {
+        throw new Error(await failureDetail(res, `Sending failed (HTTP ${res.status}).`));
+      }
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
@@ -210,24 +287,41 @@ export function ChatUI({ agents }: { agents: AgentInfo[] }) {
           } else if (data.type === "done") {
             patchLast((m) => ({ ...m, usage: data.usage }));
           } else if (data.type === "error") {
-            patchLast((m) => ({ ...m, content: `${m.content}\n⚠ ${data.message}` }));
+            patchLast((m) => ({ ...m, error: data.message }));
           }
         }
       }
+      // The stream closed cleanly but produced nothing at all — say so
+      // rather than leaving an empty bubble that looks like a hang.
+      patchLast((m) =>
+        m.content.trim() || m.tools?.length || m.error
+          ? m
+          : { ...m, error: "No reply came back from the agent. Please try again." },
+      );
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
         patchLast((m) => ({ ...m, content: `${m.content}\n⏹ stopped` }));
       } else {
-        patchLast((m) => ({ ...m, content: `${m.content}\n⚠ ${String(err)}` }));
+        patchLast((m) => ({ ...m, error: describeSendError(err) }));
       }
     } finally {
       abortRef.current = null;
       setStreaming(false);
+      setStreamStartedAt(null);
     }
   }
 
   function stop() {
     abortRef.current?.abort();
+  }
+
+  // Error recovery: drop the failed exchange and send the same prompt again.
+  function retryLast() {
+    if (streaming) return;
+    const prompt = messages[messages.length - 2];
+    if (!prompt || prompt.role !== "user") return;
+    setMessages((all) => all.slice(0, -2));
+    void send(prompt.content);
   }
 
   if (agents.length === 0) {
@@ -359,10 +453,14 @@ export function ChatUI({ agents }: { agents: AgentInfo[] }) {
         {messages.map((m, i) => (
           <div key={i} className={m.role === "user" ? "flex justify-end" : "flex justify-start"}>
             <div
-              className={`max-w-[85%] whitespace-pre-wrap rounded-lg border px-3 py-2 text-sm leading-relaxed transition-colors duration-200 ${
+              className={`max-w-[85%] whitespace-pre-wrap rounded-lg border text-sm leading-relaxed transition-colors duration-200 ${
                 m.role === "user"
-                  ? "border-accent/40 bg-accent/10"
-                  : "border-hairline bg-white/[0.02]"
+                  ? "border-accent/40 bg-accent/10 px-3 py-2"
+                  : m.error && !m.content && !m.tools?.length
+                    ? // The error callout IS the reply: no bubble around it
+                      // (it used to draw a border inside a border).
+                      "border-transparent"
+                    : "border-hairline bg-white/[0.02] px-3 py-2"
               }`}
             >
               {m.tools?.map((t, j) => (
@@ -406,8 +504,35 @@ export function ChatUI({ agents }: { agents: AgentInfo[] }) {
                     )
                   )
                 : m.content}
-              {m.role === "assistant" && streaming && i === messages.length - 1 && (
-                <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-accent align-middle" />
+              {m.role === "assistant" &&
+                streaming &&
+                i === messages.length - 1 &&
+                (!m.content && !m.tools?.length && streamStartedAt !== null ? (
+                  <ThinkingIndicator since={streamStartedAt} />
+                ) : (
+                  <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-accent align-middle" />
+                ))}
+              {m.error && (
+                <div
+                  role="alert"
+                  className={`${m.content || m.tools?.length ? "mt-2" : ""} flex items-start gap-2 whitespace-normal rounded-md border border-hue-red/40 bg-hue-red/10 px-2.5 py-2 text-xs leading-relaxed text-foreground`}
+                >
+                  <span aria-hidden="true" className="text-hue-red">
+                    ⚠
+                  </span>
+                  <div className="flex flex-col items-start gap-2">
+                    <span>{m.error}</span>
+                    {i === messages.length - 1 && !streaming && (
+                      <button
+                        type="button"
+                        onClick={retryLast}
+                        className="cursor-pointer rounded-md border border-hairline px-2.5 py-1 text-xs font-medium text-foreground transition-colors duration-200 hover:bg-white/5"
+                      >
+                        Try again
+                      </button>
+                    )}
+                  </div>
+                </div>
               )}
               {m.usage && (
                 <div className="mt-2 border-t border-hairline pt-1 font-mono text-[10px] text-muted">

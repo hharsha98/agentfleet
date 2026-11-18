@@ -470,6 +470,7 @@ function VariantPanel({
         <span className="font-mono text-xs text-muted">Variant {label}</span>
         {agents.length > 0 && (
           <select
+            aria-label={`Load variant ${label}'s settings from an agent`}
             value=""
             onChange={(e) => {
               if (e.target.value) onLoadAgent(e.target.value);
@@ -487,23 +488,33 @@ function VariantPanel({
         )}
       </div>
 
+      {/* Visible labels: the temperature box used to show a bare "0.7"
+          with nothing saying what it was. */}
       <div className="grid grid-cols-2 gap-2">
-        <input
-          value={variant.model}
-          onChange={(e) => onModel(e.target.value)}
-          list="playground-models"
-          placeholder="model"
-          className={inputClass}
-        />
-        <input
-          type="number"
-          step={0.1}
-          min={0}
-          max={2}
-          value={variant.temperature}
-          onChange={(e) => onTemperature(Number(e.target.value))}
-          className={inputClass}
-        />
+        <label className="flex min-w-0 flex-col gap-1">
+          <span className="font-mono text-[10px] uppercase tracking-wide text-muted">Model</span>
+          <input
+            value={variant.model}
+            onChange={(e) => onModel(e.target.value)}
+            list="playground-models"
+            placeholder="model"
+            className={inputClass}
+          />
+        </label>
+        <label className="flex min-w-0 flex-col gap-1">
+          <span className="font-mono text-[10px] uppercase tracking-wide text-muted">
+            Temperature
+          </span>
+          <input
+            type="number"
+            step={0.1}
+            min={0}
+            max={2}
+            value={variant.temperature}
+            onChange={(e) => onTemperature(Number(e.target.value))}
+            className={inputClass}
+          />
+        </label>
       </div>
 
       <div className="min-h-[8rem] whitespace-pre-wrap rounded-md border border-hairline bg-black/10 px-3 py-2 text-sm leading-relaxed">

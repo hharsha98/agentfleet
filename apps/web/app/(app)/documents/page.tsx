@@ -100,11 +100,13 @@ export default function DocumentsPage() {
       const form = new FormData();
       form.append("file", file);
       const res = await apiFetch("/api/v1/documents", { method: "POST", body: form });
-      const body = await res.json();
+      // A proxy or crashed request can answer with plain text; parsing that
+      // as JSON used to show the visitor "SyntaxError: Unexpected token…".
+      const body = await res.json().catch(() => ({}));
       setNote(
         res.ok
           ? `✓ ${body.filename} ingested into ${body.chunks} chunk${body.chunks === 1 ? "" : "s"}`
-          : `⚠ ${body.detail ?? `upload failed (${res.status})`}`,
+          : `⚠ ${typeof body.detail === "string" ? body.detail : `Upload failed (HTTP ${res.status}). Please try again.`}`,
       );
       if (res.ok) await refresh();
     } catch (err) {
@@ -242,12 +244,13 @@ export default function DocumentsPage() {
           delay={40}
           hue="cyan"
         >
-          <div className="flex items-center gap-3 rounded-lg border border-hairline p-4 transition-colors duration-200 focus-within:border-accent/50">
+          <div className="flex flex-wrap items-center gap-3 rounded-lg border border-hairline p-4 transition-colors duration-200 focus-within:border-accent/50">
             <input
               ref={fileRef}
               type="file"
               accept=".txt,.md,.pdf"
-              className="flex-1 text-sm text-muted file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-accent/15 file:px-3 file:py-1.5 file:text-sm file:text-foreground file:transition-colors file:duration-200 hover:file:bg-accent/25"
+              aria-label="Choose a .txt, .md or .pdf file"
+              className="min-w-0 flex-1 text-sm text-muted file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-accent/15 file:px-3 file:py-1.5 file:text-sm file:text-foreground file:transition-colors file:duration-200 hover:file:bg-accent/25"
             />
             <button
               onClick={upload}

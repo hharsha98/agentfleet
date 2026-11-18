@@ -175,11 +175,37 @@ async def _mark_incomplete_runs(tracked: dict) -> None:
                 logger.warning("shutdown: run %s was still running; marked failed", run_id)
 
 
+def _warn_if_llm_unconfigured() -> None:
+    """One loud line at boot when the LLM endpoint or key is blank — the
+    state a compose `FOO: ${FOO:-}` override used to produce. Without it the
+    only symptom is every agent run failing with a provider error."""
+    settings = get_settings()
+    if not settings.llm_configured:
+        logger.warning(
+            "LLM provider is NOT configured: FREE_LLM_BASE_URL is %s. Every agent run "
+            "will fail until it is set in the API's environment.",
+            "EMPTY" if not settings.free_llm_base_url.strip() else "not an http(s) URL",
+        )
+    elif not settings.free_llm_key.strip():
+        logger.warning(
+            "FREE_LLM_KEY is EMPTY. Fine for a local OpenAI-compatible server; any "
+            "hosted provider will reject every agent run with 401."
+        )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _shutting_down
 
+    from app.services.checkpointer import close_checkpointer, start_checkpointer_init
+
+    _warn_if_llm_unconfigured()
     _start_embeddings_prewarm()
+    # Set the LangGraph checkpointer up now, before any request can hold a
+    # transaction open — see services/checkpointer.py for the deadlock this
+    # avoids. Not awaited: boot never blocks on it, and the first chat that
+    # needs it awaits the same task.
+    start_checkpointer_init()
     yield
 
     # --- Everything below only runs on a clean (non-SIGKILL) shutdown ---
@@ -207,6 +233,7 @@ async def lifespan(app: FastAPI):
             await _mark_incomplete_runs({t: tracked[t] for t in pending})
 
     await queue_module.close_arq_pool()
+    await close_checkpointer()
 
     from app import db as app_db
 
@@ -324,6 +351,10 @@ async def health() -> dict[str, str | bool]:
         "orchestrator": settings.orchestrator_mode,
         "embeddings": _embeddings_status,
         "demo": settings.demo_login_enabled,
+        # Config presence only (no network call, no secret): lets the web UI
+        # say "this server's AI provider isn't configured" instead of every
+        # agent failing with an opaque provider error.
+        "llm_configured": settings.llm_configured,
     }
 
 

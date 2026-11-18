@@ -119,6 +119,10 @@ class Run(Base):
     workflow_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("workflows.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    # Plain-English reason the RUN failed as a whole (e.g. planning could
+    # not reach the provider) — shown on the board. Per-task failures keep
+    # living on RunTask.error.
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     tasks: Mapped[list["RunTask"]] = relationship(
